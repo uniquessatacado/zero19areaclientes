@@ -1,0 +1,8 @@
+{
+  "headers": [
+    {"source":"/","headers":[{"key":"Cache-Control","value":"no-store, max-age=0"}]},
+    {"source":"/index.html","headers":[{"key":"Cache-Control","value":"no-store, max-age=0"}]},
+    {"source":"/demo.html","headers":[{"key":"Cache-Control","value":"no-store, max-age=0"}]}
+  ],
+  "alias": ["019-personalizacoes.vercel.app","019-personalizacoes-uniquess.vercel.app"]
+}
