@@ -1,0 +1,233 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import picaFactory from 'https://esm.sh/pica@9.0.1';
+
+const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
+const BUCKET = 'z19p-assets';
+const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
+const DEFAULT_QUALITY = 'ultra';
+const STATUS_STALE_MS = 24 * 60 * 60 * 1000;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const pica = picaFactory({ features: ['js','wasm','ww'] });
+
+const $ = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+const escapeHTML = (v='') => String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const fmtDate = d => new Date(d).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+const fmtBytes = n => !n ? '—' : n < 1024*1024 ? `${(n/1024).toFixed(0)} KB` : `${(n/1024/1024).toFixed(1)} MB`;
+const slug = s => (s||'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9-_]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase();
+const publicUrl = path => path ? supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl : '';
+const app = document.getElementById('app');
+let session = null;
+let workspaces = [];
+let currentWorkspace = null;
+let currentFolders = [];
+let currentAssets = [];
+let activeFolder = 'all';
+let uploadQueue = [];
+let statuses = [];
+let products = [];
+let folderTemplates = [];
+let currentQuotes = [];
+let libraryWorkspaces = {};
+let dashboardAgingTimer = null;
+
+
+const DEFAULT_STATUSES = [
+  {name:'Em atendimento',color:'#ff6b2c',sort_order:10},
+  {name:'Aguardando chegar o produto para realizar a personalização',color:'#f0b429',sort_order:20},
+  {name:'Cliente não responde',color:'#8b93a7',sort_order:30},
+  {name:'Cliente desistiu',color:'#d65c6a',sort_order:40},
+  {name:'Finalizado',color:'#38d39f',sort_order:50}
+];
+const DEFAULT_PRODUCTS = [
+  '30.1','Oversize Suedine','Oversize 100% algodão','Pima Egípcia','Malha peruana','Cotton','Dry Fit Premium','Dry Fit com poliamida'
+];
+const DEFAULT_FOLDER_TEMPLATES = [
+  {name:'Artes enviadas pelo cliente',purpose:'artes_cliente'},
+  {name:'Artes prontas',purpose:'artes_prontas'},
+  {name:'Logo da empresa',purpose:'logo_empresa'},
+  {name:'Mockups',purpose:'mockups'}
+];
+const PRINT_PLACEMENTS = ['Frente','Meio do peito','Ponta do peito esquerda','Ponta do peito direita','Costas','Manga esquerda','Manga direita'];
+
+const moneyNumber = v => {
+  if(typeof v==='number') return Number.isFinite(v)?v:0;
+  let x=String(v??'').trim().replace(/R\$\s?/gi,'').replace(/\s/g,'');
+  if(x.includes(',')) x=x.replace(/\./g,'').replace(',','.');
+  x=x.replace(/[^0-9.-]/g,'');
+  const n=parseFloat(x); return Number.isFinite(n)?n:0;
+};
+const fmtMoney = v => moneyNumber(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const normalizeWaPhone = phone => {
+  let d=String(phone||'').replace(/\D/g,'');
+  if((d.length===10||d.length===11)&&!d.startsWith('55')) d='55'+d;
+  return d;
+};
+function openWhatsApp(phone){
+  const d=normalizeWaPhone(phone);if(!d)return toast('Cadastre o telefone do cliente primeiro.','err');
+  window.open(`https://wa.me/${d}`,'_blank','noopener,noreferrer');
+}
+function quoteItemUnit(item){
+  if(item.pricing_mode==='piece_plus_print') return moneyNumber(item.piece_price)+(Array.isArray(item.prints)?item.prints:[]).reduce((sum,p)=>sum+moneyNumber(p.price),0);
+  return moneyNumber(item.total_unit_price);
+}
+function quoteTotal(quote){return (quote.items||[]).reduce((sum,i)=>sum+Math.max(1,parseInt(i.quantity)||1)*quoteItemUnit(i),0);}
+function statusById(id){return statuses.find(s=>s.id===id)||null;}
+function statusOptions(selected=''){return statuses.map(s=>`<option value="${s.id}" ${s.id===selected?'selected':''}>${escapeHTML(s.name)}</option>`).join('');}
+function statusPill(status){return status?`<span class="status-pill" style="--status:${escapeHTML(status.color||'#ff6b2c')}"><i></i>${escapeHTML(status.name)}</span>`:'<span class="status-pill muted"><i></i>Sem status</span>';}
+function isFinalizedStatus(status){return String(status?.name||'').trim().toLocaleLowerCase('pt-BR')==='finalizado';}
+function formatStatusAge(ms){
+  const totalHours=Math.max(0,Math.floor(ms/3600000));
+  const days=Math.floor(totalHours/24),hours=totalHours%24;
+  if(days>0)return `${days} ${days===1?'dia':'dias'}${hours?` e ${hours}h`:''}`;
+  return `${totalHours}h`;
+}
+function workspaceStatusDuration(w){
+  const st=statusById(w?.status_id);
+  if(!st||isFinalizedStatus(st))return null;
+  const changedAt=w?.status_changed_at||w?.updated_at||w?.created_at;
+  const t=changedAt?new Date(changedAt).getTime():NaN;
+  if(!Number.isFinite(t))return null;
+  const ms=Math.max(0,Date.now()-t);
+  return {ms,label:formatStatusAge(ms),changedAt:new Date(t),status:st};
+}
+function workspaceStatusAttention(w){
+  const age=workspaceStatusDuration(w);
+  if(!age||age.ms<STATUS_STALE_MS)return null;
+  return age;
+}
+function sortWorkspacesByAttention(items){
+  return [...items].sort((a,b)=>{const aa=workspaceStatusAttention(a),bb=workspaceStatusAttention(b);if(aa&&bb)return bb.ms-aa.ms;if(aa)return -1;if(bb)return 1;return 0;});
+}
+
+
+function toast(msg, kind=''){
+  const el=document.createElement('div'); el.className=`toast ${kind}`; el.textContent=msg; $('#toast-root').appendChild(el); setTimeout(()=>el.remove(),4200);
+}
+function icon(name){
+  if(name==='folder')return '<svg class="ui-icon folder-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 6.25c0-1.1.9-2 2-2h4.05c.55 0 1.07.23 1.45.63l1.15 1.22h5.75c1.1 0 2 .9 2 2v8.45c0 1.1-.9 2-2 2H5.8c-1.1 0-2-.9-2-2V6.25Z" fill="currentColor" opacity=".2"/><path d="M4.5 8h15M5.8 4.75h4.05c.42 0 .83.18 1.12.49L12.63 7h5.57c.83 0 1.5.67 1.5 1.5v8.05c0 .83-.67 1.5-1.5 1.5H5.8c-.83 0-1.5-.67-1.5-1.5V6.25c0-.83.67-1.5 1.5-1.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const icons={home:'⌂',plus:'＋',image:'▧',download:'⇩',share:'↗',back:'←',trash:'⌫',edit:'✎',upload:'⇧',logout:'↪',check:'✓',close:'×',search:'⌕',copy:'⧉',user:'◉',phone:'☎',settings:'⚙',quote:'R$',whatsapp:'WA'}; return icons[name]||'•';
+}
+function route(){ return location.hash.replace(/^#/,'') || '/'; }
+function nav(path){
+  const target=String(path||'/');
+  if(route()===target){ Promise.resolve().then(()=>renderRoute()); return; }
+  location.hash=target;
+}
+window.addEventListener('hashchange', ()=>{ void renderRoute(); });
+
+async function init(){
+  try{if('serviceWorker' in navigator){const regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(r=>r.unregister()));}if('caches' in window){const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('019-personalizacoes')).map(k=>caches.delete(k)));}}catch{}
+  const { data } = await supabase.auth.getSession(); session=data.session;
+  supabase.auth.onAuthStateChange((_e,s)=>{session=s; renderRoute();});
+  renderRoute();
+}
+
+function shell(content, {back=false}={}){
+  return `<div class="app-shell">
+    <header class="topbar">
+      ${back?`<button class="btn ghost small" data-nav="/">${icon('back')}</button>`:''}
+      <div class="brand" data-nav="/" role="button" tabindex="0">
+        <div class="brand-mark">019</div><div><div class="brand-title">019 Personalizações</div><div class="brand-sub">Artes • Mockups • DTF</div></div>
+      </div>
+      <div class="top-actions">${session?`<button class="btn ghost small" id="logoutBtn">${icon('logout')} <span class="label">Sair</span></button>`:''}</div>
+    </header>${content}</div>`;
+}
+function bindCommon(){
+  $$('[data-nav]').forEach(el=>el.onclick=()=>nav(el.dataset.nav));
+  $('#logoutBtn')?.addEventListener('click', async()=>{await supabase.auth.signOut(); nav('/');});
+}
+
+async function renderRoute(){
+  if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}
+  const r=route();
+  if(r.startsWith('/cliente/')) return renderPublic(r.split('/')[2]);
+  if(!session) return renderAuth();
+  if(r.startsWith('/biblioteca/')) return renderLibrary(r.split('/')[2]);
+  if(r.startsWith('/ambiente/')) return renderWorkspace(r.split('/')[2]);
+  return renderDashboard();
+}
+
+function renderAuth(mode='login'){
+  app.innerHTML=`<div class="auth"><div class="auth-card">
+    <div class="brand"><div class="brand-mark">019</div><div><div class="brand-title">019 Personalizações</div><div class="brand-sub">Central de produção</div></div></div>
+    <h1>${mode==='signup'?'Criar acesso':'Entrar'}</h1><p>${mode==='signup'?'Cadastre o acesso interno da equipe.':'Acesse os ambientes, artes e mockups.'}</p>
+    <form id="authForm"><div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div>
+    <div class="field"><label>Senha</label><input type="password" name="password" required minlength="6" autocomplete="current-password"></div>
+    <button class="btn primary" type="submit">${mode==='signup'?'Criar conta':'Entrar'}</button></form>
+    <div class="auth-switch">${mode==='signup'?'Já possui acesso? <span class="link" id="switchAuth">Entrar</span>':'Primeiro acesso? <span class="link" id="switchAuth">Criar conta</span>'}</div>
+  </div></div>`;
+  $('#switchAuth').onclick=()=>renderAuth(mode==='signup'?'login':'signup');
+  $('#authForm').onsubmit=async e=>{
+    e.preventDefault(); const fd=new FormData(e.currentTarget); const email=fd.get('email'),password=fd.get('password');
+    const btn=e.currentTarget.querySelector('button'); btn.disabled=true; btn.innerHTML='<span class="loading"></span>';
+    const res = mode==='signup' ? await supabase.auth.signUp({email,password}) : await supabase.auth.signInWithPassword({email,password});
+    btn.disabled=false; btn.textContent=mode==='signup'?'Criar conta':'Entrar';
+    if(res.error) return toast(res.error.message,'err');
+    if(mode==='signup' && !res.data.session) toast('Conta criada. Confirme o e-mail para entrar.','ok'); else {session=res.data.session; nav('/');}
+  };
+}
+
+async function ensureDefaults(){
+  if(!session?.user?.id)return;
+  const uid=session.user.id;
+  const [{count:statusCount},{count:productCount},{count:folderTemplateCount}]=await Promise.all([
+    supabase.from('z19p_statuses').select('id',{count:'exact',head:true}).eq('owner_id',uid),
+    supabase.from('z19p_products').select('id',{count:'exact',head:true}).eq('owner_id',uid),
+    supabase.from('z19p_folder_templates').select('id',{count:'exact',head:true}).eq('owner_id',uid)
+  ]);
+  // Só cria os padrões no primeiro uso. Depois disso, exclusões e edições do usuário são respeitadas.
+  if(!statusCount){
+    await supabase.from('z19p_statuses').insert(DEFAULT_STATUSES.map(x=>({...x,owner_id:uid})));
+  }
+  if(!productCount){
+    await supabase.from('z19p_products').insert(DEFAULT_PRODUCTS.map((name,i)=>({owner_id:uid,name,sort_order:(i+1)*10})));
+  }
+  if(!folderTemplateCount){
+    await supabase.from('z19p_folder_templates').insert(DEFAULT_FOLDER_TEMPLATES.map((x,i)=>({owner_id:uid,name:x.name,purpose:x.purpose,sort_order:(i+1)*10})));
+  }
+  await ensureLibraries();
+}
+async function ensureLibraries(){
+  if(!session?.user?.id)return;
+  const uid=session.user.id;
+  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);
+  if(error){console.error(error);return;}
+  const byType=Object.fromEntries((data||[]).map(w=>[w.workspace_type,w]));
+  const missing=[];
+  if(!byType.library_artes) missing.push({owner_id:uid,company_name:'Artes',client_name:'Biblioteca interna de artes',notes:'Ambiente interno para organizar e transferir artes entre celular e computador.',share_enabled:false,client_can_download:false,workspace_type:'library_artes'});
+  if(!byType.library_mockups) missing.push({owner_id:uid,company_name:'Mockups',client_name:'Biblioteca interna de mockups',notes:'Ambiente interno para organizar e transferir mockups entre celular e computador.',share_enabled:false,client_can_download:false,workspace_type:'library_mockups'});
+  if(missing.length){
+    const {error:ie}=await supabase.from('z19p_workspaces').insert(missing);if(ie)console.error(ie);
+  }
+  const {data:fresh}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);
+  libraryWorkspaces=Object.fromEntries((fresh||[]).map(w=>[w.workspace_type,w]));
+}
+async function loadConfig(){
+  if(!session)return;
+  const [{data:s,error:se},{data:p,error:pe},{data:f,error:fe}]=await Promise.all([
+    supabase.from('z19p_statuses').select('*').order('sort_order').order('name'),
+    supabase.from('z19p_products').select('*').order('sort_order').order('name'),
+    supabase.from('z19p_folder_templates').select('*').order('sort_order').order('name')
+  ]);
+  if(se)toast('Não foi possível carregar os status.','err');else statuses=s||[];
+  if(pe)toast('Não foi possível carregar os produtos.','err');else products=p||[];
+  if(fe)toast('Não foi possível carregar as pastas padrão.','err');else folderTemplates=f||[];
+}
+async function loadWorkspaces(){
+  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('workspace_type','client').order('created_at',{ascending:false});
+  if(error){toast('Não foi possível carregar os ambientes.','err');return [];}
+  workspaces=data||[];
+  const ids=workspaces.map(w=>w.id);
+  if(ids.length){
+    const {data:logoFolders}=await supabase.from('z19p_folders').select('id,workspace_id').in('workspace_id',ids).eq('purpose','logo_empresa');
+    const folderIds=(logoFolders||[]).map(f=>f.id);
+    if(folderIds.length){
+      const {data:logoAssets}=await supabase.from('z19p_assets').select('id,workspace_id,folder_id,processed_path,original_path,created_at').in('folder_id',folderIds).order('created_at',{ascending:false});
+      for(const w of workspaces){const a=(logoAssets||[]).find(x=>x.workspace_id===w.id);if(a)w.logo_url=publicUrl(a.processed_path||a.original_path);}
+    }
+  }
+  workspaces=sortWorkspacesByAttention(workspaces);
+  return workspaces;
+}
