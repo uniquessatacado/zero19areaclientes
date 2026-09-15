@@ -1,227 +1,283 @@
-# 019 Personalizações — Memória do Projeto
+# 019 Personalizações — Memória Canônica do Projeto
 
-> Arquivo canônico de continuidade. Antes de qualquer alteração futura, ler este arquivo inteiro, conferir a versão atual e atualizar a seção **Histórico de versões** antes de publicar.
+> **LEITURA OBRIGATÓRIA ANTES DE QUALQUER ALTERAÇÃO.** Este arquivo é a fonte de continuidade do projeto. Antes de mexer no código: ler tudo, identificar a versão atual, concluir qualquer etapa aberta, registrar a próxima versão e preservar todas as funções já implementadas. Depois: validar, commitar no GitHub e só então publicar.
 
-## 1. Objetivo do sistema
+## 1. Fonte de verdade e infraestrutura
 
-Sistema interno da Zero 19 para centralizar atendimento de empresas/clientes, artes, mockups, orçamentos, produção DTF, equipe, histórico e produtividade. Precisa funcionar bem no celular e no computador e servir também como ponte de arquivos entre os dois.
-
-## 2. Regras de não regressão
-
-1. Nunca remover uma função existente para incluir outra sem registrar e validar a substituição.
-2. Alterações visuais devem ser feitas sem quebrar fluxo, banco, upload, orçamento, área pública ou permissões.
-3. Antes de publicar: validar sintaxe JavaScript, estrutura do bundle, rotas principais e requisitos marcados como **IMPLEMENTADO** abaixo.
-4. Não reintroduzir remoção automática de fundo. Ela foi retirada a pedido do usuário.
-5. Não reduzir imagem original quando a opção de qualidade estiver ativa. Ampliação pode ser feita, redução não.
-6. Mockup não deve passar por recorte de prancheta nem por ampliação automática.
-7. Senha de funcionário nunca deve ser exibida ao administrador. Usar redefinição de senha.
-8. Toda ação administrativa relevante deve preservar autoria quando houver suporte no banco.
-9. Não publicar alteração nova por cima de uma etapa incompleta. Finalizar/testar a etapa atual primeiro.
-10. Toda publicação deve gerar uma entrada nova no **Histórico de versões** deste arquivo.
-
-## 3. Identidade e acesso
-
-- Nome: **019 Personalizações**.
-- Tema: escuro, laranja 019, visual limpo e profissional.
-- Administrador principal: **Clovis**.
+- Repositório oficial: **`uniquessatacado/zero19areaclientes`**, branch **`main`**.
+- Produção: **`https://019-personalizacoes.vercel.app`**.
+- Projeto Vercel: `019-personalizacoes` / `prj_cpZoh49CdDlYP0h82gwXCbR4nyw3`.
+- Supabase project id: `kedggjyerexnzmipaick`.
+- Tabelas desta aplicação usam prefixo `z19p_`.
+- Bucket: `z19p-assets`.
+- Administrador principal atual: **Clovis**.
 - E-mail administrativo atual: `ussloja@gmail.com`.
-- Hospedagem principal: `https://019-personalizacoes.vercel.app`.
-- Banco/Storage/Auth: Supabase do projeto já conectado.
+- Nome do sistema: **019 Personalizações**.
+- Visual aprovado: tema escuro, laranja Zero 19, profissional, responsivo e sem compactação exagerada.
+- O ZIP/layout aprovado na fase v2.5 é a referência visual; funcionalidades novas devem entrar sem redesenhar globalmente a aplicação.
+- O placeholder digitado `019` **não é o logo oficial**. Quando o arquivo oficial for fornecido, substituir preservando o logo Zero 19 em que o zero é escrito/estilizado.
 
-## 4. Requisitos funcionais consolidados
+## 2. Regras absolutas de não regressão
 
-### Empresas e atendimento
+1. **Nunca remover uma função existente para adicionar outra** sem registrar explicitamente a substituição e validar o impacto.
+2. **Nunca redesenhar globalmente o layout** para encaixar uma função nova. Alterações devem ser localizadas.
+3. Se o usuário mandar nova alteração enquanto outra está em andamento: **terminar a etapa atual primeiro e depois iniciar a próxima**.
+4. Antes de cada alteração, ler este MD; depois registrar aqui causa, correção e prevenção de qualquer bug descoberto.
+5. Toda versão publicada deve ter commit correspondente no GitHub. Produção deve ser rastreável e permitir rollback por commit/deployment.
+6. Não reintroduzir remoção automática de fundo. Foi retirada a pedido do usuário.
+7. A qualidade de imagem nunca deve reduzir uma original que já seja maior que o alvo.
+8. Mockup não passa por recorte de prancheta nem ampliação automática.
+9. Senha de funcionário nunca deve ser exibida ao administrador; usar convite/redefinição segura.
+10. Toda ação administrativa relevante deve preservar autoria quando houver suporte no banco.
+11. **Nunca reintroduzir `DecompressionStream` nativo no boot.** Ele causou `Failed to decode data` em navegador real.
+12. **Nunca buscar um deployment Vercel antigo para montar a aplicação.** Isso já causou `Failed to fetch`.
+13. Não publicar bundle incompleto. Se o boot usar bundle versionado, verificar todas as partes antes da publicação.
+14. Não aplicar CSS global com muitos `!important` sobre a aplicação; isso já destruiu o layout aprovado.
+15. A navegação SPA deve trocar a tela no clique; não pode depender de atualizar manualmente a página.
+16. No mobile, nenhum filtro, card, toolbar, formulário ou botão pode estourar horizontalmente.
+17. Nomes de pastas devem aparecer completos; não esconder com `...`. Reduzir fonte/quebrar linha quando necessário.
 
-- **IMPLEMENTADO** criar, editar e excluir empresa.
-- **IMPLEMENTADO** nome da empresa, cliente, telefone/WhatsApp, estado/UF, observações.
-- **IMPLEMENTADO** status configuráveis.
-- **IMPLEMENTADO** status iniciais: Em atendimento; Aguardando chegar o produto para realizar a personalização; Cliente não responde; Desistiu; Remarcado; Finalizado.
-- **IMPLEMENTADO** alterar status no card e dentro da empresa.
-- **IMPLEMENTADO** alerta após 24h sem mudança de status, exceto Finalizado.
-- **IMPLEMENTADO** empresa atrasada sobe na lista e recebe destaque discreto.
-- **IMPLEMENTADO** exibir tempo parado em horas/dias.
-- **IMPLEMENTADO** botão WhatsApp no card.
-- **IMPLEMENTADO** status Desistiu registra data e fica destacado.
-- **IMPLEMENTADO** Remarcado pede data/hora e destaca quando chegar o retorno.
-- **IMPLEMENTADO** ao sair de status terminal para status ativo, criar novo projeto da mesma empresa.
-- **IMPLEMENTADO** responsável atual e usuário que cadastrou a empresa.
-- **IMPLEMENTADO** botão “Puxar pra mim”, transferindo responsabilidade e abrindo WhatsApp com saudação.
-- **IMPLEMENTADO** área da empresa mostra histórico de projetos e faturamento acumulado.
+## 3. Empresas, clientes e atendimento
 
-### Artes, qualidade e produção
+### Implementado
+- Criar, editar e excluir empresa.
+- Campos: empresa, cliente, telefone/WhatsApp, UF/estado, observações.
+- Status configuráveis no menu Configurações.
+- Status padrão: **Em atendimento**, **Aguardando chegar o produto para realizar a personalização**, **Cliente não responde**, **Desistiu**, **Remarcado**, **Finalizado**.
+- Alterar status no card e dentro da empresa.
+- Mostrar tempo no status em empresas não finalizadas: horas; depois dias + horas.
+- Após 24h sem mudança de status, empresa sobe para o topo e recebe alerta visual discreto até o status mudar.
+- Botão WhatsApp no card.
+- `Desistiu` registra/destaca a data.
+- `Remarcado` exige data/hora do retorno e destaca quando o retorno vence.
+- Quem cadastrou a empresa e responsável atual aparecem separados.
+- Botão **Puxar pra mim** transfere a responsabilidade para o usuário logado e abre WhatsApp com saudação de continuidade.
+- Se alguém diferente assume o atendimento, manter quem cadastrou originalmente e atualizar somente o responsável atual.
+- Alterar de Finalizado para um status ativo representa **novo projeto** da mesma empresa, preservando histórico anterior.
+- Perfil interno da empresa mostra histórico de projetos e quanto o cliente já gastou em camisas, estampas e total.
+- Área pública do cliente não precisa expor histórico financeiro acumulado interno.
 
-- **IMPLEMENTADO** upload de uma ou várias imagens.
-- **IMPLEMENTADO** nome individual por arquivo.
-- **IMPLEMENTADO** editar nome, tipo e pasta.
-- **IMPLEMENTADO** excluir arquivo.
-- **IMPLEMENTADO** baixar PNG.
-- **IMPLEMENTADO** salvar como imagem.
-- **IMPLEMENTADO** visualização em fundo transparente, branco e preto.
-- **IMPLEMENTADO** remoção de prancheta transparente pelo limite de pixels visíveis.
-- **IMPLEMENTADO** preservação de bordas antialias/alpha para evitar cortar a arte.
-- **IMPLEMENTADO** saída PNG com metadata 300 DPI.
-- **IMPLEMENTADO** qualidade: Original, 4032px, 6000px e 8192px.
-- **IMPLEMENTADO** nunca reduzir original maior que o alvo.
-- **REMOVIDO DE PROPÓSITO** remoção automática de fundo.
-- **IMPLEMENTADO** mockup separado das artes de produção e sem tratamento automático.
+### WhatsApp ao assumir atendimento
+Mensagem deve ser amigável, usando cliente e vendedor, no sentido de: “Olá, [cliente], estou responsável pelo desenvolvimento do seu projeto agora. Vamos continuar por aqui. Sou [vendedor] da Zero 19.”
 
-### Pastas e bibliotecas
+## 4. Artes, imagens e produção DTF
 
-- **IMPLEMENTADO** pastas por empresa.
-- **IMPLEMENTADO** subpastas.
-- **IMPLEMENTADO** criar, renomear e excluir pastas.
-- **IMPLEMENTADO** modelos de pasta configuráveis.
-- **IMPLEMENTADO** pastas padrão: Artes enviadas pelo cliente; Artes prontas; Logo da empresa; Mockups.
-- **IMPLEMENTADO** imagem na pasta Logo da empresa aparece como logo do card da empresa.
-- **IMPLEMENTADO** biblioteca interna de Artes, sem vínculo com cliente.
-- **IMPLEMENTADO** biblioteca interna de Mockups, sem vínculo com cliente.
-- **IMPLEMENTADO** bibliotecas aceitam pastas e subpastas e servem para transferência celular ↔ computador.
-- **PENDENTE** importação recursiva de pasta do Google Drive por link, preservando subpastas e arquivos originais. Deve ser feito via integração autorizada/OAuth, não por scraping frágil.
+### Implementado
+- Upload de uma ou várias imagens.
+- Nome individual por arquivo.
+- Editar nome, tipo e pasta.
+- Excluir arte.
+- Baixar PNG / salvar como imagem.
+- Preview em fundo transparente/checker, branco ou preto.
+- Remoção de prancheta transparente pelo limite real dos pixels visíveis, preservando bordas antialias/alpha para não cortar arte.
+- PNG com metadata 300 DPI.
+- Qualidade: **Original**, **4032 px**, **Ultra 6000 px**, **Máxima 8192 px**.
+- Nunca reduzir arquivo original maior que o alvo escolhido.
+- Remoção automática de fundo: **REMOVIDA DE PROPÓSITO**.
+- Mockup é separado das artes de produção e mantém composição original.
 
-### Orçamentos
+## 5. Pastas, subpastas e bibliotecas
 
-- **IMPLEMENTADO** orçamento por empresa.
-- **IMPLEMENTADO** área pública do cliente mostra orçamento.
-- **IMPLEMENTADO** produto, quantidade, prazo de entrega e observações.
-- **IMPLEMENTADO** preço total por peça personalizada OU peça + estampas separadas.
-- **IMPLEMENTADO** múltiplas estampas por item.
-- **IMPLEMENTADO** posições como frente, peito, costas, mangas etc.
-- **IMPLEMENTADO** largura em centímetros; altura proporcional.
-- **IMPLEMENTADO** catálogo configurável: editar, adicionar e excluir modelos.
-- **IMPLEMENTADO** catálogo inicial: 30.1; Oversize Suedine; Oversize 100% algodão; Pima Egípcia; Malha Peruana; Cotton; Dry Fit Premium; Dry Fit com Poliamida.
-- **IMPLEMENTADO** faturamento de finalização separado entre camisas, estampas e total.
+### Implementado
+- Pastas por empresa.
+- Subpastas ilimitadas pela estrutura atual.
+- Criar, renomear, mover e excluir pastas.
+- Configurações de **Pastas padrão** para definir o que nasce em cada nova empresa.
+- Padrões atuais: **Artes enviadas pelo cliente**, **Artes prontas**, **Logo da empresa**, **Mockups**.
+- Arquivo na pasta **Logo da empresa** passa a ser usado no card da empresa no lugar do placeholder.
+- Nomes de pasta precisam ser legíveis por inteiro na lateral/mobile.
+- Biblioteca interna **Artes** sem vínculo com cliente, com pastas/subpastas para organizar Nike, Adidas, política, times etc.
+- Biblioteca interna **Mockups** sem vínculo com cliente.
+- Bibliotecas servem como ponte celular ↔ computador: subir de um dispositivo e baixar no outro.
 
-### Área do cliente
+### Pendente
+- **Google Drive**: importar uma pasta por link/autorização, preservar subpastas e arquivos originais recursivamente. Ex.: Política → Bolsonaro/Lula. Fazer via integração Google Drive/OAuth, não scraping frágil.
 
-- **IMPLEMENTADO** link compartilhável por empresa.
-- **IMPLEMENTADO** cliente vê artes, mockups e orçamento.
-- **IMPLEMENTADO** cliente pode baixar arquivos quando habilitado.
-- **IMPLEMENTADO** cliente vê vendedor responsável.
-- **IMPLEMENTADO** botão de WhatsApp do vendedor.
-- **IMPLEMENTADO** horário de atendimento exibido como 9h às 18h.
-- **PENDENTE** permitir que o cliente envie/anexe imagem diretamente na área pública, caso isso continue sendo desejado. Hoje a área pública é de visualização/download.
+## 6. Orçamentos
 
-### Equipe e administração
+### Implementado
+- Orçamento por empresa e visualização organizada na área pública do cliente.
+- Produto/camiseta, quantidade, prazo de entrega e observações.
+- Preço por unidade.
+- Dois modos: valor total por peça já personalizada OU peça + estampas separadas.
+- Múltiplas estampas por item.
+- Posições: frente, meio do peito, ponta do peito esquerda/direita, costas, manga esquerda/direita e combinações.
+- Medida principal por **largura em cm**, altura proporcional.
+- Editar/adicionar/excluir produtos no catálogo.
+- Produtos padrão: **30.1**, **Oversize Suedine**, **Oversize 100% algodão**, **Pima Egípcia**, **Malha Peruana**, **Cotton**, **Dry Fit Premium**, **Dry Fit com Poliamida**.
+- Faturamento final separado em camisas, estampas e total.
+- Campos numéricos no mobile devem ser simples para apagar/digitar; evitar UI confusa de stepper/setinhas.
 
-- **IMPLEMENTADO** perfil de administrador e perfis de funcionários.
-- **IMPLEMENTADO** administrador convida funcionário com nome, telefone e e-mail.
-- **IMPLEMENTADO** funcionário define a própria senha no primeiro acesso.
-- **IMPLEMENTADO** redefinição de senha pelo administrador via fluxo seguro.
-- **IMPLEMENTADO** funcionários da mesma conta enxergam os mesmos clientes/empresas conforme RLS da equipe.
-- **IMPLEMENTADO** usuário que cadastrou e responsável atual aparecem nos cards/empresa.
-- **IMPLEMENTADO** histórico/auditoria de ações principais.
-- **IMPLEMENTADO** anexos registram quem enviou.
-- **IMPLEMENTADO** orçamento registra autoria.
-- **IMPLEMENTADO** histórico de login disponível no banco e área administrativa.
-- **NÃO IMPLEMENTAR** administrador visualizar senha do funcionário.
+## 7. Área pública do cliente
 
-### Dashboard e produtividade
+### Implementado
+- Link compartilhável por empresa.
+- Cliente vê orçamento, artes e mockups.
+- Cliente pode baixar arquivos quando habilitado.
+- Cliente vê vendedor responsável.
+- Botão WhatsApp do vendedor.
+- Horário de atendimento: **9h às 18h**.
+- Empresa finalizada continua com ambiente disponível para consulta/download.
 
-- **IMPLEMENTADO** filtros: hoje, ontem, últimos 7 dias, últimos 30 dias, mês passado, mês, data personalizada.
-- **IMPLEMENTADO** filtro por vendedor.
-- **IMPLEMENTADO** empresas/clientes cadastrados.
-- **IMPLEMENTADO** empresas por estado/UF.
-- **IMPLEMENTADO** projetos iniciados e finalizados.
-- **IMPLEMENTADO** atendimentos ativos em tempo real.
-- **IMPLEMENTADO** atendimentos vencidos/atenção +24h.
-- **IMPLEMENTADO** desistências.
-- **IMPLEMENTADO** faturamento camisas, estampas e total.
-- **IMPLEMENTADO** resumo diário na página inicial.
-- **IMPLEMENTADO** histórico de atividades no administrativo.
+### Pendente
+- Permitir o cliente anexar/subir imagem diretamente pela área pública, se mantido como requisito final. Hoje o fluxo principal é visualização/download.
 
-## 5. Pontos arquiteturais importantes
+## 8. Equipe e administração
 
-- **Repositório canônico a partir da v2.10:** `uniquessatacado/zero19areaclientes` (branch `main`). Este repositório é a fonte de verdade do código e do `PROJECT_MEMORY.md`.
-- **Regra obrigatória antes de alterar:** ler `PROJECT_MEMORY.md` no repositório, identificar a versão atual, concluir a etapa em andamento, criar a nova entrada de versão e só então alterar/publicar.
-- **Regra obrigatória após alterar:** commit no GitHub com a versão correspondente antes/ao mesmo tempo da publicação; a produção deve ser rastreável a um commit.
-- **Rollback:** se uma versão quebrar produção, voltar para um commit/tag conhecido e só depois reaplicar a correção de forma isolada.
-- **Falha resolvida a não repetir:** loaders que baixam chunks compactados e usam `DecompressionStream`/gzip/base64 em tempo de execução causaram `Failed to decode data`/`Failed to fetch` em navegadores reais. A partir da v2.10, o boot deve usar arquivos estáticos normais (`index.html` + `styles.css` + `app.js`) no mesmo deployment. Não reintroduzir decodificação/compressão no navegador para iniciar o app.
-- Tabelas do sistema usam prefixo `z19p_` para não misturar com outras aplicações no mesmo Supabase.
-- Arquivos ficam no bucket `z19p-assets`.
-- O sistema possui RLS para equipe da mesma conta e autoria dos registros.
-- Existe RPC pública `z19p_get_public_workspace` para a área do cliente.
-- Existe Edge Function `z19p-team-admin` para convites, ativação/desativação e redefinição de senha da equipe.
-- O front atual é carregado como bundle estático. Evitar patches temporários duplicando lógica já presente no bundle principal.
-- O patch `team-patch.js` criado durante a fase de correção ficou redundante porque as mesmas funções passaram a existir no bundle principal. Na v2.3 ele deve ser neutralizado/removido para reduzir risco de duplicação.
+### Implementado
+- Clovis como administrador.
+- Área **Equipe** para funcionários.
+- Cadastro/convite com nome completo, telefone e e-mail.
+- Funcionário cria a própria senha no primeiro acesso.
+- Redefinição de senha por fluxo seguro.
+- Funcionários da mesma equipe enxergam a base compartilhada conforme regras do banco.
+- Histórico de acesso e ações administrativas.
+- Empresas, anexos, orçamento, mudanças de status e ações principais registram autoria quando suportado.
+- Cards destacam quem cadastrou e quem é o responsável atual.
+- Na área do cliente, mostrar “Seu vendedor responsável é [nome]” + WhatsApp.
 
-## 6. Checklist obrigatório antes de publicar
+### Não implementar
+- Administrador visualizar a senha definida pelo funcionário. Senhas permanecem protegidas; usar redefinição.
 
-- [ ] `node --check app.js`
-- [ ] `index.html` não usa `DecompressionStream`, gzip/base64/chunks remotos para iniciar o app
-- [ ] `styles.css`, `app.js` e `demo.html` respondem 200 no preview antes de produção
-- [ ] confirmar commit correspondente no repositório `zero19areaclientes`
-- [ ] busca por opção de remoção automática de fundo deve retornar zero na interface
-- [ ] login abre normalmente
-- [ ] dashboard carrega sem overflow horizontal
-- [ ] filtro de status não sai da tela no mobile
-- [ ] card de empresa mostra status, responsável, WhatsApp e ações
-- [ ] editar/excluir empresa continua disponível
-- [ ] abrir empresa funciona
-- [ ] pastas/subpastas continuam funcionando
-- [ ] upload de arte mantém recorte/prancheta + opções de qualidade
-- [ ] mockup não é processado como arte
-- [ ] editar/excluir/baixar arte continua funcionando
-- [ ] orçamento abre, salva e aparece na área pública
-- [ ] equipe/dashboard continuam acessíveis ao administrador
-- [ ] área pública do cliente carrega vendedor, orçamento, mockups e artes
-- [ ] nenhuma alteração visual remove função já existente
+## 9. Dashboard e produtividade
 
-## 7. Pendências priorizadas
+### Implementado
+- Dashboard administrativo e botão de produtividade.
+- Filtros: **Hoje**, **Ontem**, **Últimos 7 dias**, **Últimos 30 dias**, **Mês passado**, **mês específico**, **data personalizada**.
+- Filtro por vendedor.
+- Empresas/clientes cadastrados por usuário.
+- Empresas por UF/estado.
+- Projetos iniciados e finalizados.
+- Atendimentos ativos em tempo real.
+- Distribuição por status.
+- Atendimentos vencidos +24h.
+- Desistências.
+- Faturamento por camisas, estampas e total.
+- Resumo diário na página inicial.
+- Histórico de atividades.
+- Equipe, Dashboard, “Ver produtividade” e demais rotas devem abrir imediatamente no clique, sem exigir refresh.
 
-1. **Google Drive**: importar pasta recursivamente, preservar subpastas e arquivos originais.
-2. **Upload pelo cliente** na área pública, se confirmado como requisito final.
-3. **Consolidar código**: retirar overrides/monkey-patches antigos do `app.js` e gerar uma base única, depois de congelar comportamento atual com testes.
-4. **Privacidade de arquivos**: bucket atual usa URLs públicas para facilitar compartilhamento. Evolução futura recomendada: bucket privado + URLs assinadas.
-5. **Testes automatizados de smoke** para rotas e principais fluxos.
+## 10. Biblioteca de vídeos / Demonstrações de qualidade
 
-## 8. Histórico de versões
+### Implementado
+- Biblioteca interna **Vídeos**.
+- Upload MP4, MOV e WebM.
+- Pastas/subpastas.
+- Nome e **descrição da demonstração**.
+- Visualizar, renomear, mover, excluir e baixar vídeo original.
+- Limite atual do bucket: 50 MB por arquivo.
+- Cada vídeo recebe `share_token` para compartilhamento público.
+- RPC pública `z19p_get_public_video_demo(uuid)` retorna apenas dados necessários de demonstrações.
+- Página pública `demo.html?t=<token>` com layout responsivo, vídeo original em alta qualidade e botão **Baixar vídeo**.
+- Botão **Demonstrar** permite selecionar uma ou várias demonstrações e depois escolher um cliente cadastrado.
+- WhatsApp gera texto organizado com emoji/negrito, cada demonstração em bloco separado, descrição e link individual.
+- Modelo do texto: “Clique no link abaixo para assistir ao vídeo da demonstração de qualidade — [descrição]” seguido do link.
+- Vídeos internos não aparecem automaticamente na área normal do cliente; são enviados pelo fluxo Demonstrar.
 
-### v1.0–v1.4 — Base, produção, comercial e organização
-- Login/Supabase; empresas; upload/PNG; área do cliente.
-- Recorte transparente, 300 DPI, 4032/6000/8192; mockup separado; remoção automática de fundo retirada.
-- Status, catálogo, orçamento, WhatsApp; pastas/subpastas, Logo da empresa, Artes prontas/cliente e bibliotecas Artes/Mockups.
-- Alerta +24h e prioridade visual das pendências.
+## 11. Arquitetura e bugs já descobertos
 
-### v2.0–v2.4 — Equipe, indicadores e estabilização
-- Admin/funcionários, autoria, responsável, Puxar pra mim, histórico, projetos recorrentes, Desistiu/Remarcado, faturamento e dashboard.
-- UF, empresas por estado, totais por cliente e vendedor na área pública.
-- Ajustes de RLS/Storage/auditoria/primeiro acesso.
-- Criado `PROJECT_MEMORY.md`; `Cotton` corrigido no catálogo.
-- Revertida compactação global que havia degradado o layout; visual anterior restaurado sem remover funções.
+### Bug: layout destruído por compactação global
+- **Causa:** CSS/patch global com muitos overrides e `!important`.
+- **Correção:** restaurar layout canônico aprovado e aplicar só estilos localizados.
+- **Prevenção:** nunca redesenhar globalmente por causa de uma feature.
 
-### v2.5–v2.7 — Layout canônico, navegação e estabilidade
-- O ZIP de layout aprovado virou a referência visual canônica; `styles.css` de referência SHA-256 `1d7789662daaf1336d83e66615b2a97a3db808c4a5d878463f58c9f0e1956400`. Funções novas devem entrar sem redesign global.
-- Corrigida navegação de Equipe/Dashboard/Produtividade: `hashchange` chama a implementação atual de `renderRoute`; `nav()` rerenderiza a rota atual.
-- Placeholder `019` não é o logo oficial; substituir quando o arquivo oficial da Zero 19 for fornecido.
-- Corrigida arquitetura que buscava deployment Vercel antigo e gerava `Failed to fetch`; não voltar a depender de deployment antigo.
-- Empresas não finalizadas mostram tempo no status e alerta +24h; nomes de pastas quebram linha e não usam reticências.
-- Layout, orçamento, status, equipe, dashboard, artes, mockups e demais funções preservados.
+### Bug: Equipe/Dashboard mudavam URL mas não tela
+- **Causa:** handler antigo de navegação/hash continuava registrado.
+- **Correção:** `hashchange` chama a implementação atual de `renderRoute`; `nav()` rerenderiza a rota atual.
+- **Prevenção:** testar clique de todas as rotas sem refresh.
 
-### v2.8 — Biblioteca de vídeos de demonstração e WhatsApp
-- Criado ambiente interno para vídeos de demonstração de qualidade, com pastas/subpastas, upload MP4/MOV/WEBM, nome, visualização, download e exclusão.
-- Dashboard recebeu card **Vídeos** ao lado de Artes e Mockups, preservando o layout canônico.
-- Bucket `z19p-assets` passou a aceitar `video/mp4`, `video/quicktime` e `video/webm`, limite atual de 50 MB.
-- Botão **Demonstrar** abre empresas/clientes cadastrados e permite iniciar WhatsApp do cliente.
+### Bug: `Failed to fetch`
+- **Causa:** produção carregava parte do app buscando deployment Vercel antigo.
+- **Correção:** remover dependência de deployment antigo.
+- **Prevenção:** boot jamais deve apontar para URL de deployment histórico.
 
-### v2.9 — Preview público de demonstrações e envio múltiplo no WhatsApp
-- `z19p_assets` recebeu `share_token` e foi criada RPC pública `z19p_get_public_video_demo(uuid)` para links públicos de demonstração.
-- Cada vídeo possui nome + descrição para o cliente.
-- `Demonstrar` permite selecionar uma ou várias demonstrações e depois o cliente.
-- WhatsApp gera mensagem formatada com emoji, negrito, nome/descrição de cada demonstração e link individual.
-- `demo.html?t=<share_token>` mostra preview responsivo, reproduz o arquivo original em alta qualidade e oferece **Baixar vídeo**.
-- **Problema encontrado:** o boot v2.9 usou chunks/base64 + gzip + `DecompressionStream`, causando `Failed to decode data` em navegador real. Essa arquitetura está proibida daqui em diante.
+### Bug: `Failed to decode data`
+- **Causa confirmada:** v2.9 usava `DecompressionStream` nativo para gzip no navegador; em alguns dispositivos o boot falhava. Durante a migração para o GitHub também foi encontrado bundle incompleto, faltando `runtime-bundle/bundle.06.txt`.
+- **Correção v2.10.1:** bundle foi completado (`bundle.00` a `bundle.07`) e o boot de produção deixou de usar `DecompressionStream`. A compatibilidade atual usa `fflate@0.8.2` em JavaScript, Raw GitHub como origem principal e jsDelivr como fallback.
+- **Prevenção:** nunca usar `DecompressionStream` no boot; nunca publicar sem conferir todas as partes; manter código/versionamento no GitHub.
+- **Evolução preferida:** consolidar deploy Git→Vercel com `index.html + styles.css + app.js` diretos do mesmo deployment, eliminando também o bundle remoto quando a integração de deploy estiver estabilizada.
 
-### v2.10 — GitHub como fonte de verdade + boot estático sem decode
-- Pedido: parar de perder contexto/código, versionar tudo no repositório `uniquessatacado/zero19areaclientes`, manter o `PROJECT_MEMORY.md` junto do código e permitir rollback seguro.
-- Causa do erro em produção: a v2.9 inicializava o sistema baixando chunks/base64 compactados e decodificando gzip com `DecompressionStream` no navegador. Em alguns navegadores/dispositivos isso resultou em `Failed to decode data` e impediu o sistema de abrir.
-- Correção arquitetural: o boot novo não pode usar gzip/base64/DecompressionStream. Durante a migração, os arquivos-fonte podem ser particionados no repositório, mas devem ser carregados como texto simples e concatenados sem compressão; o objetivo final é `index.html` + `styles.css` + `app.js` estáticos no mesmo deployment.
-- Cache deve ficar no-cache/no-store durante estabilização.
-- Continuidade: funcionalidades v2.9 permanecem, incluindo tempo no status, nomes completos de pastas, biblioteca de vídeos, descrição, seleção múltipla de demonstrações, WhatsApp e preview público.
-- WhatsApp: texto deve listar cada demonstração separadamente, com nome, descrição e link individual.
-- Preview de vídeo: usar arquivo original em alta qualidade, carregamento rápido e botão de download.
-- Processo permanente: nenhuma alteração futura deve ser publicada sem atualizar este arquivo e o GitHub; problemas resolvidos entram aqui com causa + prevenção.
-- **Observação de infraestrutura:** a tentativa de usar GitHub Actions para reconstruir automaticamente o snapshot falhou antes de executar qualquer step (`runner_id=0`, `steps=[]`). Não depender desse workflow para publicar ou preservar o código; manter os arquivos versionados diretamente no repositório.
+## 12. Checklist obrigatório antes de publicar
 
-## 9. Próxima versão
+- [ ] Ler este `PROJECT_MEMORY.md` inteiro.
+- [ ] Registrar a nova versão aqui antes/na mesma mudança.
+- [ ] `node --check app.js` quando houver `app.js` direto.
+- [ ] Não existe `DecompressionStream` no boot.
+- [ ] Não existe URL de deployment Vercel antigo no boot.
+- [ ] Se houver bundle remoto de compatibilidade, todas as partes existem e estão na versão correta.
+- [ ] Commit correspondente existe no `zero19areaclientes`.
+- [ ] Preview/deployment está `READY` antes de promoção.
+- [ ] Domínio canônico responde 200 e entrega a versão nova.
+- [ ] `demo.html` responde 200.
+- [ ] Login abre.
+- [ ] Dashboard sem overflow horizontal.
+- [ ] Filtro de status não sai da tela no celular.
+- [ ] Equipe/Dashboard/Produtividade navegam no clique.
+- [ ] Cards mantêm status, responsável, WhatsApp, editar/excluir e abrir empresa.
+- [ ] Tempo no status e alerta +24h aparecem corretamente.
+- [ ] Pastas/subpastas funcionam e nomes aparecem completos.
+- [ ] Artes continuam com recorte de prancheta e qualidade.
+- [ ] Não existe remoção automática de fundo na interface.
+- [ ] Mockup não recebe processamento de arte.
+- [ ] Editar/excluir/baixar arte continua funcionando.
+- [ ] Orçamento salva e aparece na área pública.
+- [ ] Área pública mostra vendedor, orçamento, mockups e artes.
+- [ ] Biblioteca de vídeos, descrição, seleção múltipla, WhatsApp e preview permanecem.
+- [ ] Nenhuma função anterior foi removida para encaixar a nova.
 
-Ao receber a próxima solicitação, criar **v2.11** neste arquivo antes de publicar e preservar o layout canônico e todas as regras de não regressão da v2.10.
+## 13. Histórico resumido de versões
+
+### v1.0–v1.4 — Base, produção e comercial
+- Auth/Supabase, empresas, upload/PNG, área pública.
+- Recorte transparente, 300 DPI, 4032/6000/8192, mockup separado e removedor de fundo retirado.
+- Status, catálogo, orçamento, WhatsApp, pastas/subpastas e bibliotecas Artes/Mockups.
+- Alerta +24h.
+
+### v2.0–v2.4 — Equipe, auditoria e indicadores
+- Administrador/funcionários, autoria, responsável, Puxar pra mim, histórico, projetos recorrentes, Desistiu/Remarcado, faturamento, dashboard e UF.
+- Criado `PROJECT_MEMORY.md`.
+- Corrigido Cotton no catálogo.
+- Revertida compactação global que degradou o layout.
+
+### v2.5–v2.7 — Layout canônico e navegação
+- ZIP/layout aprovado virou referência visual.
+- Corrigidas rotas Equipe/Dashboard/Produtividade.
+- Corrigido `Failed to fetch` por dependência de deployment antigo.
+- Tempo no status, alerta +24h e nomes completos de pastas.
+
+### v2.8 — Vídeos de demonstração
+- Biblioteca Vídeos, upload MP4/MOV/WebM, pastas, download e fluxo Demonstrar/WhatsApp.
+
+### v2.9 — Preview público e múltiplas demonstrações
+- `share_token`, RPC pública de vídeo, descrição por vídeo, seleção múltipla e `demo.html` com download.
+- Boot v2.9 acabou expondo o problema de `DecompressionStream` em navegador real.
+
+### v2.10 — GitHub como fonte de verdade
+- Pedido do usuário: código + MD versionados no repositório para não perder contexto e permitir rollback.
+- Preparada base para retirar o carregamento quebradiço.
+
+### v2.10.1 — Recuperação de produção concluída em 15/09/2026
+- Repositório canônico confirmado: `uniquessatacado/zero19areaclientes`.
+- Completado `runtime-bundle` com `bundle.00.txt` até `bundle.07.txt`.
+- Criados/atualizados no GitHub: `index.html`, `demo.html`, `vercel.json` e este `PROJECT_MEMORY.md`.
+- Produção publicada no Vercel: deployment **`dpl_2VNKYZRi3ArC2Z9gyheKyap62CQC`**.
+- Deployment ficou **READY** sem erro de alias.
+- Aliases ativos: `019-personalizacoes.vercel.app` e `019-personalizacoes-uniquess.vercel.app`.
+- Domínio canônico verificado via HTTP 200 entregando `z19-version=2.10.1`.
+- `demo.html` verificado via HTTP 200.
+- Cache da raiz e do preview de vídeo configurado como `no-store` durante estabilização.
+- Boot não usa `DecompressionStream`; usa `fflate` em JS e possui fallback Raw GitHub/jsDelivr.
+- Próxima alteração deve iniciar como **v2.11** e preservar tudo acima.
+
+## 14. Pendências priorizadas
+
+1. Importação recursiva do Google Drive com OAuth e preservação de subpastas.
+2. Upload de arquivo pelo cliente na área pública, se confirmado.
+3. Consolidar `app.js`/CSS removendo overrides antigos depois de congelar comportamento com smoke tests.
+4. Evoluir o boot para arquivos diretos do mesmo deployment via integração Git→Vercel, retirando o bundle remoto de compatibilidade sem reintroduzir o bug.
+5. Considerar bucket privado + URLs assinadas para maior privacidade.
+6. Criar smoke tests automatizados para login, dashboard, empresa, pastas, upload, orçamento, equipe e vídeo.
+
+## 15. Próxima versão
+
+**A próxima versão é v2.11.** Antes de qualquer mudança, ler este arquivo novamente, registrar a intenção da v2.11 e preservar o layout canônico, todas as funções e todas as regras de prevenção acima.
