@@ -3,51 +3,54 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b0b0d">
+  <meta name="theme-color" content="#09090b">
   <meta name="color-scheme" content="dark">
-  <meta name="z19-version" content="2.10.1">
+  <meta name="z19-version" content="2.10.2">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <title>019 Personalizações</title>
   <style>
-    html,body{margin:0;min-height:100%;background:#09090b;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.boot{min-height:100vh;display:grid;place-items:center;padding:24px}.boot-card{text-align:center;max-width:480px}.spinner{width:36px;height:36px;margin:0 auto 18px;border:3px solid #2b2b31;border-top-color:#ff5a1f;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}.retry{border:0;border-radius:12px;background:#ff5a1f;color:#111;font-weight:800;padding:12px 18px;cursor:pointer}
+    html,body{margin:0;min-height:100%;background:#09090b;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    #z19boot{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;padding:24px;background:#09090b}.boot-card{text-align:center;max-width:520px}.spinner{width:38px;height:38px;margin:0 auto 18px;border:3px solid #2b2b31;border-top-color:#ff5a1f;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}.retry{border:0;border-radius:12px;background:#ff5a1f;color:#111;font-weight:850;padding:12px 18px}.muted{color:#9797a4;font-size:13px;overflow-wrap:anywhere}
   </style>
 </head>
 <body>
-  <div id="boot" class="boot"><div class="boot-card"><div class="spinner"></div><b>Carregando 019 Personalizações…</b><p style="color:#9797a4">Versão 2.10.1</p></div></div>
+  <div id="z19boot"><div class="boot-card"><div class="spinner"></div><b>Carregando 019 Personalizações…</b><p class="muted">Versão 2.10.2</p></div></div>
   <div id="app"></div>
   <div id="toast-root" aria-live="polite"></div>
   <script type="module">
+    const boot=document.getElementById('z19boot');
+    const fail=(err)=>{console.error(err);if(!boot)return;boot.innerHTML=`<div class="boot-card"><h2>Não foi possível iniciar o sistema</h2><p class="muted">${String(err?.message||err)}</p><button class="retry" onclick="location.reload()">Tentar novamente</button></div>`;};
+    window.addEventListener('error',e=>{if(!document.getElementById('app')?.innerHTML)fail(e.error||e.message||'Erro ao iniciar');});
+    window.addEventListener('unhandledrejection',e=>{if(!document.getElementById('app')?.innerHTML)fail(e.reason||'Falha ao iniciar');});
     const ROOTS=[
       'https://raw.githubusercontent.com/uniquessatacado/zero19areaclientes/main/runtime-bundle/',
       'https://cdn.jsdelivr.net/gh/uniquessatacado/zero19areaclientes@main/runtime-bundle/'
     ];
     const PARTS=['bundle.00.txt','bundle.01.txt','bundle.02.txt','bundle.03.txt','bundle.04.txt','bundle.05.txt','bundle.06.txt','bundle.07.txt'];
-    async function getPart(name){
-      let last;
-      for(const root of ROOTS){
-        try{const r=await fetch(root+name+'?v=2101',{cache:'no-store'});if(r.ok)return (await r.text()).trim();last=new Error(`HTTP ${r.status}`);}catch(e){last=e;}
-      }
-      throw last||new Error('Falha ao carregar '+name);
-    }
-    async function start(){
-      try{
-        const [{gunzipSync,strFromU8},parts]=await Promise.all([
-          import('https://esm.sh/fflate@0.8.2'),
-          Promise.all(PARTS.map(getPart))
-        ]);
-        const b64=parts.join('');
-        const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
-        const payload=JSON.parse(strFromU8(gunzipSync(bytes)));
-        const style=document.createElement('style');style.textContent=payload.css;document.head.appendChild(style);
-        document.getElementById('boot')?.remove();
-        const url=URL.createObjectURL(new Blob([payload.js],{type:'text/javascript'}));
-        try{await import(url);}finally{setTimeout(()=>URL.revokeObjectURL(url),5000);}
-      }catch(e){
-        console.error(e);
-        document.getElementById('boot').innerHTML=`<div class="boot-card"><h2>Não foi possível carregar o sistema</h2><p style="color:#9797a4">${String(e?.message||e)}</p><button class="retry" onclick="location.reload()">Tentar novamente</button></div>`;
-      }
-    }
-    start();
+    async function getPart(name){let last;for(const root of ROOTS){try{const r=await fetch(root+name+'?v=2102',{cache:'no-store'});if(r.ok)return (await r.text()).trim();last=new Error(`HTTP ${r.status} em ${name}`)}catch(e){last=e}}throw last||new Error('Falha ao carregar '+name)}
+    try{
+      const [fflate,supa,pica,parts]=await Promise.all([
+        import('https://esm.sh/fflate@0.8.2?bundle'),
+        import('https://esm.sh/@supabase/supabase-js@2.57.4?bundle'),
+        import('https://esm.sh/pica@9.0.1?bundle'),
+        Promise.all(PARTS.map(getPart))
+      ]);
+      const b64=parts.join('');
+      const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+      const payload=JSON.parse(fflate.strFromU8(fflate.gunzipSync(bytes)));
+      const style=document.createElement('style');style.textContent=payload.css;document.head.appendChild(style);
+      let js=payload.js;
+      js=js.replace("import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';\n",'');
+      js=js.replace("import picaFactory from 'https://esm.sh/pica@9.0.1';\n",'');
+      js=js.replace('\n}bindWorkspaceCards = function(){','\n};\nbindWorkspaceCards = function(){');
+      new Function('createClient','picaFactory',js)(supa.createClient,pica.default);
+      const started=Date.now();
+      const timer=setInterval(()=>{
+        const app=document.getElementById('app');
+        if(app?.innerHTML?.trim()) { clearInterval(timer); boot.remove(); return; }
+        if(Date.now()-started>15000){clearInterval(timer);fail(new Error('O aplicativo não respondeu ao iniciar.'));}
+      },80);
+    }catch(e){fail(e)}
   </script>
 </body>
 </html>
