@@ -1,0 +1,131 @@
+enos um produto.','err');
+  for(const item of draft.items){if(!item.product_name)return toast('Selecione o produto em todos os itens.','err');}
+  const payload={owner_id:session.user.id,workspace_id:currentWorkspace.id,title:draft.title.trim()||'Orçamento',delivery_term:draft.delivery_term.trim()||null,notes:draft.notes.trim()||null,updated_at:new Date().toISOString()};
+  let quoteId=draft.id;if(quoteId){const {error}=await supabase.from('z19p_quotes').update(payload).eq('id',quoteId);if(error)return toast(error.message,'err');const {error:de}=await supabase.from('z19p_quote_items').delete().eq('quote_id',quoteId);if(de)return toast(de.message,'err');}
+  else{const {data,error}=await supabase.from('z19p_quotes').insert(payload).select().single();if(error)return toast(error.message,'err');quoteId=data.id;}
+  const rows=draft.items.map((item,i)=>({owner_id:session.user.id,quote_id:quoteId,product_id:item.product_id||null,product_name:item.product_name,quantity:Math.max(1,parseInt(item.quantity)||1),pricing_mode:item.pricing_mode,piece_price:item.pricing_mode==='piece_plus_print'?moneyNumber(item.piece_price):null,total_unit_price:item.pricing_mode==='total_unit'?moneyNumber(item.total_unit_price):null,prints:(item.prints||[]).map(p=>({placement:p.placement||'Frente',width_cm:String(p.width_cm||'').trim(),price:item.pricing_mode==='piece_plus_print'?moneyNumber(p.price):0})),sort_order:i}));
+  const {error}=await supabase.from('z19p_quote_items').insert(rows);if(error)return toast(error.message,'err');m.remove();toast('Orçamento salvo e disponível para o cliente.','ok');renderWorkspace(currentWorkspace.id);
+}
+
+async function renderWorkspace(id){
+  await ensureDefaults();
+  await loadConfig();
+  const [{data:w,error:we},{data:f},{data:a}]=await Promise.all([
+    supabase.from('z19p_workspaces').select('*').eq('id',id).single(),
+    supabase.from('z19p_folders').select('*').eq('workspace_id',id).order('sort_order').order('name'),
+    supabase.from('z19p_assets').select('*').eq('workspace_id',id).order('created_at',{ascending:false})
+  ]);
+  if(we||!w){toast('Ambiente não encontrado.','err');return nav('/');}
+  currentWorkspace=w;currentFolders=f||[];currentAssets=a||[];activeFolder='all';
+  const isLibrary=w.workspace_type&&w.workspace_type!=='client';
+  const isMockupsLibrary=w.workspace_type==='library_mockups';
+  if(isLibrary)currentQuotes=[];else await loadQuotes(id);
+  const st=statusById(w.status_id);
+  const logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa');
+  const logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null;
+  const logoUrl=logoAsset?publicUrl(logoAsset.processed_path||logoAsset.original_path):'';
+  const bannerIcon=logoUrl?`<div class="workspace-banner-logo"><img src="${logoUrl}" alt="Logo"></div>`:'';
+  const bannerActions=isLibrary
+    ? `<button class="btn primary" id="uploadBtn">${icon('upload')} ${isMockupsLibrary?'Adicionar mockup':'Subir arte'}</button>`
+    : `${w.phone?`<button class="btn whatsapp" id="workspaceWhatsapp">WA WhatsApp</button>`:''}<button class="btn" id="mockupBtn">${icon('image')} Adicionar mockup</button><button class="btn primary" id="uploadBtn">${icon('upload')} Subir arte</button><button class="btn ghost" id="workspaceMore">•••</button>`;
+  const attention=isLibrary?null:workspaceStatusAttention(w);
+  const agingNotice=attention?`<div class="workspace-aging-notice"><span class="attention-pulse"></span><div><b>Status sem alteração há ${escapeHTML(attention.label)}</b><small>${w.phone?'Entre em contato pelo WhatsApp e atualize o andamento.':'Revise este atendimento e atualize o status.'}</small></div>${w.phone?`<button class="btn whatsapp small" id="agingWhatsapp">WA WhatsApp</button>`:''}</div>`:'';
+  const controls=isLibrary?'':`${agingNotice}<div class="workspace-control-row"><div class="workspace-status-block"><div class="workspace-status-control"><span class="status-dot" style="--status:${escapeHTML(st?.color||'#555')}"></span><div><small>Status da empresa</small><select id="workspaceStatus" class="status-select"><option value="">Sem status</option>${statusOptions(w.status_id)}</select></div></div>${statusAgeDetail}</div><div class="share-strip compact-share"><div class="share-info"><span class="share-status ${w.share_enabled?'on':''}"></span><div><b>Área do cliente</b><small>${w.share_enabled?'Link ativo':'Link desativado'}</small></div></div><div class="share-actions"><button class="btn small" id="copyShare">${icon('copy')} Copiar link</button><label class="switch"><input type="checkbox" id="shareEnabled" ${w.share_enabled?'checked':''}><span></span></label></div></div></div>`;
+  const quoteSection=isLibrary?'':`<section class="quotes-admin"><div class="section-title-row"><div><div class="eyebrow">Comercial</div><h2>Orçamento</h2><p>O cliente visualiza este orçamento no próprio ambiente.</p></div>${currentQuotes.length?`<button class="btn small" id="addQuote">${icon('plus')} Novo orçamento</button>`:''}</div>${renderQuotesAdmin()}</section>`;
+  const sideTitle=isLibrary?(isMockupsLibrary?'Pastas de mockups':'Pastas de artes'):'Pastas da empresa';
+  const kindLabel=isLibrary?(isMockupsLibrary?'Biblioteca de mockups':'Biblioteca de artes'):'Empresa';
+  const meta=isLibrary?(isMockupsLibrary?'Organize seus mockups e acesse do celular ou computador.':'Organize suas artes em pastas e subpastas e acesse de qualquer dispositivo.'):`${escapeHTML(w.client_name||'Cliente não informado')} ${w.phone?`• ${escapeHTML(w.phone)}`:''}${w.state?` • ${escapeHTML(w.state)}`:''}`;
+  const typeFilter=isLibrary?'':`<select id="typeFilter" class="btn compact-select"><option value="all">Tudo</option><option value="arte">Artes</option><option value="mockup">Mockups</option></select>`;
+  const content=`<main class="container simple-container"><div class="workspace-banner clean library-aware">${bannerIcon}<div><div class="eyebrow">${kindLabel}</div><h1>${escapeHTML(w.company_name)}</h1><div class="meta">${meta}</div></div><div class="spacer"></div>${bannerActions}</div>
+  ${controls}${quoteSection}
+  <div class="workspace-layout clean-layout"><aside class="sidebar"><div class="side-title"><b>${sideTitle}</b><button class="btn ghost small" id="newFolder" title="Criar pasta">${icon('plus')}</button></div><button class="folder active" data-folder="all">${icon('image')} <span>Todos</span></button><button class="folder" data-folder="root">${icon('folder')} <span>Sem pasta</span></button>${renderFolderTree()}</aside><section class="workspace-main"><div class="toolbar clean-toolbar asset-toolbar"><div class="search">${icon('search')}<input id="assetSearch" placeholder="Buscar arquivo..."></div>${typeFilter}</div><div id="assetGrid" class="asset-grid clean-assets">${renderAssets(currentAssets)}</div></section></div></main>`;
+  app.innerHTML=shell(content,{back:true});bindCommon();bindWorkspaceUI();if(!isLibrary)bindQuoteAdmin();
+}
+function folderChildren(parentId=null,folders=currentFolders){
+  return folders.filter(f=>(f.parent_id||null)===(parentId||null)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)||a.name.localeCompare(b.name,'pt-BR'));
+}
+function renderFolderTree(parentId=null,depth=0,seen=new Set()){
+  const rows=[];
+  for(const f of folderChildren(parentId)){
+    if(seen.has(f.id))continue;seen.add(f.id);
+    const purpose=f.purpose?` data-purpose="${escapeHTML(f.purpose)}"`:'';
+    rows.push(`<div class="folder-row folder-depth-${Math.min(depth,6)}" style="--depth:${depth}"><button class="folder" data-folder="${f.id}"${purpose}>${icon('folder')} <span>${escapeHTML(f.name)}</span></button><button class="folder-more" data-id="${f.id}" aria-label="Opções da pasta">•••</button></div>`);
+    rows.push(renderFolderTree(f.id,depth+1,seen));
+  }
+  return rows.join('');
+}
+function folderOptionHTML(folders=currentFolders,selected='',excludeId=''){
+  const out=[];const seen=new Set();
+  const walk=(parentId=null,depth=0)=>{
+    for(const f of folderChildren(parentId,folders)){
+      if(f.id===excludeId||seen.has(f.id))continue;seen.add(f.id);
+      out.push(`<option value="${f.id}" ${selected===f.id?'selected':''}>${'— '.repeat(depth)}${escapeHTML(f.name)}</option>`);
+      walk(f.id,depth+1);
+    }
+  };walk();return out.join('');
+}
+function renderAssets(items){
+  if(!items.length){const isLib=currentWorkspace?.workspace_type&&currentWorkspace.workspace_type!=='client',mock=currentWorkspace?.workspace_type==='library_mockups',video=currentWorkspace?.workspace_type==='library_videos';return `<div class="empty" style="grid-column:1/-1"><div class="big">${video?'▶':'▧'}</div><b>${video?'Nenhum vídeo aqui':'Nenhum arquivo aqui'}</b><div>${isLib?(video?'Adicione vídeos de demonstração e organize em pastas.':mock?'Adicione seus mockups e organize em pastas.':'Suba suas artes e organize em pastas e subpastas.'):'Suba uma arte ou adicione um mockup.'}</div><div class="empty-actions"><button class="btn primary" id="emptyUpload">${icon('upload')} ${video?'Adicionar vídeo':mock?'Adicionar mockup':'Subir arte'}</button>${isLib?'':`<button class="btn" id="emptyMockup">Adicionar mockup</button>`}</div></div>`;}
+  return items.map(a=>{const url=publicUrl(a.processed_path||a.original_path);const q=a.metadata?.quality_target?`${a.metadata.quality_target}px`:'';return `<article class="asset-card clean" data-asset="${a.id}"><button class="preview-wrap asset-preview-btn" data-id="${a.id}" aria-label="Visualizar ${escapeHTML(a.name)}"><span class="badge">${a.asset_type==='mockup'?'MOCKUP':'ARTE'}</span><img loading="lazy" src="${url}" alt="${escapeHTML(a.name)}"></button><div class="asset-body"><div class="asset-title-row"><h4 title="${escapeHTML(a.name)}">${escapeHTML(a.name)}</h4><button class="icon-more more-asset" data-id="${a.id}" aria-label="Editar arquivo">•••</button></div><div class="asset-meta"><span>${a.width||'?'}×${a.height||'?'}</span>${a.asset_type==='arte'&&a.alpha_trimmed?'<span>sem prancheta</span>':''}${q?`<span>${q}</span>`:''}</div><div class="asset-actions"><button class="btn small download-asset" data-id="${a.id}">${icon('download')} PNG</button><button class="btn ghost small image-asset" data-id="${a.id}">Imagem</button></div></div></article>`}).join('');
+}
+function bindWorkspaceUI(){
+  const isLibrary=currentWorkspace?.workspace_type&&currentWorkspace.workspace_type!=='client';
+  const isMockupsLibrary=currentWorkspace?.workspace_type==='library_mockups';
+  $('#workspaceMore')?.addEventListener('click',()=>openWorkspaceActions(currentWorkspace));
+  $('#workspaceWhatsapp')?.addEventListener('click',()=>openWhatsApp(currentWorkspace.phone));
+  $('#agingWhatsapp')?.addEventListener('click',()=>openWhatsApp(currentWorkspace.phone));
+  $('#workspaceStatus')?.addEventListener('change',async e=>{const ok=await updateWorkspaceStatus(currentWorkspace.id,e.target.value||null,{rerender:true});if(!ok)renderWorkspace(currentWorkspace.id);});
+  $('#uploadBtn')?.addEventListener('click',()=>openUploadModal({presetType:isMockupsLibrary?'mockup':'arte'}));
+  $('#mockupBtn')?.addEventListener('click',()=>openUploadModal({presetType:'mockup'}));
+  $('#newFolder')?.addEventListener('click',()=>createFolder(activeFolder!=='all'&&activeFolder!=='root'?activeFolder:null));
+  $('#copyShare')?.addEventListener('click',()=>copyShare(currentWorkspace.share_token));
+  $('#shareEnabled')?.addEventListener('change',async e=>{const {error}=await supabase.from('z19p_workspaces').update({share_enabled:e.target.checked}).eq('id',currentWorkspace.id);if(error)toast(error.message,'err');else{currentWorkspace.share_enabled=e.target.checked;toast(e.target.checked?'Link do cliente ativado.':'Link do cliente desativado.','ok');renderWorkspace(currentWorkspace.id);}});
+  $$('.folder').forEach(b=>b.onclick=()=>{activeFolder=b.dataset.folder;$$('.folder').forEach(x=>x.classList.toggle('active',x===b));filterAssets();});
+  $$('.folder-more').forEach(b=>b.onclick=e=>{e.stopPropagation();openFolderActions(currentFolders.find(f=>f.id===b.dataset.id));});
+  $('#assetSearch')?.addEventListener('input',filterAssets);$('#typeFilter')?.addEventListener('change',filterAssets);bindAssetCards();bindEmptyActions();
+}
+function bindEmptyActions(){
+  const lib=currentWorkspace?.workspace_type;$('#emptyUpload')?.addEventListener('click',()=>openUploadModal({presetType:lib==='library_mockups'?'mockup':'arte'}));$('#emptyMockup')?.addEventListener('click',()=>openUploadModal({presetType:'mockup'}));
+}
+function filterAssets(){
+  const q=($('#assetSearch')?.value||'').toLowerCase(),t=$('#typeFilter')?.value||'all';const filtered=currentAssets.filter(a=>a.name.toLowerCase().includes(q)&&(activeFolder==='all'||(activeFolder==='root'&&!a.folder_id)||a.folder_id===activeFolder)&&(t==='all'||a.asset_type===t));$('#assetGrid').innerHTML=renderAssets(filtered);bindAssetCards();bindEmptyActions();
+}
+function bindAssetCards(){
+  $$('.download-asset').forEach(b=>b.onclick=()=>downloadAsset(currentAssets.find(a=>a.id===b.dataset.id)));
+  $$('.image-asset').forEach(b=>b.onclick=()=>saveImageAsset(currentAssets.find(a=>a.id===b.dataset.id)));
+  $$('.more-asset').forEach(b=>b.onclick=()=>openAssetActions(currentAssets.find(a=>a.id===b.dataset.id)));
+  $$('.asset-preview-btn').forEach(b=>b.onclick=()=>openAssetPreview(currentAssets.find(a=>a.id===b.dataset.id)));
+}
+async function downloadAsset(a){if(!a)return;const path=a.processed_path||a.original_path;const url=publicUrl(path);const link=document.createElement('a');link.href=url;link.download=`${slug(a.name)||'arte'}.png`;link.target='_blank';document.body.appendChild(link);link.click();link.remove();}
+function openImageAsset(a){if(!a)return;window.open(publicUrl(a.processed_path||a.original_path),'_blank','noopener,noreferrer');}
+async function saveImageAsset(a){
+  if(!a)return;try{const path=a.processed_path||a.original_path;const r=await fetch(publicUrl(path));if(!r.ok)throw new Error();const blob=await r.blob();const file=new File([blob],`${slug(a.name)||'arte'}.png`,{type:'image/png'});if(navigator.share&&navigator.canShare?.({files:[file]})){await navigator.share({files:[file],title:a.name});return;}openImageAsset(a);}catch(e){if(e?.name!=='AbortError')openImageAsset(a);}
+}
+function openAssetPreview(a){
+  if(!a)return;const url=publicUrl(a.processed_path||a.original_path);const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal preview-modal"><div class="modal-head"><div><div class="eyebrow">${a.asset_type==='mockup'?'Mockup':'Arte'}</div><h2>${escapeHTML(a.name)}</h2></div><button class="btn ghost small close">×</button></div><div class="large-preview check" id="largePreview"><img src="${url}" alt="${escapeHTML(a.name)}"></div><div class="preview-controls"><div class="seg" id="previewBg"><button data-bg="check" class="active">Transparente</button><button data-bg="white">Branco</button><button data-bg="black">Preto</button></div><div class="preview-dims">${a.width||'?'} × ${a.height||'?'} px • ${a.dpi||300} DPI</div></div><div class="modal-footer spread"><button class="btn" id="previewImage">Salvar como imagem</button><button class="btn primary" id="previewDownload">${icon('download')} Baixar PNG</button></div></div>`;document.body.appendChild(m);$('.close',m).onclick=()=>m.remove();
+  $$('#previewBg button',m).forEach(b=>b.onclick=()=>{$$('#previewBg button',m).forEach(x=>x.classList.toggle('active',x===b));const p=$('#largePreview',m);p.classList.remove('check','white','black');p.classList.add(b.dataset.bg);});
+  $('#previewDownload',m).onclick=()=>downloadAsset(a);$('#previewImage',m).onclick=()=>saveImageAsset(a);
+}
+function openAssetActions(a){
+  if(!a)return;const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Editar arquivo</div><h2>${escapeHTML(a.name)}</h2></div><button class="btn ghost small close">×</button></div><div class="form-grid"><div class="field full"><label>Nome da arte / arquivo</label><input id="renameAsset" value="${escapeHTML(a.name)}"></div><div class="field"><label>Tipo</label><select id="assetType"><option value="arte" ${a.asset_type==='arte'?'selected':''}>Arte</option><option value="mockup" ${a.asset_type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${a.asset_type==='outro'?'selected':''}>Outro</option></select></div><div class="field"><label>Pasta / projeto</label><select id="assetFolder"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,a.folder_id||'')}</select></div></div><div class="file-actions"><button class="btn" id="assetDownload">${icon('download')} Baixar PNG</button><button class="btn" id="assetSaveImage">Salvar como imagem</button><button class="btn" id="assetPreview">Visualizar</button></div><div class="modal-footer"><button class="btn danger" id="deleteAsset">${icon('trash')} Excluir</button><div class="spacer"></div><button class="btn primary" id="saveAsset">Salvar alterações</button></div></div>`;document.body.appendChild(m);$('.close',m).onclick=()=>m.remove();
+  $('#assetDownload',m).onclick=()=>downloadAsset(a);$('#assetSaveImage',m).onclick=()=>saveImageAsset(a);$('#assetPreview',m).onclick=()=>openAssetPreview(a);
+  $('#saveAsset',m).onclick=async()=>{const name=$('#renameAsset',m).value.trim();if(!name)return toast('Digite um nome para o arquivo.','err');const {error}=await supabase.from('z19p_assets').update({name,asset_type:$('#assetType',m).value,folder_id:$('#assetFolder',m).value||null}).eq('id',a.id);if(error)return toast(error.message,'err');m.remove();toast('Arquivo atualizado.','ok');renderWorkspace(currentWorkspace.id);};
+  $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const paths=[a.original_path,a.processed_path].filter(Boolean);if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)return toast('Não foi possível apagar o arquivo do armazenamento.','err');}const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.message,'err');m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
+}
+
+function openUploadModal({presetType='arte'}={}){
+  uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. Você escolhe o nome de cada arquivo antes de salvar.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div><div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Qualidade / dimensão máxima</b><span>Nunca reduz o arquivo original. Só amplia quando necessário.</span></div><select id="qualityPreset"><option value="original">Original — sem ampliar</option><option value="alta">Alta — até 4032 px</option><option value="ultra" selected>Ultra — até 6000 px</option><option value="maxima">Máxima — até 8192 px</option></select></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
+  const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
+  function addFiles(files){for(const f of files){uploadQueue.push({file:f,name:f.name.replace(/\.[^.]+$/,''),type:presetType,folderId:activeFolder!=='all'&&activeFolder!=='root'?activeFolder:'',preview:URL.createObjectURL(f)});}renderUploadList(m,{lockedType:isMockupMode});}
+  $('#processUpload',m).onclick=()=>processQueue(m,{mockupMode:isMockupMode});
+}
+function renderUploadList(m,{lockedType=false}={}){
+  const list=$('#uploadList',m);list.innerHTML=uploadQueue.map((q,i)=>`<div class="upload-row clean-upload"><img class="upload-thumb" src="${q.preview}"><div class="upload-name"><label>Nome</label><input data-i="${i}" data-k="name" value="${escapeHTML(q.name)}" placeholder="Nome da arte"></div>${lockedType?'':`<div><label>Tipo</label><select data-i="${i}" data-k="type"><option value="arte" ${q.type==='arte'?'selected':''}>Arte</option><option value="mockup" ${q.type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${q.type==='outro'?'selected':''}>Outro</option></select></div>`}<div><label>Pasta</label><select data-i="${i}" data-k="folderId"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,q.folderId||'')}</select></div><button class="remove-upload" data-remove="${i}" title="Remover">×</button></div>`).join('');
+  $$('input[data-i],select[data-i]',list).forEach(el=>el.oninput=()=>{uploadQueue[+el.dataset.i][el.dataset.k]=el.value;});$$('[data-remove]',list).forEach(b=>b.onclick=()=>{const q=uploadQueue.splice(+b.dataset.remove,1)[0];if(q?.preview)URL.revokeObjectURL(q.preview);renderUploadList(m,{lockedType});});$('#processUpload',m).disabled=!uploadQueue.length;
+}
+
+async function processQueue(m,{mockupMode=false}={}){
+  if(!uploadQueue.length)return;const trim=mockupMode?false:$('#optTrim',m).checked;const quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY);const btn=$('#processUpload',m);btn.disabled=true;const prog=$('#progress',m);prog.classList.remove('hidden');let done=0;
+  for(const q of uploadQueue){try{$('#progressText',m).textContent=`${mockupMode?'Salvando':'Processando'} ${done+1}/${uploadQueue.length}: ${q.name}`;const isMockup=q.type==='mockup';const doTrim=isMockup?false:trim;const qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0);const result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget});const assetId=crypto.randomUUID();const base=`${session.user.id}/${currentWorkspace.id}/${q.folderId||'root'}/${assetId}`;const ext=(q.file.name.split('.').pop()||'bin').toLowerCase();const originalPath=`${base}/original.${ext}`;const processedPath=`${base}/processed.png`;
+      let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;
+      up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentTy
