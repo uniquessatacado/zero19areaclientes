@@ -1,0 +1,13 @@
+{
+  "version": "2.13",
+  "parts": [
+    "release.00.txt",
+    "release.01.txt",
+    "release.02.txt",
+    "release.03.txt"
+  ],
+  "raw_sha256": "bb45053a823ac6c66f48957ac7573e26d384434b8b1416af87b62183b123d607",
+  "base64_sha256": "65df4379ac0422e4076bc99ea944e2b5bdd01046f4e8d78414877ecfc711ee24",
+  "raw_bytes": 97948,
+  "base64_bytes": 33092
+}
