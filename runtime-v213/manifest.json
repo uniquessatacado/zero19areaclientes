@@ -1,0 +1,19 @@
+{
+  "version": "2.13",
+  "parts": [
+    "bundle.00.txt",
+    "bundle.01.txt",
+    "bundle.02.txt",
+    "bundle.03.txt",
+    "bundle.04.txt",
+    "bundle.05.txt",
+    "bundle.06.txt",
+    "bundle.07.txt",
+    "bundle.08.txt",
+    "bundle.09.txt"
+  ],
+  "raw_sha256": "8021a56a72ccf8da262eca89ceff637ea917aacd31573f7ed363c029b5448c66",
+  "base64_sha256": "82f21fefa50c9f9278e0cff79c03f8a9f58ee232408c734429f649abc1f430e4",
+  "raw_bytes": 270764,
+  "base64_bytes": 88344
+}
