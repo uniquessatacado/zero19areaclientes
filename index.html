@@ -1,4 +1,29 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0b0d"><meta name="color-scheme" content="dark"><meta name="z19-version" content="2.12"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><title>019 Personalizações</title><link rel="stylesheet" href="/styles.css?v=212"><style>html,body{margin:0;min-height:100%;background:#09090b;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}#z19boot{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#09090b;padding:24px}.boot-card{text-align:center;max-width:520px}.boot-logo{width:190px;max-width:70vw;height:56px;object-fit:contain;filter:invert(1);margin:0 auto 20px}.spinner{width:38px;height:38px;margin:0 auto 16px;border:3px solid #292a30;border-top-color:#ff6428;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}.boot-card p{color:#92939d;font-size:12px}.retry{border:0;border-radius:12px;background:#ff6428;color:#120c09;font-weight:850;padding:11px 16px}</style></head><body><div id="z19boot"><div class="boot-card"><img class="boot-logo" src="/zero19-logo.png" alt="Zero 19"><div class="spinner"></div><b>Carregando 019 Personalizações…</b><p>Versão 2.12</p></div></div><div id="app"></div><div id="toast-root" aria-live="polite"></div><script type="module">
-const boot=document.getElementById('z19boot'),app=document.getElementById('app');let done=false;const fail=e=>{if(done)return;console.error(e);boot.innerHTML=`<div class="boot-card"><img class="boot-logo" src="/zero19-logo.png" alt="Zero 19"><h2>Não foi possível iniciar o sistema</h2><p>${String(e?.message||e||'Erro desconhecido')}</p><button class="retry" onclick="location.reload()">Tentar novamente</button></div>`};window.addEventListener('error',e=>{if(!app.innerHTML.trim())fail(e.error||e.message)});window.addEventListener('unhandledrejection',e=>{if(!app.innerHTML.trim())fail(e.reason)});try{await import('/app.js?v=212');const start=Date.now(),timer=setInterval(()=>{if(app.innerHTML.trim()){done=true;clearInterval(timer);boot.remove()}else if(Date.now()-start>18000){clearInterval(timer);fail(new Error('O aplicativo não respondeu ao iniciar.'))}},80)}catch(e){fail(e)}
-</script></body></html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="color-scheme" content="dark">
+  <meta name="z19-version" content="2.12">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>019 Personalizações</title>
+  <link rel="stylesheet" href="/styles.css?v=2.12">
+  <style>html,body{margin:0;min-height:100%;background:#09090b;color:#fff;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}#z19boot{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;background:#09090b;padding:24px}.boot-card{text-align:center;max-width:520px}.boot-logo{width:190px;max-width:70vw;height:56px;object-fit:contain;filter:invert(1);margin:0 auto 20px}.spinner{width:38px;height:38px;margin:0 auto 16px;border:3px solid #292a30;border-top-color:#ff6428;border-radius:50%;animation:s .8s linear infinite}@keyframes s{to{transform:rotate(360deg)}}.boot-card p{color:#92939d;font-size:12px}.retry{border:0;border-radius:12px;background:#ff6428;color:#120c09;font-weight:850;padding:11px 16px}</style>
+</head>
+<body>
+  <div id="z19boot"><div class="boot-card"><img class="boot-logo" src="/zero19-logo.png" alt="Zero 19"><div class="spinner"></div><b>Carregando 019 Personalizações…</b><p>Versão 2.12</p></div></div>
+  <div id="app"></div>
+  <div id="toast-root" aria-live="polite"></div>
+  <script type="module">
+    const boot=document.getElementById('z19boot'),app=document.getElementById('app');let done=false;
+    const fail=e=>{if(done)return;console.error(e);boot.innerHTML=`<div class="boot-card"><img class="boot-logo" src="/zero19-logo.png" alt="Zero 19"><h2>Não foi possível iniciar o sistema</h2><p>${String(e?.message||e||'Erro desconhecido')}</p><button class="retry" onclick="location.reload()">Tentar novamente</button></div>`};
+    window.addEventListener('error',e=>{if(!app.innerHTML.trim())fail(e.error||e.message)});
+    window.addEventListener('unhandledrejection',e=>{if(!app.innerHTML.trim())fail(e.reason)});
+    try{
+      await import('/app.js?v=2.12');
+      const started=Date.now(),timer=setInterval(()=>{if(app.innerHTML.trim()){done=true;clearInterval(timer);boot.remove()}else if(Date.now()-started>18000){clearInterval(timer);fail(new Error('O aplicativo não respondeu ao iniciar.'))}},80);
+    }catch(e){fail(e)}
+  </script>
+</body>
+</html>

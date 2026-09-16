@@ -1,4 +1,4 @@
-name: Bootstrap v2.10 source
+name: Bootstrap v2.12 static source
 
 on:
   push:
@@ -16,23 +16,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Rebuild stable source
-        run: node scripts/bootstrap-v210.mjs
-      - name: Validate JavaScript and boot architecture
+      - name: Rebuild v2.12 static source
+        run: node scripts/bootstrap-v212.mjs
+      - name: Validate release
         run: |
           node --check app.js
           ! grep -q 'DecompressionStream' index.html
-          ! grep -q 'v28-p' index.html
-          test -s styles.css
+          ! grep -q 'runtime-bundle/' index.html
+          grep -q "APP_VERSION = '2.12'" app.js
+          grep -q 'app-version-badge' styles.css
+          grep -q 'Versão 2.12' index.html
+          grep -q 'Demonstrações de Qualidade' qualidades.html
+          grep -q 'v2.12' comercial-admin.html
+          grep -q 'v2.12' PROJECT_MEMORY.md
           test -s demo.html
+          test -s portfolio.html
+          test -s zero19-logo.png
       - name: Commit generated source
         run: |
           git config user.name 'zero19-version-bot'
           git config user.email 'actions@users.noreply.github.com'
-          git add app.js styles.css index.html demo.html vercel.json PROJECT_MEMORY.md
+          git add app.js styles.css qualidades.html comercial-admin.html PROJECT_MEMORY.md
           if git diff --cached --quiet; then
             echo 'No generated changes.'
             exit 0
           fi
-          git commit -m 'v2.10: stable static source [skip bootstrap]'
+          git commit -m 'v2.12: static release source [skip bootstrap]'
           git push

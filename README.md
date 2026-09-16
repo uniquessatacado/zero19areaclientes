@@ -1,40 +1,32 @@
 # Zero 19 — Área de Clientes / 019 Personalizações
 
-Sistema interno da Zero 19 para atendimento de empresas/clientes, projetos, artes, mockups, orçamentos, equipe, produtividade e biblioteca de demonstrações de qualidade.
-
-## Regra principal de manutenção
-
-Antes de qualquer alteração, leia **`PROJECT_MEMORY.md` inteiro**. Ele é a memória canônica do projeto e registra requisitos, bugs corrigidos, decisões técnicas e regras de não regressão.
-
-Fluxo obrigatório: **ler memória → registrar nova versão → alterar → validar → commit no GitHub → publicar produção**.
+Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups, orçamentos, equipe, produtividade e biblioteca de demonstrações de qualidade.
 
 ## Produção
 
-- `https://019-personalizacoes.vercel.app`
-- Banco/Auth/Storage: Supabase já conectado.
-- Versão de recuperação atual: **v2.10.1**.
+- Site: https://019-personalizacoes.vercel.app
+- Supabase: projeto já configurado no front com chave publishable.
+- Versão atual do código: **v2.12**.
 
-## Fonte de verdade
+## Regra de manutenção
 
-Repositório: **`uniquessatacado/zero19areaclientes`**, branch `main`.
+Antes de qualquer alteração, leia **`PROJECT_MEMORY.md` inteiro**. Ele é o registro canônico de requisitos, decisões, bugs resolvidos e regras de não regressão.
 
-Arquivos/áreas principais:
-- `index.html` — boot da versão em produção.
-- `runtime-bundle/` — bundle completo versionado da aplicação (`bundle.00.txt` a `bundle.07.txt`).
-- `demo.html` — preview público de vídeos de demonstração.
-- `PROJECT_MEMORY.md` — memória obrigatória, requisitos e histórico.
-- `vercel.json` — cache/aliases durante estabilização.
-- `scripts/` e `source-v210*` — material de reconstrução/migração da base atual.
+Toda alteração deve seguir: **ler memória → registrar nova versão → alterar → validar preview → commit → produção**.
 
-## Falhas que não podem voltar
+## Arquivos principais
 
-1. Não usar `DecompressionStream` nativo no navegador. Ele causou **Failed to decode data** em dispositivos reais.
-2. Não carregar código buscando um deployment Vercel antigo. Isso causou **Failed to fetch**.
-3. Não publicar bundle incompleto. Conferir sempre as partes esperadas.
-4. Não fazer redesign global nem CSS de compactação por cima do layout aprovado.
+- `index.html` — boot estático do sistema.
+- `styles.css` — layout canônico/responsivo.
+- `app.js` — aplicação principal.
+- `demo.html` — redireciona deep-links antigos para o catálogo público.
+- `qualidades.html` — catálogo público de demonstrações de qualidade.
+- `portfolio.html` — portfólio público / provas sociais.
+- `comercial-admin.html` — administração interna de qualidades, faixas, comentários e portfólio.
+- `PROJECT_MEMORY.md` — memória obrigatória e histórico.
+- `supabase-schema.sql` — referência do schema inicial.
+- `vercel.json` — headers/cache do deploy.
 
-## Boot v2.10.1
+## Falha que não deve voltar
 
-Para recuperar a produção sem o erro de decode, o `index.html` atual usa `fflate` em JavaScript e carrega o bundle versionado deste próprio repositório, com fallback Raw GitHub/jsDelivr. O bundle está completo de `bundle.00.txt` a `bundle.07.txt`.
-
-A evolução preferida, depois de consolidar deploy Git→Vercel, é servir `index.html + app.js + styles.css` diretamente do mesmo deployment e eliminar o bundle remoto sem reintroduzir os bugs já corrigidos.
+Não usar loaders que baixam chunks compactados e fazem gzip/base64/`DecompressionStream` no navegador para iniciar a aplicação. Essa arquitetura causou `Failed to decode data` / `Failed to fetch` em produção. Desde v2.10 o app deve carregar arquivos estáticos normais do mesmo deployment.
