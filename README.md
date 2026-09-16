@@ -6,7 +6,8 @@ Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups,
 
 - Site: https://019-personalizacoes.vercel.app
 - Supabase: projeto já configurado no front com chave publishable.
-- Versão atual do código: **v2.12**.
+- Produção atual: **v2.15.1**.
+- Candidata local para teste: **v2.16** (ainda não publicada).
 
 ## Regra de manutenção
 

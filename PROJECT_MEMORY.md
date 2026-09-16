@@ -163,8 +163,8 @@
 - Esta v2.15.1 é uma recuperação de disponibilidade. O núcleo interno usa o último runtime estável para tirar o sistema do estado de boot quebrado.
 - **Não afirmar que todas as features v2.13+ estão ativas no runtime interno desta recuperação.** Banco/especificações comerciais permanecem preservados, mas o snapshot v2.13 corrompido não deve voltar à produção.
 
-## 13. Próxima implementação — reconstrução limpa
-A próxima versão deve reconstruir as features v2.13+ a partir de fonte íntegra, sem reutilizar o snapshot corrompido. Prioridades obrigatórias:
+## 13. Candidata local v2.16 — reconstrução limpa
+A v2.16 foi reconstruída localmente a partir do último runtime estável íntegro, sem reutilizar o snapshot `runtime-v213` corrompido. Os módulos comerciais vieram da release estática v2.13 que passou em validação independente de sintaxe. A candidata ainda não foi publicada; produção permanece em v2.15.1 até teste autenticado e autorização de publicação. Prioridades obrigatórias preservadas:
 1. manter o sistema inicializando e todo o fluxo v2.12 estável;
 2. reintegrar logo oficial e versão interna sem regressão visual;
 3. catálogo/demonstrações com produto compartilhado com orçamento, preços por faixa, 1 vídeo + 3 fotos, 100 MB, likes/comentários/templates WhatsApp;
@@ -173,7 +173,27 @@ A próxima versão deve reconstruir as features v2.13+ a partir de fonte íntegr
 6. catálogo visual de estampas e criação de arte;
 7. validar todas as rotas, CRUDs, mobile e produção antes de promover.
 
-## 14. Checklist obrigatório antes de qualquer próxima publicação
+## 14. Revisão funcional v2.16 — 16/09/2026 (LOCAL, NÃO PUBLICADA)
+- **Relato:** botões internos não abriam suas páginas e o sistema precisava de uma revisão funcional.
+- **Causa confirmada:** o domínio retornava HTTP 200, porém o `index.html` carregava o núcleo por oito chunks compactados hospedados em GitHub/jsDelivr. No navegador real, o carregador terminava em `O aplicativo não respondeu ao iniciar`; sem o boot, nenhuma navegação interna podia funcionar.
+- **Correção:** `index.html` voltou a carregar `app.js` e `styles.css` estáticos do mesmo servidor; o runtime estável foi materializado em fonte local; foi adicionado timeout seguro na recuperação de sessão; erros de inicialização agora aparecem na própria tela.
+- **Navegação:** o listener SPA continua chamando a implementação atual de `renderRoute`; elementos `data-nav` também funcionam por Enter/Espaço; o painel administrativo ganhou acessos diretos para `Gestão comercial` e `Comissões`.
+- **Páginas comerciais:** `qualidades.html`, `portfolio.html`, `comercial-admin.html` e `demo.html` foram materializadas como páginas estáticas locais, sem loader de release remota. `demo.html` redireciona para o catálogo mantendo o token específico.
+- **Logo/versão:** logo oficial preservado com contraste em fundo escuro; topo interno sem texto redundante; badge interno atualizado para v2.16; páginas públicas não exibem badge de versão.
+- **Correção posterior do logo:** o antigo `zero19-logo.png` estava corrompido/cortado: canvas `900×183`, mas somente uma faixa de `850×7` pixels continha o desenho. Ele foi substituído byte a byte pelo PNG original enviado pelo usuário (`2172×724`, conteúdo útil `1960×395`, SHA-256 `CBE8486D91864C08E5820AE2B26D4F88F3C2B69B52EC9B086D0DAA439E1BA7E1`). As URLs receberam `?v=2.16-logo2` para invalidar cache. Login e definição de senha agora mostram somente o logo, sem texto de marca redundante.
+- **Cache:** `vercel.json` passou a impedir cache obsoleto de `app.js` e `styles.css` durante estabilização.
+- **Home focada em clientes:** a abertura interna foi simplificada para título, resumo compacto, busca e clientes. Artes, Mockups, Vídeos, configurações, equipe, produtividade e gestão comercial saíram do conteúdo principal e foram organizados em drawer lateral. No mobile há barra inferior fina com Menu, Artes, Clientes, Vídeos, Mockups e Links.
+- **Prioridade de atendimento:** clientes vencidos, remarcados vencidos ou há mais de 24h sem mudança de status aparecem numa seção destacada antes dos demais clientes. Busca e filtro continuam recalculando as duas listas.
+- **Central de links:** nova rota interna `#/links` concentra abertura, cópia e envio por WhatsApp do catálogo de qualidades, portfólio e área individual do cliente. Ao compartilhar a área individual, o link é ativado de forma segura se ainda estiver desligado.
+- **Permissões de comissão:** somente o perfil `admin` (Clovis como administrador principal) recebe no drawer os acessos de gestão e comissão; `comercial-admin.html` também mantém a barreira de perfil administrativo. Funcionários nunca recebem o painel de gestão.
+- **Visão privada do vendedor:** quando o comissionamento global está ativo, o funcionário vê na home somente os próprios valores aguardando, aprovados e recebidos, usando `z19p_get_my_commission_summary`. Quando está desligado, o bloco não existe. No orçamento, o vendedor responsável vê a estimativa correspondente às próprias regras/faixas, com a mesma divisão produto/estampa usada pelo RPC de pagamento; admin e vendedor não responsável não veem essa prévia.
+- **Uploads comerciais separados:** Demonstrações e Portfólio agora possuem cartões independentes para vídeo e fotos. Cada seletor mostra arquivos escolhidos, permite remoção antes de salvar, mantém remoção de mídias já vinculadas e valida o limite combinado de 1 vídeo (100 MB) + 3 fotos.
+- **Cache da revisão visual:** `index.html` usa `styles.css?v=2.16-ui3` e `app.js?v=2.16-ui3` para impedir que o navegador preserve a tela antiga.
+- **Validação:** `node --check` em `app.js`, validação de todos os scripts inline e JSON da Vercel aprovados. Smoke test no Edge headless confirmou: home chega ao login, Qualidades carrega catálogo e controles, Portfólio carrega, Comercial sem sessão retorna ao login, e `/demo.html` redireciona para Qualidades. Nenhuma imagem quebrada foi detectada.
+- **Limite da validação:** CRUDs e rotas exclusivas após login devem ser exercitados com uma sessão real antes de publicar; a revisão está disponível em `http://127.0.0.1:4173/` para esse teste.
+- **Prevenção:** o boot não pode voltar a depender de snapshots externos/compactados; manter `scripts/validate-static.mjs` e `scripts/browser-smoke.mjs` como verificações antes de publicar.
+
+## 15. Checklist obrigatório antes de qualquer próxima publicação
 - [ ] Ler este MD inteiro.
 - [ ] Registrar nova versão antes de alterar.
 - [ ] Validar sintaxe de todo JS/scripts inline.
@@ -196,4 +216,4 @@ A próxima versão deve reconstruir as features v2.13+ a partir de fonte íntegr
 - [ ] Logo e rotas públicas retornam 200.
 - [ ] Só depois responder ao usuário que está publicado.
 
-**Próxima versão planejada: v2.16 — reconstrução limpa das features comerciais sobre a base estável.**
+**Candidata atual: v2.16 local — aguarda teste autenticado do usuário antes de commit/publicação.**
