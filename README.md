@@ -4,7 +4,11 @@ Aplicação de atendimento, projetos, artes, orçamentos, filas de produção e 
 
 **Leia `PROJECT_MEMORY.md` e o histórico integral indicado nele antes de alterar.**
 
-## Build v2.17.6
+## Produção v2.17.6
+
+Publicada a partir do commit `d2eb6c540ce60d0f1136d960fe0c9b8eecf0b4d3`, deployment Vercel `dpl_ZPY2K9YPLMckbJTN1gQgfpDfJKvY` READY. Domínio oficial e módulos novos conferidos. Consulte a memória para resultados e limites dos testes.
+
+## Build e desenvolvimento local
 
 Esta revisão contém altura-base das letras com acentos/cedilha, encaixe óptico entre letras, conferência de nomes e vários rascunhos de filme no banco.
 
@@ -24,10 +28,8 @@ Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte
 - `scripts/test-v2176.mjs`: regressões novas.
 - `versions/PROJECT_MEMORY-pre-2.17.6.md`: histórico anterior integral e preservado.
 
-O restante do sistema permanece no mesmo Supabase/GitHub/Vercel, com autenticação, RLS, clientes, projetos, comissões, catálogos e layout preservados. Nenhuma migration nesta revisão. Cópias de rascunho usam print jobs existentes, distintas do autosave da edição atual.
+O restante do sistema permanece no mesmo Supabase/GitHub/Vercel. Nenhuma migration nesta revisão. Cópias de rascunho usam print jobs existentes, distintas do autosave da edição atual. Os testes com serviços simulados não substituem um fluxo autenticado completo nem impressão física.
 
 Exportação continua em um único PNG transparente 300 DPI. TIFF com Cor Spot 1 está apenas especificado na memória, sem implementação nesta versão.
 
-## Publicação
-
-Candidata v2.17.6: só chamar de publicada após build/testes, commit rastreável, deployment READY e conferência do domínio canônico `https://019-personalizacoes.vercel.app`, incluindo scripts executáveis.
+Commits devem conter `[skip bootstrap]` para impedir que o workflow histórico v2.12 tente reconstruir a fonte antiga.
