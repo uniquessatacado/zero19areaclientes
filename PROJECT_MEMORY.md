@@ -300,4 +300,4 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - Adicionar o lote chama o mesmo refresh/recalculo global do filme usado pelas artes comuns, preservando gap, medidas físicas e exportação PNG único da v2.17.4.
 - Jobs antigos/unificados continuam compatíveis; snapshots novos registram `compositionMode`, `pieceType` e `compositionGroupId`.
 - Sem migration de banco nesta revisão.
-- Status deste commit: candidata v2.17.5; publicar somente após validação de sintaxe, nesting e preview.
+- **Validação/publicação confirmada:** `validate-static`, lettering, rotação livre e persistência de jobs passaram. Caso de regressão 18,765 × 35 cm em filme 58 cm escolheu 90° e 187,65 mm de comprimento. Commit de runtime final `7095fa8ddc0e2fe94e29988e76df98f6673eebac`; deployment Vercel `dpl_3YA69gs5jRpd7ABt3hV9eRBpDg5p` `READY`; aliases canônicos ativos. O domínio respondeu HTTP 200 com `z19-version="2.17.5"`; `app.js`, `production-v217.js` e `nesting-core.js` foram conferidos e são idênticos à `main`.

@@ -6,8 +6,8 @@ Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups,
 
 - Site: https://019-personalizacoes.vercel.app
 - Supabase: projeto já configurado no front com chave publishable.
-- Produção atual antes desta revisão: **v2.17.4**.
-- Candidata em validação: **v2.17.5** — lote de nomes/números com mesclagem inteligente no filme.
+- Produção atual confirmada no domínio: **v2.17.5**.
+- Ativo: lote de nomes/números com mesclagem inteligente, dígitos separados, nesting 0°/90° e PNG único.
 
 ## Regra de manutenção
 
