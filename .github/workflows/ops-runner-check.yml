@@ -1,0 +1,22 @@
+name: Ops runner check
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Runner alive
+        run: echo RUNNER_OK
+      - name: Check Vercel token presence
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then
+            echo VERCEL_TOKEN_PRESENT
+          else
+            echo VERCEL_TOKEN_MISSING
+          fi
