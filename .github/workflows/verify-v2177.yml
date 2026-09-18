@@ -14,9 +14,26 @@ jobs:
         with:
           node-version: '24'
       - name: Build and regression tests
-        run: npm run build
-      - name: Verify v2.17.7 artifacts
+        id: build
+        shell: bash
         run: |
+          set +e
+          npm run build > validation-v2177.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat validation-v2177.log
+          exit 0
+      - name: Upload validation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-v2177-log
+          path: validation-v2177.log
+      - name: Verify build succeeded
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.build.outputs.exit_code }}" = "0"
           node --check dist/app.js
           node --check dist/production-v217.js
           node --check dist/lettering-layout-v2176.js
