@@ -1,6 +1,6 @@
 /** v2.17.6: cap/body height is independent of accents. Legacy jobs opt in only
  * on recalculation, so exporting an old job never silently changes its geometry. */
-export const LETTERING_METRICS_VERSION = 2;
+export const LETTERING_METRICS_VERSION = 3;
 export const baseCharacter = char => String(char).normalize('NFD').replace(/\p{M}/gu, '');
 const nextFrame = () => new Promise(resolve => setTimeout(resolve, 0));
 const finiteMetrics = m => m && ['actualBoundingBoxAscent','actualBoundingBoxDescent','actualBoundingBoxLeft','actualBoundingBoxRight'].every(k=>Number.isFinite(m[k]));
@@ -79,8 +79,47 @@ async function vectorPart(part, height, item, sanitizeSvg) {
 
 /** Receives the verified original font families and glyph map; never substitutes
  * the official font with a system font and never strips marks from output. */
-export async function refineLetteringLayout(item, legacy, {drawLine,sanitizeSvg,hasGlyph}={}) {
-  if(item.letteringMetricsVersion!==LETTERING_METRICS_VERSION||!legacy.nameLine.parts.length)return legacy;
+export function chooseDominantInkBand(bands,{top=0,height=0}={}){
+  const clean=(bands||[]).filter(b=>Number.isFinite(b?.top)&&Number.isFinite(b?.height)&&Number.isFinite(b?.area)&&b.height>0&&b.area>0);
+  if(clean.length<2)return {top,height,decorated:false};
+  const total=clean.reduce((sum,b)=>sum+b.area,0),largest=[...clean].sort((a,b)=>b.area-a.area||b.height-a.height)[0];
+  if(largest.area>=total*.55&&largest.height<height*.96)return {top:largest.top,height:largest.height,decorated:true};
+  return {top,height,decorated:false};
+}
+
+async function refineNumberLine(item,line,sanitizeSvg){
+  if(!line.parts.length)return line;
+  const target=Number(item.numberHeightCm),tracking=Number(item.digitSpacingCm??0);
+  if(!(target>0&&Number.isFinite(target)))throw new Error('A altura-base do número é inválida.');
+  if(!Number.isFinite(tracking)||tracking<0)throw new Error('O espaço entre números é inválido.');
+  const parts=[],decorations=[];
+  for(const original of line.parts){
+    const part={...original};
+    if(part.kind==='vector'){
+      const ink=await vectorGeometry(part.glyph,sanitizeSvg),body=chooseDominantInkBand(ink.bands,{top:ink.y,height:ink.height}),scale=target/body.height;
+      const extraTop=Math.max(0,(body.top-ink.y)*scale),extraBottom=Math.max(0,(ink.y+ink.height-(body.top+body.height))*scale);
+      Object.assign(part,{widthCm:ink.width*scale,heightCm:ink.height*scale,bodyHeightCm:target,extraTopCm:extraTop,extraBottomCm:extraBottom,
+        sourceCrop:{x:ink.x/ink.sourceWidth,y:ink.y/ink.sourceHeight,width:ink.width/ink.sourceWidth,height:ink.height/ink.sourceHeight}});
+      decorations.push({part,extraTop,extraBottom});
+    }else if(part.kind==='font'){
+      part.bodyHeightCm=target;part.extraTopCm=0;part.extraBottomCm=0;decorations.push({part,extraTop:0,extraBottom:0});
+    }else if(part.kind==='space'){part.widthCm=target*.4;part.heightCm=0;}
+    parts.push(part);
+  }
+  const maxTop=Math.max(0,...decorations.map(entry=>entry.extraTop)),maxBottom=Math.max(0,...decorations.map(entry=>entry.extraBottom));
+  let cursor=0;
+  for(const part of parts){
+    part.xCm=cursor;
+    if(part.kind==='vector')part.yCm=maxTop-(part.extraTopCm||0);
+    else if(part.kind==='font'){part.yCm=(part.yCm||0)+maxTop;part.baselineCm=(part.baselineCm||0)+maxTop;}
+    else part.yCm=0;
+    cursor+=part.widthCm+tracking;
+  }
+  return {...line,parts,widthCm:Math.max(0,cursor-(parts.length?tracking:0)),heightCm:maxTop+target+maxBottom,bodyHeightCm:target,extraTopCm:maxTop,extraBottomCm:maxBottom};
+}
+
+async function refineNameLine(item,legacy,{drawLine,sanitizeSvg,hasGlyph}={}){
+  if(!legacy.nameLine.parts.length)return legacy.nameLine;
   const height=Number(item.nameHeightCm);
   if(!(height>0&&Number.isFinite(height)))throw new Error('A altura-base do nome é inválida.');
   const measurement=document.createElement('canvas'),measure=measurement.getContext('2d');
@@ -93,7 +132,6 @@ export async function refineLetteringLayout(item, legacy, {drawLine,sanitizeSvg,
   const references=new Map();
   for(const part of legacy.nameLine.parts)if(part.kind==='font'){
     const family=legacy.families.get(part.source.id);
-    // A fixed cap reference keeps the em scale identical across different names.
     const reference=references.get(part.source.id)||['H','E','I','A','O'].find(c=>!hasGlyph||hasGlyph(family,c))||baseCharacter(part.char);
     references.set(part.source.id,reference);
     const base=metrics(reference,part.source);
@@ -130,8 +168,6 @@ export async function refineLetteringLayout(item, legacy, {drawLine,sanitizeSvg,
       for(let y=0;y<rowCount;y++)for(let x=0;x<canvas.width;x++)if(rgba[(y*canvas.width+x)*4+3]){left[y]=Math.min(left[y],x);edges[y]=x+1;}
       const ordered=previous&&previous.kind!=='space'?previous.xCm+Math.min(previous.widthCm,part.widthCm)*.15:cursor;
       const offset=previous&&previous.kind!=='space'?opticalOffset(right,left,tracking*pxPerCm,ordered*pxPerCm)/pxPerCm:cursor;
-      // A rectangular gap is always a safe fallback. Optical fitting can only
-      // tighten excess empty corners, never stretch the name or change letters.
       part.xCm=Math.min(cursor,offset);
       const shift=part.xCm*pxPerCm;
       for(let y=0;y<rowCount;y++)if(Number.isFinite(edges[y]))right[y]=Math.max(right[y],shift+edges[y]);
@@ -140,7 +176,15 @@ export async function refineLetteringLayout(item, legacy, {drawLine,sanitizeSvg,
     }
   }finally{canvas.width=canvas.height=1;measurement.width=measurement.height=1;}
   const width=Math.max(...painted.map(p=>p.xCm+p.widthCm));
-  const nameLine={...legacy.nameLine,parts,widthCm:width,heightCm:lineHeight,bodyHeightCm:height,extraTopCm:Math.max(0,-top-ascent*scale),extraBottomCm:Math.max(0,bottom-descent*scale),spacingMode:item.spacingMode||'optical'};
-  const numberLine=legacy.numberLine,hasNumber=numberLine.parts.length>0,gap=hasNumber?Number(item.gapCm||0):0;
-  return {...legacy,nameLine,widthCm:Math.max(width,numberLine.widthCm),heightCm:lineHeight+numberLine.heightCm+gap,numberYcm:lineHeight+gap};
+  return {...legacy.nameLine,parts,widthCm:width,heightCm:lineHeight,bodyHeightCm:height,extraTopCm:Math.max(0,-top-ascent*scale),extraBottomCm:Math.max(0,bottom-descent*scale),spacingMode:item.spacingMode||'optical'};
 }
+
+export async function refineLetteringLayout(item, legacy, options={}) {
+  if(item.letteringMetricsVersion!==LETTERING_METRICS_VERSION)return legacy;
+  const nameLine=await refineNameLine(item,legacy,options);
+  const numberLine=await refineNumberLine(item,legacy.numberLine,options.sanitizeSvg);
+  if(!nameLine.parts.length&&!numberLine.parts.length)return legacy;
+  const hasName=nameLine.parts.length>0,hasNumber=numberLine.parts.length>0,gap=hasName&&hasNumber?Number(item.gapCm||0):0;
+  return {...legacy,nameLine,numberLine,widthCm:Math.max(nameLine.widthCm,numberLine.widthCm),heightCm:nameLine.heightCm+numberLine.heightCm+gap,numberYcm:hasName?nameLine.heightCm+gap:0};
+}
+
