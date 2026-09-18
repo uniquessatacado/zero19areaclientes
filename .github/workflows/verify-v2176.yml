@@ -1,0 +1,28 @@
+name: Validate lettering and film drafts v2.17.6
+on:
+  push:
+    branches: [maintenance/v2.17.6-lettering-drafts]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate sources
+        run: |
+          node scripts/validate-static.mjs
+          node scripts/test-lettering.mjs
+          node scripts/test-film-jobs.mjs
+      - name: Package exact source for offline regression tests
+        run: git archive --format=tar.gz HEAD -o /tmp/zero19-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zero19-source-v2176
+          path: /tmp/zero19-source.tar.gz
+          retention-days: 1
