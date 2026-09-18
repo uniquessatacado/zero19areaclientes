@@ -6,8 +6,8 @@ Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups,
 
 - Site: https://019-personalizacoes.vercel.app
 - Supabase: projeto já configurado no front com chave publishable.
-- Produção atualmente publicada antes desta correção: **v2.17.3**.
-- Candidata desta correção: **v2.17.4** — exportação DTF em um único PNG contínuo.
+- Produção atual confirmada no domínio: **v2.17.4**.
+- Correção ativa: exportação DTF em **um único PNG contínuo** por filme.
 
 ## Regra de manutenção
 

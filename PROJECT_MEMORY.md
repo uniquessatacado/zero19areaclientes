@@ -285,4 +285,4 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - **Medida:** largura e comprimento continuam derivados diretamente do layout em centímetros a 300 DPI; nenhuma arte pode ser reduzida, cortada ou reposicionada durante a exportação.
 - **Não regressão:** manter transparência, alpha/antialias, rotação, posições, espaçamento/gap, opção de recorte externo e largura inteira.
 - Esta regra substitui a orientação anterior de segmentação automática para filmes longos.
-- Status neste commit: candidata v2.17.4; publicar somente após preview/validação do domínio.
+- **Publicação confirmada:** commit de runtime `15f0438e747470824c8ac020962edc7c20832567`; deployment Vercel `dpl_swyqL4wGLsEjQ4Cc68WWo2qmpUZG`, estado `READY`, aliases `019-personalizacoes.vercel.app` e `019-personalizacoes-uniquess.vercel.app`. O domínio canônico respondeu HTTP 200 com `z19-version="2.17.4"`; `app.js` e `production-v217.js` foram conferidos contra a `main` e são idênticos.
