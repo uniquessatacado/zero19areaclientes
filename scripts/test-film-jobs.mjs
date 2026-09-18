@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import {rotatedBoundsMm} from '../nesting-core.js';
 
 const source=await fs.readFile(new URL('../production-v217.js',import.meta.url),'utf8');
-const code=source.slice(source.indexOf('  let filmJobSaving='),source.lastIndexOf('  return {enhanceDashboard'));
+const code=source.slice(source.indexOf('  let filmJobSaving='),source.lastIndexOf('  return {buildQuotePdf'));
 assert.ok(code.includes('async function saveFilmJob'));
 const copy=value=>JSON.parse(JSON.stringify(value));
 const item=(id='a1')=>({localId:'local-'+id,type:'asset',sourceId:id,label:'Arte '+id,quantity:1,widthCm:10,heightCm:5,path:id+'/processed.png'});
