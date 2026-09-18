@@ -6,11 +6,11 @@
   async function upgradeCurrentLettering(current=()=>true){
     const source=filmItems,generation=productionAccountGeneration,replacements=[],changed=new Set();
     for(const item of source){
-      if(item.type!=='team_customization'||item.vectorSource||!item.name)continue;
-      const next={...item,name:String(item.name).normalize('NFC'),letteringMetricsVersion:2,spacingMode:item.spacingMode||'optical'};
+      if(item.type!=='team_customization'||item.vectorSource||(!item.name&&!item.number))continue;
+      const next={...item,name:String(item.name).normalize('NFC'),letteringMetricsVersion:3,spacingMode:item.spacingMode||'optical'};
       const layout=await prepareLetteringLayout(next);if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;
       next.widthCm=layout.widthCm;next.heightCm=layout.heightCm;
-      const needs=item.letteringMetricsVersion!==2||Math.abs(next.widthCm-item.widthCm)>.000001||Math.abs(next.heightCm-item.heightCm)>.000001;
+      const needs=item.letteringMetricsVersion!==3||Math.abs(next.widthCm-item.widthCm)>.000001||Math.abs(next.heightCm-item.heightCm)>.000001;
       if(needs){delete next.previewDataUrl;replacements.push(next);changed.add(item.localId);}
     }
     if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;
@@ -24,8 +24,8 @@
     let tools=page.querySelector('[data-film-tools]');if(tools)tools.remove();
     tools=document.createElement('section');tools.dataset.filmTools='';
     tools.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px;padding:14px;border:1px solid #34343a;border-radius:14px';
-    const hasNames=filmItems.some(i=>i.type==='team_customization'&&i.name&&!i.vectorSource);
-    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra preservada. Acentos e cedilha ficam fora dessa medida. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
+    const hasNames=filmItems.some(i=>i.type==='team_customization'&&(i.name||i.number)&&!i.vectorSource);
+    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes/números e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra e do número preservada. Acentos, cedilha, coroas e ornamentos ficam fora da medida-base. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
     page.querySelector('.simple-hero').insertAdjacentElement('afterend',tools);
     const saved=createSavedFilmDrafts({supabase,owner,user:uid});
     const snapshot=()=>({items:filmItems,layout:lastFilm,settings:filmSettings});
