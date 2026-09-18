@@ -60,3 +60,34 @@ Usuário adiou explicitamente essa função. Manter somente PNG nesta revisão.
 - RIP adaptado usa CMYW, sem tinta K física; não descartar K do arquivo CMYK sem analisar o processamento real do RIP.
 - Referências recebidas: `filme-completo-recortado (3).png` e `filme-completo-recortado (3).tif`. Reanalisar diretamente ambos antes de afirmar número de canais, perfil ICC, convenção/inversão do Spot ou compatibilidade.
 - Confirmar perfil ICC/conversão do Photoshop, curva completa e estrutura/tag do Spot no TIFF; validar arquivo teste no Production Manager antes de tratar como pronto para impressão.
+
+## v2.17.7 — cor da fonte e altura-base dos números (EM VALIDAÇÃO)
+
+Pedido atual:
+- permitir definir a cor do nome/fonte de uma camisa, inclusive com conta-gotas sobre a cor exibida do número;
+- preservar essa cor como configuração da personalização daquela camisa;
+- fazer a altura padrão do número (ex.: 28 cm) valer para o **corpo do algarismo**, sem contar coroa/ornamentos destacados acima ou abaixo.
+
+### Cor do nome
+- O preparador de Fontes e números passa a carregar `z19p_customization_palettes`.
+- Campo **Cor do nome / fonte** com seletor manual, HEX e botão **💧 Pegar cor do número** usando `EyeDropper` quando o navegador oferece a API.
+- O usuário pode ativar a gotinha e clicar diretamente numa cor visível do número/SVG na tela.
+- Se `EyeDropper` não existir, o seletor manual continua disponível.
+- A cor é persistida em `z19p_customization_palettes` com `role='name'`; o vetor do número não é recolorido nem alterado.
+- Alterar a cor coloca a personalização novamente em preparação/teste, como outras alterações da fonte.
+- Nenhuma migration nova: a tabela/papel `name` já existem.
+
+### Altura do número com coroa/ornamento
+- Nova receita `letteringMetricsVersion:3`.
+- Para SVG de número, o sistema mede o alpha real e detecta faixas verticais desconectadas.
+- Quando existe uma faixa dominante clara (ex.: corpo grande do 0 + coroa pequena separada), somente a faixa dominante define os 28 cm; a coroa permanece acima e aumenta a caixa total.
+- Se o SVG tiver partes ambíguas sem corpo dominante, usar a caixa completa de forma conservadora em vez de adivinhar/cortar.
+- Em números múltiplos/unificados, os corpos ficam alinhados na mesma linha; ornamentos podem ultrapassar acima/abaixo sem reduzir os algarismos.
+- Rascunhos/jobs antigos só mudam ao recalcular, preservando compatibilidade.
+
+### Não regressão
+- Não alterar PNG único 300 DPI, nesting, rascunhos, pagamentos, projetos ou TIFF/Spot pendente.
+- Cores internas dos SVGs oficiais continuam preservadas.
+- A função TIFF com Spot permanece **pendente e não implementada** nesta revisão.
+
+Estado: candidata v2.17.7 em branch de validação; não declarar publicada antes de preview READY, testes e confirmação do domínio canônico.
