@@ -295,6 +295,7 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - O modo padrão é **Mesclar encaixe**: o nome completo vira uma peça; cada algarismo do número vira uma peça independente. Ex.: `CLOVIS 10` gera `CLOVIS`, `1` e `0` para o nesting.
 - O modo **Unificar tudo** preserva o formato antigo de nome em cima + número embaixo como uma única aplicação.
 - Peças mescladas usam rotação 0°/90° automaticamente no nesting, sem depender da rotação livre de 30°, para reduzir o comprimento do filme quando vantajoso.
+- A heurística ortogonal foi corrigida para comparar 0° e 90° na primeira faixa disponível e preferir a orientação de menor altura física; antes ela aceitava a primeira opção válida (0°) cedo demais.
 - Personalizações mescladas não-halftone geram máscara alpha própria e podem usar áreas transparentes internas no modo de aproveitamento máximo; halftone continua conservador.
 - Adicionar o lote chama o mesmo refresh/recalculo global do filme usado pelas artes comuns, preservando gap, medidas físicas e exportação PNG único da v2.17.4.
 - Jobs antigos/unificados continuam compatíveis; snapshots novos registram `compositionMode`, `pieceType` e `compositionGroupId`.

@@ -238,7 +238,9 @@ function calculateLayout(expanded,settings){
           if(searchAngles&&++angleChecks>2e6)throw new Error('A busca de ângulos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(!collides(board,bw,bh,option.raw,x,y)){
             const candidate={x,y,...option};
-            if(!searchAngles){found=candidate;break outer;}
+            // Mesmo sem rotação livre, políticas ortogonais como 0°/90° precisam
+            // comparar as orientações válidas. Na primeira linha utilizável,
+            // escolha a menor altura física para reduzir o comprimento do filme.
             if(!found||candidate.heightMm<found.heightMm-EPSILON||Math.abs(candidate.heightMm-found.heightMm)<=EPSILON&&candidate.x<found.x)found=candidate;
           }
         }
