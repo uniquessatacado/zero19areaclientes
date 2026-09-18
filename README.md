@@ -1,54 +1,33 @@
 # Zero 19 — Área de Clientes / 019 Personalizações
 
-Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups, orçamentos, equipe, produtividade e biblioteca de demonstrações de qualidade.
+Aplicação de atendimento, projetos, artes, orçamentos, filas de produção e montagem DTF.
 
-## Produção
+**Leia `PROJECT_MEMORY.md` e o histórico integral indicado nele antes de alterar.**
 
-- Site: https://019-personalizacoes.vercel.app
-- Supabase: projeto já configurado no front com chave publishable.
-- Produção atual confirmada no domínio: **v2.17.5**.
-- Ativo: lote de nomes/números com mesclagem inteligente, dígitos separados, nesting 0°/90° e PNG único.
+## Build v2.17.6
 
-## Regra de manutenção
+Esta revisão contém altura-base das letras com acentos/cedilha, encaixe óptico entre letras, conferência de nomes e vários rascunhos de filme no banco.
 
-Antes de qualquer alteração, leia **`PROJECT_MEMORY.md` inteiro**. Ele é o registro canônico de requisitos, decisões, bugs resolvidos e regras de não regressão.
+```sh
+npm run build
+python -m http.server 8080 --directory dist
+```
 
-Toda alteração deve seguir: **ler memória → registrar nova versão → alterar → validar preview → commit → produção**.
+Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; a versão do artefato compilado é v2.17.6.
 
-## Arquivos principais
+## Fontes da revisão
 
-- `index.html` — boot estático do sistema.
-- `styles.css` — layout canônico/responsivo.
-- `app.js` — aplicação principal.
-- `demo.html` — redireciona deep-links antigos para o catálogo público.
-- `qualidades.html` — catálogo público de demonstrações de qualidade.
-- `portfolio.html` — portfólio público / provas sociais.
-- `comercial-admin.html` — administração interna de qualidades, faixas, comentários e portfólio.
-- `PROJECT_MEMORY.md` — memória obrigatória e histórico.
-- `supabase-schema.sql` — referência do schema inicial.
-- `vercel.json` — headers/cache do deploy.
+- `lettering-layout-v2176.js`: métrica do corpo sem sinais e espaçamento óptico por contorno.
+- `film-saved-drafts.js`: cópias independentes no banco e conferência do texto original.
+- `scripts/film-v2176-functions.txt`: integração no controlador de filme.
+- `scripts/build-v2176.mjs`: build e testes, saída `dist/`.
+- `scripts/test-v2176.mjs`: regressões novas.
+- `versions/PROJECT_MEMORY-pre-2.17.6.md`: histórico anterior integral e preservado.
 
-## Falha que não deve voltar
+O restante do sistema permanece no mesmo Supabase/GitHub/Vercel, com autenticação, RLS, clientes, projetos, comissões, catálogos e layout preservados. Nenhuma migration nesta revisão. Cópias de rascunho usam print jobs existentes, distintas do autosave da edição atual.
 
-Não usar loaders que baixam chunks compactados e fazem gzip/base64/`DecompressionStream` no navegador para iniciar a aplicação. Essa arquitetura causou `Failed to decode data` / `Failed to fetch` em produção. Desde v2.10 o app deve carregar arquivos estáticos normais do mesmo deployment.
+Exportação continua em um único PNG transparente 300 DPI. TIFF com Cor Spot 1 está apenas especificado na memória, sem implementação nesta versão.
 
-## Revisão da produção DTF
+## Publicação
 
-Consulte `IMPLEMENTATION_CHECKLIST_v217.md` para o escopo completo, testes e pendências reais.
-
-- Filme: seleção visual multiempresa, quantidade/medidas, organização automática, rotação livre opcional, travas, prévia com fundos de visualização e PNG transparente em 300 DPI inteiro ou recortado, sempre em **um único arquivo por filme**; não há divisão automática em segmentos. Personalizações de time podem ser mescladas como nome inteiro + dígitos separados para o nesting.
-- Estúdio: provador individual e botão **Montar camiseta completa**, com modelos normal/oversized, três cores, quatro vistas, várias estampas e exportação para apresentação. Essas imagens de mockup não são o arquivo físico DTF.
-- Custos: compras e perfis de impressora, análise local das cores, estimativas e simulador sem cadastro. Preços ausentes não são tratados como zero; calibração inicial não substitui medições do equipamento.
-- Orientador: verificações locais baseadas em evidências do projeto, sem API paga nem envio a IA. Não é um modelo generativo ou aprendizagem automática.
-
-As migrations de integridade operacional, custos privados, financeiro, montagens, filme em edição e apresentações foram aplicadas ao Supabase em 18/09. Configurações e montagens usam o banco como fonte principal. Cadastros antigos locais são preservados para transferência explícita; não há novo salvamento de negócio exclusivamente no navegador. Custos/financeiro são exclusivos do titular Clovis, protegidos também por RLS.
-
-### Verificação local
-
-`node scripts/validate-static.mjs` valida os módulos e scripts. Os arquivos `scripts/test-*.mjs` executam regressões puras. Os scripts `*-browser-test.mjs` usam Edge isolado e fixtures locais: não substituem teste autenticado de RLS e gravação na conta real. `scripts/` não é publicado.
-
-O visualizador `mockup-3d.html` usa uma malha real licenciada (CC BY 4.0), com cores e estampas; o corte normal é adaptação declarada do oversized. A galeria `mockup-viewer.html` lê apenas um manifesto JSON validado e mostra as vistas fotográficas empilhadas, sem abas ou execução de HTML armazenado. O PDF da apresentação contém uma vista por página. Publicações explícitas usam o bucket separado `z19p-presentations`, sem custos internos.
-
-O seletor do estúdio consulta 24 artes por página, filtra empresa/cliente/nome/data e limita as prévias a duas requisições simultâneas. Prévia leve não altera o original utilizado na impressão.
-
-`supabase/tests/v217_cloud_rls_rollback.sql` verificou as permissões reais de titular, funcionário e visitante, revisão otimista e exportação única; os dados fictícios foram revertidos na mesma transação. A revisão de segurança não encontrou novos alertas nos módulos criados; existem avisos históricos de outros sistemas no banco compartilhado, fora do escopo desta alteração.
+Candidata v2.17.6: só chamar de publicada após build/testes, commit rastreável, deployment READY e conferência do domínio canônico `https://019-personalizacoes.vercel.app`, incluindo scripts executáveis.

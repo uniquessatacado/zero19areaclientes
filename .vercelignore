@@ -1,11 +1,7 @@
 tmp/
-scripts/
 .git/
 .vercel/
 .env*
 .agents/
 .codex/
-supabase/
 output/
-/*.md
-assets/MOCKUP_PROMPTS.md

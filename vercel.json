@@ -1,68 +1,16 @@
 {
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [{ "key": "X-Content-Type-Options", "value": "nosniff" }]
-    },
-    {
-      "source": "/",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/index.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/app.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/styles.css",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/production-v217.css",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/production-v217.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/nesting-(.*).js",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/(art-(.*)|asset-studio-actions|studio-(.*)|film-(.*)|garment-(.*)|production-cost-(.*)|production-finance(.*)|cost-store|project-advisor(.*)|route-viewport|rip-calibration|mockup-(.*)|queue-core|lettering-core|project-history|customization-preparer|font-cmap|ui-polish).(js|css|html)",
-      "headers": [{ "key": "Cache-Control", "value": "no-cache,max-age=0,must-revalidate" }]
-    },
-    {
-      "source": "/qualidades.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/portfolio.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/comercial-admin.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/demo.html",
-      "headers": [{ "key": "Cache-Control", "value": "no-store,max-age=0" }]
-    },
-    {
-      "source": "/zero19-logo.svg",
-      "headers": [{ "key": "Cache-Control", "value": "public,max-age=86400" }]
-    },
-    {
-      "source": "/zero19-logo.png",
-      "headers": [{ "key": "Cache-Control", "value": "public,max-age=86400" }]
-    }
+  "buildCommand":"node scripts/build-v2176.mjs",
+  "outputDirectory":"dist",
+  "headers":[
+    {"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"Cache-Control","value":"no-cache,max-age=0,must-revalidate"}]},
+    {"source":"/","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/index.html","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/qualidades.html","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/portfolio.html","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/comercial-admin.html","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/demo.html","headers":[{"key":"Cache-Control","value":"no-store,max-age=0"}]},
+    {"source":"/zero19-logo.svg","headers":[{"key":"Cache-Control","value":"public,max-age=86400"}]},
+    {"source":"/zero19-logo.png","headers":[{"key":"Cache-Control","value":"public,max-age=86400"}]}
   ],
-  "alias": [
-    "019-personalizacoes.vercel.app",
-    "019-personalizacoes-uniquess.vercel.app"
-  ]
+  "alias":["019-personalizacoes.vercel.app","019-personalizacoes-uniquess.vercel.app"]
 }

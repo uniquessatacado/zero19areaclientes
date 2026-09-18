@@ -1,0 +1,66 @@
+  async function prepareLetteringLayout(item){
+    const legacy=await prepareLegacyLetteringLayout(item);
+    return refineLetteringLayout(item,legacy,{drawLine:drawPreparedLetteringLine,sanitizeSvg,hasGlyph:(family,char)=>fontCoverageByFamily.get(family)?.hasGlyph(char)===true});
+  }
+
+  async function upgradeCurrentLettering(current=()=>true){
+    const source=filmItems,generation=productionAccountGeneration,replacements=[],changed=new Set();
+    for(const item of source){
+      if(item.type!=='team_customization'||item.vectorSource||!item.name)continue;
+      const next={...item,name:String(item.name).normalize('NFC'),letteringMetricsVersion:2,spacingMode:item.spacingMode||'optical'};
+      const layout=await prepareLetteringLayout(next);if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;
+      next.widthCm=layout.widthCm;next.heightCm=layout.heightCm;
+      const needs=item.letteringMetricsVersion!==2||Math.abs(next.widthCm-item.widthCm)>.000001||Math.abs(next.heightCm-item.heightCm)>.000001;
+      if(needs){delete next.previewDataUrl;replacements.push(next);changed.add(item.localId);}
+    }
+    if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;
+    for(const next of replacements)Object.assign(source.find(i=>i.localId===next.localId),next,{previewDataUrl:undefined});
+    if(changed.size)filmMaskCache.clear();
+    return changed;
+  }
+
+  function mountFilmTools(media){
+    const page=app.querySelector('.film-page');if(!page)return;
+    let tools=page.querySelector('[data-film-tools]');if(tools)tools.remove();
+    tools=document.createElement('section');tools.dataset.filmTools='';
+    tools.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px;padding:14px;border:1px solid #34343a;border-radius:14px';
+    const hasNames=filmItems.some(i=>i.type==='team_customization'&&i.name&&!i.vectorSource);
+    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra preservada. Acentos e cedilha ficam fora dessa medida. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
+    page.querySelector('.simple-hero').insertAdjacentElement('afterend',tools);
+    const saved=createSavedFilmDrafts({supabase,owner,user:uid});
+    const snapshot=()=>({items:filmItems,layout:lastFilm,settings:filmSettings});
+    const ensureStable=async()=>{if(!await flushFilmDraft())throw new Error('Não foi possível confirmar a montagem atual na nuvem. Ela foi preservada; resolva o aviso do rascunho e tente novamente.');};
+    const saveCurrent=async title=>{
+      const account=String(owner()),actor=String(uid()),generation=productionAccountGeneration;
+      await ensureStable();
+      if(generation!==productionAccountGeneration||account!==String(owner())||actor!==String(uid()))throw new Error('A conta mudou. Reabra o filme.');
+      const profile=media.find(m=>m.id===filmSettings.mediaId)||media.find(m=>m.id===app.querySelector('#filmMedia')?.value);
+      if(!profile)throw new Error('Escolha o filme antes de salvar o rascunho.');
+      const result=await saved.save(snapshot(),title,Number(profile.usable_width_cm),profile.id);
+      ctx.toast('Rascunho salvo separadamente no banco.','ok');return result;
+    };
+    const switchTo=async target=>{
+      const generation=productionAccountGeneration;await ensureStable();if(generation!==productionAccountGeneration)throw new Error('A conta mudou.');
+      const store=filmDraftStore;if(!store)throw new Error('Rascunho atual indisponível.');
+      const draft=target||{version:1,ownerId:String(owner()),items:[],layout:null,settings:{...filmSettings}};
+      clearTimeout(filmDraftTimer);filmCalculationGeneration++;filmDraftSaving=true;
+      try{
+        const result=await store.save({items:draft.items,layout:draft.layout,settings:draft.settings});
+        if(generation!==productionAccountGeneration||store!==filmDraftStore)throw new Error('A conta mudou. O filme aberto não foi substituído.');
+        if(!result.ok)throw new Error(result.warning||'Falha ao abrir o filme.');
+        applyFilmDraft({...draft,savedAt:result.savedAt});filmDraftLoaded=true;filmDraftDirty=false;filmDraftConflict=false;filmDraftWarning='';filmDraftChange++;
+        filmMaskCache.clear();await regenerateFilmDraftPreviews();
+      }finally{if(generation===productionAccountGeneration)filmDraftSaving=false;}
+      await renderFilm();
+    };
+    const dialog=mode=>openSavedFilmDialog({mode,snapshot,store:saved,saveCurrent,switchTo,escapeHTML:h});
+    tools.querySelector('[data-save-named]').onclick=()=>dialog('save');
+    tools.querySelector('[data-open-named]').onclick=()=>dialog('load');
+    tools.querySelector('[data-new-film]').onclick=()=>filmItems.length?dialog('new'):safe(()=>switchTo(null));
+    tools.querySelector('[data-fix-names]')?.addEventListener('click',()=>calculateFilm(media));
+    tools.querySelector('[data-proof-names]').onclick=()=>{
+      const rows=filmNameProof(filmItems),modal=document.createElement('div'),focus=document.activeElement;modal.className='modal-backdrop';
+      modal.innerHTML='<div class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><h2>Conferir nomes do filme</h2><button class="btn ghost small" data-close aria-label="Fechar">×</button></div><p>Esta é a lista dos textos cadastrados no filme. O encaixe muda somente a posição; não cria nem corrige nomes.</p><div>'+rows.map((r,index)=>'<div style="display:flex;gap:16px;justify-content:space-between;border-bottom:1px solid #34343a;padding:12px 0"><b>'+h(index+1)+'. '+h(r.name||'(só número)')+'</b><span>'+h(r.number||'—')+' · '+h(r.quantity)+' un.</span></div>').join('')+'</div><div class="modal-footer"><button class="btn primary" data-close>Conferido</button></div></div>';
+      const close=()=>{modal.remove();focus?.isConnected&&focus.focus();};modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=close);modal.onkeydown=e=>{if(e.key==='Escape')close();};document.body.appendChild(modal);modal.querySelector('[data-close]').focus();
+    };
+  }
