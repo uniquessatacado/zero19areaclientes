@@ -25,7 +25,7 @@
     tools=document.createElement('section');tools.dataset.filmTools='';
     tools.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px;padding:14px;border:1px solid #34343a;border-radius:14px';
     const hasNames=filmItems.some(i=>i.type==='team_customization'&&(i.name||i.number)&&!i.vectorSource);
-    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes/números e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra e do número preservada. Acentos, cedilha, coroas e ornamentos ficam fora da medida-base. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
+    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn danger" data-clear-film '+(!filmItems.length?'disabled':'')+'>Limpar filme</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes/números e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra e do número preservada. Acentos, cedilha, coroas e ornamentos ficam fora da medida-base. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
     page.querySelector('.simple-hero').insertAdjacentElement('afterend',tools);
     const saved=createSavedFilmDrafts({supabase,owner,user:uid});
     const snapshot=()=>({items:filmItems,layout:lastFilm,settings:filmSettings});
@@ -57,6 +57,17 @@
     tools.querySelector('[data-save-named]').onclick=()=>dialog('save');
     tools.querySelector('[data-open-named]').onclick=()=>dialog('load');
     tools.querySelector('[data-new-film]').onclick=()=>filmItems.length?dialog('new'):safe(()=>switchTo(null));
+    tools.querySelector('[data-clear-film]').onclick=async()=>{
+      if(!filmItems.length)return;
+      if(!confirm('Limpar todos os itens deste filme agora? Artes, fontes e jobs salvos não serão apagados.'))return;
+      clearTimeout(filmDraftTimer);filmCalculationGeneration++;filmPreviewGeneration++;
+      filmItems=[];lastFilm=null;filmMaskCache.clear();filmCostPanel?.destroy();filmCostPanel=null;filmDraftNote='';saveFilmDraft(true);
+      const host=app.querySelector('#filmItems');if(host)host.innerHTML='<div class="empty mini">Nenhum item.</div>';
+      const preview=app.querySelector('#filmPreview');if(preview)preview.innerHTML='<div class="empty">Filme limpo. Adicione itens para começar outra montagem.</div>';
+      const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.innerHTML='';app.querySelector('#filmInspector')?.remove();
+      const exportButton=app.querySelector('#exportFilm'),saveButton=app.querySelector('#saveFilm');if(exportButton)exportButton.disabled=true;if(saveButton)saveButton.disabled=true;
+      mountFilmTools(media);filmDraftBanner();ctx.toast('Filme limpo de uma vez.','ok');
+    };
     tools.querySelector('[data-fix-names]')?.addEventListener('click',()=>calculateFilm(media));
     tools.querySelector('[data-proof-names]').onclick=()=>{
       const rows=filmNameProof(filmItems),modal=document.createElement('div'),focus=document.activeElement;modal.className='modal-backdrop';
