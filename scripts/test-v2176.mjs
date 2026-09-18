@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {baseCharacter,opticalOffset} from '../lettering-layout-v2176.js';
+import {baseCharacter,opticalOffset,chooseDominantInkBand,LETTERING_METRICS_VERSION} from '../lettering-layout-v2176.js';
+import {normalizeHexColor} from '../customization-preparer.js';
 import {createSavedFilmDrafts,checkedNamedDraft,filmNameProof,NAMED_FILM_DRAFT_KIND} from '../film-saved-drafts.js';
 assert.equal(baseCharacter('Ç'),'C');assert.equal(baseCharacter('Á'),'A');assert.equal(baseCharacter('Ã'),'A');
 const r=new Float64Array([8,7,6,5]),l=new Float64Array([4,3,2,1]);
@@ -7,7 +8,7 @@ const offset=opticalOffset(r,l,1);assert.ok(offset<9&&offset>=5,'A/V corners clo
 const names=[{localId:'a',type:'team_customization',name:'CÉSAR',number:'',compositionGroupId:'g',quantity:1},{localId:'b',type:'team_customization',name:'',number:'1',compositionGroupId:'g',quantity:1},{localId:'c',type:'team_customization',name:'',number:'0',compositionGroupId:'g',quantity:1},{localId:'d',type:'team_customization',name:'RODA',compositionGroupId:'x',quantity:1}];
 assert.deepEqual(filmNameProof(names).map(x=>[x.name,x.number]),[['CÉSAR','10'],['RODA','']]);
 assert.equal(names[0].name,'CÉSAR');
-const items=[{localId:'n',type:'team_customization',sourceId:'set',quantity:1,name:'CÉSAR',number:'',widthCm:15,heightCm:6.5,nameHeightCm:5.5,letteringMetricsVersion:2,rotationPolicy:'90',previewDataUrl:'transient'}];
+const items=[{localId:'n',type:'team_customization',sourceId:'set',quantity:1,name:'CÉSAR',number:'',widthCm:15,heightCm:6.5,nameHeightCm:5.5,letteringMetricsVersion:3,rotationPolicy:'90',previewDataUrl:'transient'}];
 const data={items,settings:{mediaId:'film',mode:'maximum',gapMm:3,freeRotation:false,angleStep:30},layout:null};
 assert.equal(checkedNamedDraft(data,'owner').data.items[0].previewDataUrl,undefined);
 assert.equal(items[0].previewDataUrl,'transient');
@@ -23,4 +24,10 @@ restored.data.items[0].name='EDITADO';assert.equal((await store.load(a.id)).data
 fail=true;await assert.rejects(store.save(data,'Falhou',58));assert.equal(db.size,2);assert.equal(items[0].name,'CÉSAR');fail=false;
 actor='other';await assert.rejects(store.load(a.id),/conta/);actor='user';
 assert.ok([...db.values()].every(v=>v.settings_snapshot.kind===NAMED_FILM_DRAFT_KIND));
-console.log('v2.17.6: accent bases, optical clearance, exact name proof, two independent drafts, recover/edit isolation, offline preservation and account guards passed.');
+assert.equal(LETTERING_METRICS_VERSION,3);
+const crown=chooseDominantInkBand([{top:0,height:18,area:90},{top:30,height:120,area:2200}],{top:0,height:150});
+assert.deepEqual(crown,{top:30,height:120,decorated:true},'detached crown must not shrink the 28 cm number body');
+const undecorated=chooseDominantInkBand([{top:0,height:80,area:500},{top:82,height:70,area:450}],{top:0,height:152});
+assert.equal(undecorated.decorated,false,'ambiguous multi-part art stays conservative');
+assert.equal(normalizeHexColor('#1a2b3c'),'#1A2B3C');assert.equal(normalizeHexColor('black'),null);
+console.log('v2.17.7: accents, optical spacing, crown/body number height, name color, drafts and account guards passed.');
