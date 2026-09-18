@@ -1,13 +1,13 @@
-import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.4';
-import {openFilmAssetPicker} from './film-picker.js?v=2.17.4';
-import {mountFilmPreview} from './film-preview.js?v=2.17.4';
-import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.4';
-import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.4';
-import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.4';
-import {openCustomizationPreparer} from './customization-preparer.js?v=2.17.4';
-import {resolveFilmDraftMedia} from './film-draft.js?v=2.17.4';
-import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.4';
-import {attachAssetStudioActions} from './asset-studio-actions.js?v=2.17.4';
+import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.5';
+import {openFilmAssetPicker} from './film-picker.js?v=2.17.5';
+import {mountFilmPreview} from './film-preview.js?v=2.17.5';
+import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.5';
+import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.5';
+import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.5';
+import {openCustomizationPreparer} from './customization-preparer.js?v=2.17.5';
+import {resolveFilmDraftMedia} from './film-draft.js?v=2.17.5';
+import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.5';
+import {attachAssetStudioActions} from './asset-studio-actions.js?v=2.17.5';
 
 const OPERATIONAL_STAGES=new Set(['art_work','ready_production','production']);
 const STAGE_LABELS={art_work:'Desenvolver arte',ready_production:'Iniciar produção',production:'Estampar'};
@@ -54,7 +54,7 @@ export function createProductionModule(ctx){
     const loading=(async()=>{
       const family=`z19_${String(source.id||'official').replace(/[^a-z0-9_]/gi,'_')}_${++fontFaceSequence}`,url=await signedSourceUrl(source.storage_path),response=await fetch(url);
       if(!response.ok)throw new Error('Não foi possível baixar a fonte oficial. Confira a conexão e tente novamente.');
-      const buffer=await response.arrayBuffer(),{parseFontCmap}=await import('./font-cmap.js?v=2.17.4'),coverage=parseFontCmap(buffer),face=new FontFace(family,buffer);
+      const buffer=await response.arrayBuffer(),{parseFontCmap}=await import('./font-cmap.js?v=2.17.5'),coverage=parseFontCmap(buffer),face=new FontFace(family,buffer);
       await face.load();if(face.status!=='loaded')throw new Error('A fonte oficial não carregou. Tente novamente.');
       if(accountGeneration!==productionAccountGeneration)throw new Error('A conta mudou durante o carregamento da fonte. Reabra a personalização.');
       document.fonts.add(face);fontCoverageByFamily.set(family,coverage);return family;
@@ -77,7 +77,7 @@ export function createProductionModule(ctx){
   function runNesting(items,options){
     if(!window.Worker)return Promise.resolve(options.operation==='move'?snapFilmPlacement(items,options.placements,options.moving,options):nestItems(items,options));
     return new Promise((resolve,reject)=>{
-      const worker=new Worker(new URL('./nesting-worker.js?v=2.17.4',import.meta.url),{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(new Error('O cálculo excedeu o tempo seguro. Reduza a quantidade de itens.'))},120000);
+      const worker=new Worker(new URL('./nesting-worker.js?v=2.17.5',import.meta.url),{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(new Error('O cálculo excedeu o tempo seguro. Reduza a quantidade de itens.'))},120000);
       const finish=()=>{clearTimeout(timer);worker.terminate()};
       worker.onmessage=event=>{finish();event.data?.ok?resolve(event.data.result):reject(new Error(event.data?.error||'Falha no cálculo do filme.'))};
       worker.onerror=event=>{finish();reject(new Error(event.message||'Falha ao iniciar o cálculo do filme.'))};
@@ -584,6 +584,99 @@ export function createProductionModule(ctx){
       document.body.appendChild(modal);field('set').focus();reset();
     });
   }
+
+  async function makeFilmLetteringPiece(set,{name='',number='',settings,compositionMode='split',pieceType='unified',groupId}={}){
+    const defaults=customizationDefaults(set),cleanName=String(name||'').trim().toUpperCase(),cleanNumber=String(number||'').trim();
+    const item={
+      type:'team_customization',customizationKind:'lettering',sourceId:set.id,quantity:1,
+      halftone:Boolean(set.halftone),allowInternalNesting:!set.halftone,rotationPolicy:'90',
+      name:cleanName,number:cleanNumber,fontSource:set._source||null,fontSources:set._sources||[],
+      glyphs:set._glyphs||[],palette:set._palette||[],compositionMode,pieceType,compositionGroupId:groupId||crypto.randomUUID(),
+      nameHeightCm:Number(settings.nameHeightCm),numberHeightCm:Number(settings.numberHeightCm),
+      gapCm:compositionMode==='unified'?Number(settings.gapCm):0,
+      nameTrackingCm:Number(settings.nameTrackingCm),
+      digitSpacingCm:compositionMode==='unified'?Number(settings.digitSpacingCm):0
+    };
+    const labelBase=set._path||customizationName(set);
+    item.label=pieceType==='name'?`${labelBase} • Nome ${cleanName}`:pieceType==='digit'?`${labelBase} • Número ${cleanNumber}`:`${labelBase} • ${[cleanName,cleanNumber].filter(Boolean).join(' ')}`;
+    const layout=await prepareLetteringLayout(item);item.widthCm=layout.widthCm;item.heightCm=layout.heightCm;
+    item.sizeOverride=['nameHeightCm','numberHeightCm','gapCm','nameTrackingCm','digitSpacingCm'].some(key=>Math.abs(Number(settings[key])-Number(defaults[key]))>.0001);
+    const scale=Math.max(1,Math.min(18,360/item.widthCm,360/item.heightCm)),canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.ceil(item.widthCm*scale));canvas.height=Math.max(1,Math.ceil(item.heightCm*scale));
+    const context=canvas.getContext('2d');if(!context)throw new Error('Seu navegador não conseguiu preparar a prévia desta personalização.');
+    await drawTeamCustomization(context,item,0,0,canvas.width,canvas.height);item.previewDataUrl=canvas.toDataURL('image/png');
+    canvas.width=1;canvas.height=1;return item;
+  }
+
+  function openFilmLetteringBatchComposer(sets,{allowLegacy=false}={}){
+    const available=(sets||[]).filter(set=>(set._kind||customizationKind(set))==='lettering'&&set.status==='ready'&&set.tested_at);
+    if(!available.length)return Promise.resolve(allowLegacy?{legacy:true}:null);
+    return new Promise(resolve=>{
+      const modal=document.createElement('div'),priorFocus=document.activeElement;let rows=[],busy=false,closed=false;
+      modal.className='modal-backdrop';
+      modal.innerHTML=`<div class="modal customization-composer-modal team-batch-composer" role="dialog" aria-modal="true" aria-labelledby="teamBatchTitle">
+        <div class="modal-head"><div><div class="eyebrow">Personalização oficial</div><h2 id="teamBatchTitle">Adicionar nomes e números</h2><p>Escolha a camisa, monte sua lista e envie tudo de uma vez para o encaixe.</p></div><button type="button" class="btn ghost small" data-close aria-label="Fechar">×</button></div>
+        <form>
+          <div class="form-grid">
+            <label class="field"><span>Time</span><select name="team"></select></label>
+            <label class="field"><span>Ano</span><select name="season"></select></label>
+            <label class="field"><span>Camisa</span><select name="kit"></select></label>
+            <label class="field"><span>Fonte / personalização</span><select name="set"></select></label>
+          </div>
+          <div class="team-batch-entry" style="margin-top:16px;padding:16px;border:1px solid #34343a;border-radius:16px;background:#111114">
+            <div class="form-grid">
+              <label class="field"><span>Nome <small>(opcional)</small></span><input name="name" maxlength="40" autocomplete="off" placeholder="Ex.: CLOVIS"></label>
+              <label class="field"><span>Número <small>(opcional)</small></span><input name="number" maxlength="6" inputmode="numeric" autocomplete="off" placeholder="Ex.: 10"></label>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin-top:12px">
+              <label style="flex:1;min-width:210px;display:flex;gap:10px;padding:12px;border:1px solid #39393f;border-radius:14px;cursor:pointer"><input type="radio" name="composition" value="split" checked style="width:20px;height:20px;accent-color:#ff6428"><span><b>Mesclar encaixe</b><small style="display:block;color:#aaa;margin-top:5px;line-height:1.45">Nome fica inteiro; cada algarismo vira uma peça separada para economizar filme.</small></span></label>
+              <label style="flex:1;min-width:210px;display:flex;gap:10px;padding:12px;border:1px solid #39393f;border-radius:14px;cursor:pointer"><input type="radio" name="composition" value="unified" style="width:20px;height:20px;accent-color:#ff6428"><span><b>Unificar tudo</b><small style="display:block;color:#aaa;margin-top:5px;line-height:1.45">Mantém nome em cima e número embaixo como uma única aplicação.</small></span></label>
+            </div>
+            <details data-advanced style="margin-top:12px"><summary class="btn" style="display:inline-flex;cursor:pointer">Editar fonte / medidas deste lote</summary>
+              <div class="form-grid" style="margin-top:12px">
+                <label class="field"><span>Altura do nome (cm)</span><input name="nameHeightCm" inputmode="decimal"></label>
+                <label class="field"><span>Altura do número (cm)</span><input name="numberHeightCm" inputmode="decimal"></label>
+                <label class="field"><span>Espaço entre letras (cm)</span><input name="nameTrackingCm" inputmode="decimal"></label>
+                <label class="field"><span>Espaço entre números (cm) <small>somente unificado</small></span><input name="digitSpacingCm" inputmode="decimal"></label>
+                <label class="field"><span>Distância nome / número (cm) <small>somente unificado</small></span><input name="gapCm" inputmode="decimal"></label>
+              </div><p class="hint">Esses ajustes valem apenas para as próximas linhas adicionadas nesta janela. O padrão salvo da fonte não é alterado.</p>
+            </details>
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap"><small data-default-summary class="hint"></small><button type="button" class="btn" data-add-row>＋ Adicionar à lista</button></div>
+            <p data-entry-error class="error-text" role="alert"></p>
+          </div>
+          <section style="margin-top:18px"><div class="section-title-row"><div><div class="eyebrow">Lote</div><h3 style="margin:4px 0">Personalizações adicionadas</h3></div><span data-row-count class="badge">0</span></div><div data-batch-rows class="team-batch-rows"></div></section>
+          <p data-batch-error class="error-text" role="alert"></p>
+          <div class="modal-footer">${allowLegacy?'<button type="button" class="btn ghost" data-legacy>All Sponsor / arte especial</button>':''}<button type="button" class="btn" data-close>Cancelar</button><button class="btn primary" type="submit" disabled>Adicionar tudo ao filme</button></div>
+        </form>
+      </div>`;
+      const q=name=>modal.querySelector(`[name="${name}"]`),submit=modal.querySelector('[type="submit"]'),rowsHost=modal.querySelector('[data-batch-rows]'),entryError=modal.querySelector('[data-entry-error]'),batchError=modal.querySelector('[data-batch-error]');
+      const parse=value=>Number(String(value).trim().replace(',','.')),fmt=value=>String(Number(Number(value).toFixed(3))).replace('.',',');
+      const setById=id=>available.find(set=>String(set.id)===String(id));
+      const teamId=set=>String(set._team?.id||set._kit?.team_id||'sem-time'),season=set=>String(set._kit?.season||'Sem ano'),kitId=set=>String(set._kit?.id||set.kit_id||'sem-camisa');
+      const unique=(values,key)=>[...new Map(values.map(value=>[key(value),value])).values()];
+      const currentTeamSets=()=>available.filter(set=>teamId(set)===q('team').value);
+      const currentSeasonSets=()=>currentTeamSets().filter(set=>season(set)===q('season').value);
+      const currentKitSets=()=>currentSeasonSets().filter(set=>kitId(set)===q('kit').value);
+      const selectedSet=()=>setById(q('set').value);
+      const option=(value,label)=>`<option value="${h(value)}">${h(label)}</option>`;
+      const applyDefaults=()=>{const set=selectedSet();if(!set)return;const defaults=customizationDefaults(set);for(const key of ['nameHeightCm','numberHeightCm','nameTrackingCm','digitSpacingCm','gapCm'])q(key).value=fmt(defaults[key]);modal.querySelector('[data-default-summary]').textContent=`Padrão salvo: nome ${fmt(defaults.nameHeightCm)} cm · número ${fmt(defaults.numberHeightCm)} cm · letras ${fmt(defaults.nameTrackingCm)} cm`;};
+      const fillSet=()=>{const list=currentKitSets();q('set').innerHTML=list.map(set=>option(set.id,customizationName(set))).join('');applyDefaults()};
+      const fillKit=()=>{const list=unique(currentSeasonSets(),kitId);q('kit').innerHTML=list.map(set=>option(kitId(set),set._kit?.name||'Camisa')).join('');fillSet()};
+      const fillSeason=()=>{const list=unique(currentTeamSets(),season);q('season').innerHTML=list.map(set=>option(season(set),season(set))).join('');fillKit()};
+      const fillTeam=()=>{const list=unique(available,teamId);q('team').innerHTML=list.map(set=>option(teamId(set),set._team?.name||'Time')).join('');fillSeason()};
+      const readSettings=()=>{const values={};for(const key of ['nameHeightCm','numberHeightCm','nameTrackingCm','digitSpacingCm','gapCm'])values[key]=parse(q(key).value);if(!(values.nameHeightCm>0&&values.nameHeightCm<=100))throw new Error('Altura do nome inválida.');if(!(values.numberHeightCm>0&&values.numberHeightCm<=100))throw new Error('Altura do número inválida.');if(!Number.isFinite(values.nameTrackingCm)||values.nameTrackingCm<0||values.nameTrackingCm>10)throw new Error('Espaço entre letras inválido.');if(!Number.isFinite(values.digitSpacingCm)||values.digitSpacingCm<0||values.digitSpacingCm>10)throw new Error('Espaço entre números inválido.');if(!Number.isFinite(values.gapCm)||values.gapCm<0||values.gapCm>50)throw new Error('Distância nome / número inválida.');return values;};
+      const renderRows=()=>{modal.querySelector('[data-row-count]').textContent=String(rows.length);submit.disabled=!rows.length||busy;rowsHost.innerHTML=rows.length?rows.map(row=>`<article style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #2d2d33"><div style="flex:1;min-width:0"><b>${h([row.name,row.number].filter(Boolean).join(' · '))}</b><small style="display:block;color:#aaa;margin-top:4px">${h(row.setPath)} · ${row.mode==='split'?'Mesclar encaixe':'Unificar tudo'}</small></div><button type="button" class="btn ghost small" data-remove-row="${h(row.id)}">Remover</button></article>`).join(''):'<div class="empty mini">Digite um nome, um número ou os dois e adicione à lista.</div>';rowsHost.querySelectorAll('[data-remove-row]').forEach(button=>button.onclick=()=>{rows=rows.filter(row=>row.id!==button.dataset.removeRow);renderRows()});};
+      const stageCurrent=()=>{entryError.textContent='';const set=selectedSet();if(!set)throw new Error('Escolha uma fonte/personalização.');const name=q('name').value.trim().toUpperCase(),number=q('number').value.trim();if(!name&&!number)throw new Error('Informe um nome, um número ou os dois.');if(number&&!/^\d{1,6}$/.test(number))throw new Error('Use somente algarismos no campo número.');const mode=modal.querySelector('[name="composition"]:checked')?.value||'split',settings=readSettings();rows.push({id:crypto.randomUUID(),setId:set.id,setUpdatedAt:set.updated_at||null,setPath:set._path||customizationName(set),name,number,mode,settings});q('name').value='';q('number').value='';q('name').focus();renderRows();return true;};
+      const close=result=>{if(closed||busy)return;closed=true;modal.remove();priorFocus?.focus?.();resolve(result??null)};
+      q('team').onchange=fillSeason;q('season').onchange=fillKit;q('kit').onchange=fillSet;q('set').onchange=applyDefaults;
+      modal.querySelector('[data-add-row]').onclick=()=>{try{stageCurrent()}catch(error){entryError.textContent=error.message||String(error)}};
+      modal.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>close());modal.querySelector('[data-legacy]')?.addEventListener('click',()=>close({legacy:true}));
+      modal.onkeydown=event=>{if(event.key==='Escape'){event.preventDefault();close()}else if(event.key==='Tab'){const controls=[...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),summary')].filter(control=>!control.closest('[hidden]')),first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
+      modal.querySelector('form').onsubmit=async event=>{event.preventDefault();if(busy)return;batchError.textContent='';try{if(q('name').value.trim()||q('number').value.trim())stageCurrent();if(!rows.length)throw new Error('Adicione ao menos uma personalização.');busy=true;submit.disabled=true;submit.textContent='Preparando peças…';const ids=[...new Set(rows.map(row=>row.setId))],latestResult=await supabase.from('z19p_customization_sets').select('id,status,tested_at,updated_at').in('id',ids);if(latestResult.error)throw latestResult.error;const latestMap=new Map((latestResult.data||[]).map(set=>[set.id,set]));for(const row of rows){const latest=latestMap.get(row.setId);if(!latest||latest.status!=='ready'||!latest.tested_at)throw new Error('Uma das personalizações não está mais liberada para produção.');if(row.setUpdatedAt&&latest.updated_at!==row.setUpdatedAt)throw new Error('Uma das fontes foi alterada. Feche e abra novamente para carregar a versão atual.');}const items=[];for(const row of rows){const set=setById(row.setId),groupId=crypto.randomUUID();if(row.mode==='unified')items.push(await makeFilmLetteringPiece(set,{name:row.name,number:row.number,settings:row.settings,compositionMode:'unified',pieceType:'unified',groupId}));else{if(row.name)items.push(await makeFilmLetteringPiece(set,{name:row.name,settings:row.settings,compositionMode:'split',pieceType:'name',groupId}));for(const digit of row.number)items.push(await makeFilmLetteringPiece(set,{number:digit,settings:row.settings,compositionMode:'split',pieceType:'digit',groupId}));}}busy=false;closed=true;modal.remove();priorFocus?.focus?.();resolve(items);}catch(error){busy=false;batchError.textContent=error.message||String(error);submit.disabled=!rows.length;submit.textContent='Adicionar tudo ao filme'}};
+      document.body.appendChild(modal);fillTeam();renderRows();q('name').focus();
+    });
+  }
+
   async function testCustomization(set){
     const kind=customizationKind(set);
     if(kind!=='lettering'){
@@ -706,7 +799,7 @@ export function createProductionModule(ctx){
     for(const result of [profilesResult,mediaResult,setsResult,jobsResult])if(result.error)return schemaMissing(result.error);
     const profiles=profilesResult.data||[],media=mediaResult.data||[],readySets=setsResult.data||[],assetIds=profiles.map(p=>p.asset_id),setIds=readySets.map(set=>set.id);let assets,sources,glyphs,palettes;try{[assets,sources,glyphs,palettes]=await Promise.all([productionByIds('z19p_assets','id',assetIds),productionByIds('z19p_customization_sources','set_id',setIds),productionByIds('z19p_customization_glyphs','set_id',setIds),productionByIds('z19p_customization_palettes','set_id',setIds)])}catch(error){return schemaMissing(error)}const assetMap=new Map(assets.map(a=>[a.id,a]));
     const kitIds=[...new Set(readySets.map(set=>set.kit_id))];let readyKits,readyTeams;try{readyKits=await productionByIds('z19p_team_kits','id',kitIds);readyTeams=await productionByIds('z19p_teams','id',[...new Set(readyKits.map(kit=>kit.team_id))])}catch(error){return schemaMissing(error)}const readyKitMap=new Map(readyKits.map(kit=>[kit.id,kit])),readyTeamMap=new Map(readyTeams.map(team=>[team.id,team]));
-    for(const set of readySets){const kit=readyKitMap.get(set.kit_id),team=readyTeamMap.get(kit?.team_id),setSources=(sources||[]).filter(source=>source.set_id===set.id);set._kind=customizationKind(set);set._sources=setSources;set._source=setSources.filter(source=>['ttf','otf'].includes(source.source_type)&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._vectorSource=setSources.filter(source=>source.source_type==='svg'&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._glyphs=(glyphs||[]).filter(glyph=>glyph.set_id===set.id);set._palette=(palettes||[]).filter(color=>color.set_id===set.id);set._path=[team?.name,kit?.season,kit?.name,SET_KIND_LABEL[set._kind],customizationName(set)].filter(Boolean).join(' → ')}
+    for(const set of readySets){const kit=readyKitMap.get(set.kit_id),team=readyTeamMap.get(kit?.team_id),setSources=(sources||[]).filter(source=>source.set_id===set.id);set._team=team;set._kit=kit;set._kind=customizationKind(set);set._sources=setSources;set._source=setSources.filter(source=>['ttf','otf'].includes(source.source_type)&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._vectorSource=setSources.filter(source=>source.source_type==='svg'&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._glyphs=(glyphs||[]).filter(glyph=>glyph.set_id===set.id);set._palette=(palettes||[]).filter(color=>color.set_id===set.id);set._path=[team?.name,kit?.season,kit?.name,SET_KIND_LABEL[set._kind],customizationName(set)].filter(Boolean).join(' → ')}
     if(renderGeneration!==filmCalculationGeneration)return false;
     if(filmDraftLoaded||filmItems.length){const reconciled=resolveFilmDraftMedia(filmSettings,lastFilm,media);filmSettings=reconciled.settings;lastFilm=reconciled.layout;if(reconciled.changed){filmDraftDirty=true;filmDraftNote=reconciled.warning;}}
     const jobs=jobsResult.data||[];
@@ -728,16 +821,24 @@ export function createProductionModule(ctx){
   }
   function glyphAspect(markup){try{const root=new DOMParser().parseFromString(markup,'image/svg+xml').documentElement,view=(root.getAttribute('viewBox')||'').trim().split(/[ ,]+/).map(Number);if(view.length===4&&view[2]>0&&view[3]>0)return view[2]/view[3];const width=parseFloat(root.getAttribute('width')),height=parseFloat(root.getAttribute('height'));return width>0&&height>0?width/height:.65}catch{return .65}}
   async function pickFilmTeam(sets,done){
-    const item=await openCustomizationComposer(sets);if(!item)return;
-    filmItems.push({...item,localId:crypto.randomUUID()});await done?.();
+    const letteringSets=(sets||[]).filter(set=>(set._kind||customizationKind(set))==='lettering'),otherSets=(sets||[]).filter(set=>(set._kind||customizationKind(set))!=='lettering');
+    if(letteringSets.length){
+      const result=await openFilmLetteringBatchComposer(letteringSets,{allowLegacy:otherSets.length>0});if(!result)return;
+      if(result.legacy){const item=await openCustomizationComposer(otherSets);if(!item)return;filmItems.push({...item,localId:crypto.randomUUID()});await done?.();return;}
+      filmItems.push(...result.map(item=>({...item,localId:item.localId||crypto.randomUUID()})));await done?.();return;
+    }
+    const item=await openCustomizationComposer(otherSets);if(!item)return;filmItems.push({...item,localId:crypto.randomUUID()});await done?.();
   }
   const filmMaskCache=new Map();
   async function maskForItem(item){
-    if(item.type!=='asset'||!item.path||item.halftone||item.allowInternalNesting===false)return null;
-    if(filmMaskCache.has(item.path))return filmMaskCache.get(item.path);
+    if(item.halftone||item.allowInternalNesting===false)return null;
+    const source=item.type==='asset'&&item.path?ctx.publicUrl(item.path):item.type==='team_customization'&&item.previewDataUrl?item.previewDataUrl:null;
+    if(!source)return null;
+    const cacheKey=item.type==='asset'?'asset:'+item.path:'team:'+(item.localId||item.label||item.sourceId);
+    if(filmMaskCache.has(cacheKey))return filmMaskCache.get(cacheKey);
     const accountGeneration=productionAccountGeneration;
     try{
-      const image=new Image();image.crossOrigin='anonymous';image.src=ctx.publicUrl(item.path);await image.decode();
+      const image=new Image();if(!source.startsWith('data:'))image.crossOrigin='anonymous';image.src=source;await image.decode();
       const iw=image.naturalWidth,ih=image.naturalHeight,w=Math.min(180,iw),height=Math.max(1,Math.ceil(w*ih/iw));
       if(iw*ih>68e6||height>2000)return null;
       const canvas=document.createElement('canvas');canvas.width=iw;canvas.height=Math.min(64,ih);const g=canvas.getContext('2d',{willReadFrequently:true}),data=new Uint8Array(w*height);
@@ -745,8 +846,8 @@ export function createProductionModule(ctx){
         for(let y=0;y<rows;y++){const my=Math.min(height-1,Math.floor((row+y)*height/ih));for(let x=0;x<iw;x++)if(rgba[(y*iw+x)*4+3]>0)data[my*w+Math.min(w-1,Math.floor(x*w/iw))]=1}
         if(row%1024===0)await new Promise(resolve=>setTimeout(resolve,0));
       }
-      if(accountGeneration!==productionAccountGeneration)return null;
-      const result={w,h:height,data};if(filmMaskCache.size>=30)filmMaskCache.delete(filmMaskCache.keys().next().value);filmMaskCache.set(item.path,result);return result;
+      canvas.width=1;canvas.height=1;if(accountGeneration!==productionAccountGeneration)return null;
+      const result={w,h:height,data};if(filmMaskCache.size>=60)filmMaskCache.delete(filmMaskCache.keys().next().value);filmMaskCache.set(cacheKey,result);return result;
     }catch(error){console.warn('mask',error);return null}
   }
   async function filmNestingItems(){const items=[];for(const item of filmItems)items.push({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation&&(item.rotationPolicy||'none')!=='none'?'free':item.rotationPolicy||'none',mask:await maskForItem(item)});return items}
@@ -769,7 +870,7 @@ export function createProductionModule(ctx){
     const preview=app.querySelector('#filmPreview');if(!preview||!lastFilm)return;const generation=++filmPreviewGeneration;
     const metrics=()=>{app.querySelector('#filmMetrics').innerHTML=`<span><small>Filme</small><b>${lastFilm.filmWidthMm/10} cm</b></span><span><small>Comprimento</small><b>${(lastFilm.lengthMm/10).toFixed(1)} cm</b></span><span><small>Metros</small><b>${(lastFilm.lengthMm/1000).toFixed(3)} m</b></span><span><small>Aproveitamento aprox.</small><b>${lastFilm.efficiency.toFixed(1)}%</b></span><span><small>Desperdício aprox.</small><b>${lastFilm.waste.toFixed(1)}%</b></span><span><small>Modo</small><b>${lastFilm.mode==='maximum'?'Máximo':'Normal'}</b></span>`};
     metrics();mountFilmPreview({element:preview,layout:lastFilm,items:filmItems,publicUrl:ctx.publicUrl,
-      validate:async (placements,moving)=>{const items=await filmNestingItems(),settings={filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep};if(moving)return runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:lastFilm.lengthMm});const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.4');return validateFilmPlacements(items,placements,settings)},
+      validate:async (placements,moving)=>{const items=await filmNestingItems(),settings={filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep};if(moving)return runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:lastFilm.lengthMm});const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.5');return validateFilmPlacements(items,placements,settings)},
       onChange:layout=>{if(generation!==filmPreviewGeneration||!preview.isConnected)return;lastFilm=layout;filmDraftNote='';saveFilmDraft();metrics();filmCostPanel?.refresh()},
       onRepack:async lockedPlacements=>runNesting(await filmNestingItems(),{filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep,lockedPlacements})});
     if(ctx.getCostUI?.()){let slot=app.querySelector('#filmCostSummary');if(!slot){slot=document.createElement('section');slot.id='filmCostSummary';app.querySelector('.film-workspace').insertAdjacentElement('afterend',slot)}filmCostPanel?.destroy();filmCostPanel=ctx.getCostUI().mountFilmCost(slot,{getLayout:()=>lastFilm,getItems:()=>filmItems,getImageUrl:item=>item.previewDataUrl||(item.path?ctx.publicUrl(item.path):null),getCommission:()=>ctx.getFilmCommissions?.(filmItems)})}
@@ -929,13 +1030,13 @@ export function createProductionModule(ctx){
       if(assetIds.some(id=>!assetProjects.has(id)))throw new Error('Uma das artes foi removida ou não está mais acessível. Revise os itens antes de salvar.');
       for(const item of items)if(item.type==='asset')item.projectId=assetProjects.get(item.sourceId);
       const projectIds=new Set(items.map(item=>item.type==='asset'?item.projectId:null)),projectId=projectIds.size===1&&![...projectIds].includes(null)?[...projectIds][0]:null;
-      const snapshot={snapshot_version:2,renderer_version:'2.17.4',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
+      const snapshot={snapshot_version:2,renderer_version:'2.17.5',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
       const jobPayload={id:jobId,owner_id:accountId,project_id:projectId,name:'Filme '+new Date().toLocaleString('pt-BR'),media_profile_id:profile.id,film_width_cm:layout.filmWidthMm/10,nesting_mode:layout.mode,gap_mm:layout.gapMm,status:'draft',calculated_length_cm:layout.lengthMm/10,settings_snapshot:snapshot,created_by:actorId,updated_by:actorId};
       attempted=true;
       const inserted=await supabase.from('z19p_print_jobs').insert(jobPayload).select('id').single();if(inserted.error)throw inserted.error;if(inserted.data?.id!==jobId)throw new Error('Não foi possível confirmar o registro do job.');
       const rows=items.map((item,index)=>{
         const placements=layout.placements.filter(p=>p.id===item.localId),first=placements[0];
-        return {owner_id:accountId,job_id:jobId,item_type:item.type,asset_id:item.type==='asset'?item.sourceId:null,customization_set_id:item.type==='team_customization'?item.sourceId:null,label:item.label||'Personalização',quantity:item.quantity,width_cm:item.widthCm,height_cm:item.heightCm,rotation_deg:first.rotation||0,position_x_mm:first.xMm,position_y_mm:first.yMm,bounds:{width_mm:first.widthMm,height_mm:first.heightMm},locked:placements.every(p=>p.locked),halftone:Boolean(item.halftone),size_override:Boolean(item.sizeOverride),sort_order:index,created_by:actorId,updated_by:actorId,metadata:{local_id:item.localId,name:item.name,number:item.number,path:item.path,project_id:item.projectId||null,placements}};
+        return {owner_id:accountId,job_id:jobId,item_type:item.type,asset_id:item.type==='asset'?item.sourceId:null,customization_set_id:item.type==='team_customization'?item.sourceId:null,label:item.label||'Personalização',quantity:item.quantity,width_cm:item.widthCm,height_cm:item.heightCm,rotation_deg:first.rotation||0,position_x_mm:first.xMm,position_y_mm:first.yMm,bounds:{width_mm:first.widthMm,height_mm:first.heightMm},locked:placements.every(p=>p.locked),halftone:Boolean(item.halftone),size_override:Boolean(item.sizeOverride),sort_order:index,created_by:actorId,updated_by:actorId,metadata:{local_id:item.localId,name:item.name,number:item.number,path:item.path,project_id:item.projectId||null,composition_mode:item.compositionMode||null,piece_type:item.pieceType||null,composition_group_id:item.compositionGroupId||null,placements}};
       });
       const savedItems=await supabase.from('z19p_print_job_items').insert(rows);if(savedItems.error)throw savedItems.error;
       finalizing=true;const completed=await supabase.from('z19p_print_jobs').update({status:'calculated',settings_snapshot:{...snapshot,commit_state:'complete'},updated_at:new Date().toISOString(),updated_by:actorId}).eq('id',jobId).eq('owner_id',accountId).select('id').single();

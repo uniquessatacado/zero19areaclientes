@@ -286,3 +286,17 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - **Não regressão:** manter transparência, alpha/antialias, rotação, posições, espaçamento/gap, opção de recorte externo e largura inteira.
 - Esta regra substitui a orientação anterior de segmentação automática para filmes longos.
 - **Publicação confirmada:** commit de runtime `15f0438e747470824c8ac020962edc7c20832567`; deployment Vercel `dpl_swyqL4wGLsEjQ4Cc68WWo2qmpUZG`, estado `READY`, aliases `019-personalizacoes.vercel.app` e `019-personalizacoes-uniquess.vercel.app`. O domínio canônico respondeu HTTP 200 com `z19-version="2.17.4"`; `app.js` e `production-v217.js` foram conferidos contra a `main` e são idênticos.
+
+## 19. v2.17.5 — personalizações de time otimizadas no filme (18/09/2026)
+
+- A entrada principal de nomes/números foi simplificada: Time → Ano → Camisa → Fonte/personalização, depois Nome e Número opcionais.
+- Medidas e espaçamentos continuam vindo da configuração oficial da fonte e ficam recolhidos em **Editar fonte / medidas deste lote**; a tela principal não exige esses campos.
+- É possível montar várias linhas antes de enviar ao filme, inclusive só nome, só número ou nome+número.
+- O modo padrão é **Mesclar encaixe**: o nome completo vira uma peça; cada algarismo do número vira uma peça independente. Ex.: `CLOVIS 10` gera `CLOVIS`, `1` e `0` para o nesting.
+- O modo **Unificar tudo** preserva o formato antigo de nome em cima + número embaixo como uma única aplicação.
+- Peças mescladas usam rotação 0°/90° automaticamente no nesting, sem depender da rotação livre de 30°, para reduzir o comprimento do filme quando vantajoso.
+- Personalizações mescladas não-halftone geram máscara alpha própria e podem usar áreas transparentes internas no modo de aproveitamento máximo; halftone continua conservador.
+- Adicionar o lote chama o mesmo refresh/recalculo global do filme usado pelas artes comuns, preservando gap, medidas físicas e exportação PNG único da v2.17.4.
+- Jobs antigos/unificados continuam compatíveis; snapshots novos registram `compositionMode`, `pieceType` e `compositionGroupId`.
+- Sem migration de banco nesta revisão.
+- Status deste commit: candidata v2.17.5; publicar somente após validação de sintaxe, nesting e preview.
