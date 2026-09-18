@@ -1,0 +1,28 @@
+name: Validate v2.17.7 number color
+on:
+  push:
+    branches: [release/v2.17.7-number-color]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build and regression tests
+        run: npm run build
+      - name: Verify v2.17.7 artifacts
+        run: |
+          node --check dist/app.js
+          node --check dist/production-v217.js
+          node --check dist/lettering-layout-v2176.js
+          node --check dist/customization-preparer.js
+          grep -q 'z19-version" content="2.17.7"' dist/index.html
+          grep -q 'letteringMetricsVersion:3' dist/production-v217.js
+          grep -q 'Pegar cor do número' dist/customization-preparer.js
+          grep -q 'chooseDominantInkBand' dist/lettering-layout-v2176.js
+          grep -q 'segments=\[{start:0,end:layout.lengthMm}\]' dist/production-v217.js
