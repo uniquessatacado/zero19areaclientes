@@ -49,7 +49,7 @@ O vercel.json declara build/outputDirectory e usa regras de header simples váli
 - Chromium isolado, sem conexão com a conta real: CESAR/CÉSAR, JOAO/JOÃO, CONCEICAO/CONCEIÇÃO, ABIDAO/ABIDÃO, OCTAVIO/OCTÁVIO mantiveram escala do corpo; texto e sinais preservados. DAVID em fonte de teste teve redução de excesso entre cantos no modo óptico. SVG sintético Á manteve corpo 5,5 cm e caixa total maior.
 - Interface de rascunhos em viewport 390 px: salvar antes de novo filme, preservar montagem se gravação falhar, carregar outro após backup e listar duas cópias passaram com serviço simulado.
 - PNG único continua exigido pelo build. O fluxo TIFF/Spot não foi implementado.
-- Não confundir testes controlados com teste autenticado de políticas/dados ou impressão no RIP do usuário.
+- Não confundir testes controlados com validação de políticas na conta real nem com impressão no RIP do usuário.
 
 ## PENDENTE — TIFF com Spot, NÃO implementar agora
 Usuário adiou explicitamente essa função. Manter somente PNG nesta revisão.
@@ -120,3 +120,13 @@ Pedido urgente:
 - TIFF/Spot permanece pendente e não entra nesta revisão.
 
 Estado: candidata v2.17.8; publicar somente depois de build/preview e confirmação do domínio oficial.
+
+## 18/09/2026 — diagnóstico do bloqueio de publicação da v2.17.8
+- Reconsulta do domínio oficial retornou HTTP 200 com `z19-version="2.17.7"`. Isso atualiza a informação histórica de produção acima; a v2.17.8 ainda NÃO foi publicada nem validada ponta a ponta.
+- A ação oficial `Vercel.deploy_to_vercel({})` retornou JSON-RPC `-32602`, mensagem `Tool deploy_to_vercel not found`. Essa tentativa não iniciou um deployment; não tratar como build lento ou aguardando propagação. O motivo interno da indisponibilidade da ação não foi determinado.
+- O job de diagnóstico GitHub Actions `105788042245`, run `35403418521`, terminou em `failure`, sem passos/logs disponibilizados. Não concluir que faltam créditos, token ou permissões sem evidência adicional.
+- Encontrada inconsistência independente no código de build: `production-v217.js` passou a chamar `drawFilm(media)`, mas `scripts/build-v2176.mjs` ainda procurava a linha `drawFilm()` e a emitia sem `media`. A guarda `replaceOnce` não encontra essa âncora antiga e interromperia o build.
+- Correção mínima no commit `2d0d5606ba79c53dc947e48fdc20013ad8e7c8d2`: atualizar a âncora e a linha emitida para `drawFilm(media)`. Mantida a versão candidata 2.17.8; nenhum módulo funcional, banco, RLS ou domínio alterado nesta correção.
+- Validação executada: cópia original conferida pelo Git blob SHA `bccc21e7f92405db8508bc0d5acbb5c7e35aa632`; `node --check` no script corrigido passou; teste focal reproduziu ausência da âncora antiga e ocorrência única da nova na linha-fonte consultada.
+- Limite: build completo, testes autenticados e deployment da candidata ainda pendentes. A tentativa de obter o checkout completo neste ambiente falhou na resolução DNS do host do arquivo GitHub. Não apresentar o teste focal como execução de `npm run build`.
+- Prevenção: executar o script de build versionado real; não usar uma transformação manual diferente do repositório como prova de que o build está pronto. Não repetir chamadas de deployment inexistente como se fossem trabalhos em progresso.
