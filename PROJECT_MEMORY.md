@@ -91,3 +91,32 @@ Pedido atual:
 - A função TIFF com Spot permanece **pendente e não implementada** nesta revisão.
 
 Estado: candidata v2.17.7 em branch de validação; não declarar publicada antes de preview READY, testes e confirmação do domínio canônico.
+
+## v2.17.8 — editor de filme rápido e preview nítido (EM VALIDAÇÃO)
+
+Pedido urgente:
+- botão para limpar todos os itens do filme de uma vez, sem remover um por um;
+- ao selecionar arte/nome/número no filme, permitir excluir com botão e teclas Delete/Backspace;
+- zoom deve mostrar a melhor qualidade disponível, principalmente números vetoriais.
+
+### Limpeza e exclusão
+- `Limpar filme` esvazia a montagem aberta de uma vez após confirmação; não apaga artes, fontes, jobs nem rascunhos nomeados.
+- A limpeza atualiza o editor imediatamente e sincroniza o autosave em segundo plano, sem recarregar todas as tabelas do módulo.
+- No preview, item selecionado ganha botão `Excluir selecionado`.
+- Clique/toque seleciona e dá foco ao item; Delete ou Backspace remove a cópia selecionada.
+- Se a origem tem quantidade > 1, excluir uma cópia decrementa a quantidade em 1; se era a última, o item sai da lista.
+- Depois da exclusão, somente o nesting é recalculado; não é necessário refazer toda a consulta da tela.
+
+### Qualidade do preview
+- Zoom máximo do preview passa de 200% para 400%.
+- Dígito isolado com SVG oficial usa o próprio SVG como fonte visual do preview, mantendo nitidez vetorial no zoom.
+- Nomes e composições que precisam de rasterização passam a gerar prévia de até ~1600 px, em vez do raster pequeno anterior.
+- Rascunhos antigos com prévia de baixa resolução são regenerados automaticamente ao serem recuperados.
+- Artes de empresa continuam usando o arquivo original pela URL pública; exportação final não usa a prévia de tela.
+
+### Não regressão
+- Preservar v2.17.7: cor da fonte/nome e altura-base dos números sem contar coroa/ornamentos.
+- Preservar PNG único 300 DPI, transparência, nesting, rascunhos, jobs, custos e Supabase.
+- TIFF/Spot permanece pendente e não entra nesta revisão.
+
+Estado: candidata v2.17.8; publicar somente depois de build/preview e confirmação do domínio oficial.
