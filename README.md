@@ -6,18 +6,18 @@ Aplicação de atendimento, projetos, artes, orçamentos, filas de produção e 
 
 ## Produção e candidata
 
-Produção confirmada antes desta correção: **v2.17.6**, deployment `dpl_ZPY2K9YPLMckbJTN1gQgfpDfJKvY` READY. Candidata em validação: **v2.17.7**, com cor persistente do nome/fonte e altura-base do número sem contar coroa/ornamentos.
+Produção confirmada antes desta correção: **v2.17.6**, deployment `dpl_ZPY2K9YPLMckbJTN1gQgfpDfJKvY` READY. Candidata em validação: **v2.17.8**, preservando a 2.17.7 e acrescentando limpeza rápida do filme, Delete/Backspace e preview nítido.
 
 ## Build e desenvolvimento local
 
-Esta revisão preserva altura-base das letras com acentos/cedilha, encaixe óptico, conferência de nomes e vários rascunhos; a candidata v2.17.7 acrescenta cor do nome/fonte com conta-gotas e altura-base do número independente de coroas/ornamentos.
+Esta revisão preserva altura-base das letras com acentos/cedilha, encaixe óptico, conferência de nomes e vários rascunhos; a 2.17.7 acrescenta cor do nome/fonte com conta-gotas e altura-base do número independente de coroas/ornamentos; a 2.17.8 melhora o editor do filme.
 
 ```sh
 npm run build
 python -m http.server 8080 --directory dist
 ```
 
-Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; o build atual produz o artefato compilado v2.17.7.
+Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; o build atual produz o artefato compilado v2.17.8.
 
 ## Fontes da revisão
 
