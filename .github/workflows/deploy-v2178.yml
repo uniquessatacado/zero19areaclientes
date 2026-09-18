@@ -1,0 +1,49 @@
+name: Deploy v2.17.8 to Vercel
+on:
+  push:
+    branches: [release/v2.17.8-film-editor]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Build v2.17.8
+        run: npm run build
+      - name: Link Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"team_88LTzdT7GLfKgRlzjvr1eF8c","projectId":"prj_cpZoh49CdDlYP0h82gwXCbR4nyw3"}' > .vercel/project.json
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+      - name: Deploy production
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          url=$(npx --yes vercel@latest deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN")
+          echo "DEPLOY_URL=$url" >> "$GITHUB_ENV"
+          echo "$url"
+      - name: Verify canonical domain
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            body=$(curl -fsSL -H 'Cache-Control: no-cache' 'https://019-personalizacoes.vercel.app/?github_deploy=2178' || true)
+            if echo "$body" | grep -q 'z19-version" content="2.17.8"'; then
+              echo "Canonical domain is v2.17.8"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Canonical domain did not reach v2.17.8" >&2
+          exit 1
