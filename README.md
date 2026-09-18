@@ -4,20 +4,20 @@ Aplicação de atendimento, projetos, artes, orçamentos, filas de produção e 
 
 **Leia `PROJECT_MEMORY.md` e o histórico integral indicado nele antes de alterar.**
 
-## Produção v2.17.6
+## Produção e candidata
 
-Publicada a partir do commit `d2eb6c540ce60d0f1136d960fe0c9b8eecf0b4d3`, deployment Vercel `dpl_ZPY2K9YPLMckbJTN1gQgfpDfJKvY` READY. Domínio oficial e módulos novos conferidos. Consulte a memória para resultados e limites dos testes.
+Produção confirmada antes desta correção: **v2.17.6**, deployment `dpl_ZPY2K9YPLMckbJTN1gQgfpDfJKvY` READY. Candidata em validação: **v2.17.7**, com cor persistente do nome/fonte e altura-base do número sem contar coroa/ornamentos.
 
 ## Build e desenvolvimento local
 
-Esta revisão contém altura-base das letras com acentos/cedilha, encaixe óptico entre letras, conferência de nomes e vários rascunhos de filme no banco.
+Esta revisão preserva altura-base das letras com acentos/cedilha, encaixe óptico, conferência de nomes e vários rascunhos; a candidata v2.17.7 acrescenta cor do nome/fonte com conta-gotas e altura-base do número independente de coroas/ornamentos.
 
 ```sh
 npm run build
 python -m http.server 8080 --directory dist
 ```
 
-Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; a versão do artefato compilado é v2.17.6.
+Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; o build atual produz o artefato compilado v2.17.7.
 
 ## Fontes da revisão
 
@@ -30,6 +30,6 @@ Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte
 
 O restante do sistema permanece no mesmo Supabase/GitHub/Vercel. Nenhuma migration nesta revisão. Cópias de rascunho usam print jobs existentes, distintas do autosave da edição atual. Os testes com serviços simulados não substituem um fluxo autenticado completo nem impressão física.
 
-Exportação continua em um único PNG transparente 300 DPI. TIFF com Cor Spot 1 está apenas especificado na memória, sem implementação nesta versão.
+Exportação continua em um único PNG transparente 300 DPI. TIFF com Cor Spot 1 continua apenas especificado na memória, sem implementação nesta versão.
 
 Commits devem conter `[skip bootstrap]` para impedir que o workflow histórico v2.12 tente reconstruir a fonte antiga.
