@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <base href="/">
+  <title>Zero19 — teste local isolado do estúdio</title>
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="../production-v217.css">
+  <link rel="stylesheet" href="../film-picker.css">
+  <link rel="stylesheet" href="../art-studio.css">
+  <link rel="stylesheet" href="../garment-composer.css">
+  <link rel="stylesheet" href="../ui-polish.css">
+</head>
+<body>
+  <main style="max-width:900px;margin:auto;padding:30px">
+    <p>FIXTURE LOCAL DE TESTE — DADOS SIMULADOS, SEM LOGIN OU CONEXÃO COM BANCO</p>
+    <h1>Teste do seletor e estúdio</h1>
+    <button class="btn primary" id="start-picker">Escolher artes</button>
+    <button class="btn" id="start-mockup">Mockup de teste</button>
+    <button class="btn" id="start-editor">Editor de teste</button>
+  </main>
+  <script type="module">
+    // This fixture never imports app.js or a Supabase client. Every operation below is in memory.
+    const clone=value=>structuredClone(value);
+    const assets=[
+      {id:'asset-one',name:'Logo oficina · teste',asset_type:'arte',workspace_id:'company-one',project_id:'project-one',folder_id:'folder-one',original_path:'fixture/original-one.png',processed_path:'fixture/original-one.png',mime_type:'image/png',width:240,height:120,metadata:{},updated_at:'2026-01-01T00:00:00Z'},
+      {id:'asset-two',name:'Arte cliente dois · teste',asset_type:'arte',workspace_id:'company-two',project_id:'project-two',folder_id:'folder-two',original_path:'fixture/original-two.png',processed_path:'fixture/original-two.png',mime_type:'image/png',width:240,height:120,metadata:{},updated_at:'2026-01-01T00:00:00Z'},
+      {id:'asset-draft',name:'Rascunho não liberado',asset_type:'arte',workspace_id:'company-one',original_path:'fixture/original-one.png',metadata:{}}
+    ];
+    const profiles=[
+      {asset_id:'asset-one',ready_for_print:true,default_width_cm:20,default_height_cm:10,aspect_ratio:2,halftone:false,allow_internal_nesting:true,rotation_policy:'180'},
+      {asset_id:'asset-two',ready_for_print:true,default_width_cm:18,default_height_cm:9,aspect_ratio:2,halftone:true,allow_internal_nesting:false,rotation_policy:'none'},
+      {asset_id:'asset-draft',ready_for_print:false,default_width_cm:10,default_height_cm:5,aspect_ratio:2}
+    ];
+    const workspaces=[{id:'company-one',company_name:'Oficina Aurora · teste',client_name:'Clóvis Teste'},{id:'company-two',company_name:'Estúdio Horizonte · teste',client_name:'Ana Teste'},{id:'company-empty',company_name:'Cliente sem arte · teste',client_name:'João Teste'}];
+    const projects=[{id:'project-one',title:'Uniformes Oficina',sequence_no:1},{id:'project-two',title:'Camisetas equipe',sequence_no:2}];
+    const folders=[{id:'folder-one',name:'Artes prontas'},{id:'folder-two',name:'Campanha nova'}];
+    const urls=new Map(),uploads=new Map(),operations=[],additions=[],notifications=[],changes=[],events=[];
+    function sampleImage(path,color){const canvas=document.createElement('canvas');canvas.width=240;canvas.height=120;const g=canvas.getContext('2d');g.fillStyle='#000';g.fillRect(0,0,240,120);g.fillStyle=color;g.fillRect(45,25,150,70);g.fillStyle='#fff';g.fillRect(95,45,50,30);urls.set(path,canvas.toDataURL('image/png'));}
+    sampleImage('fixture/original-one.png','#ff6b28');sampleImage('fixture/original-two.png','#3b96ed');
+    const db={z19p_assets:assets,z19p_asset_print_profiles:profiles};
+    const testState={failNext:null,workerCount:0,workerMessages:0,workerTerminated:0,holdWorkerMessages:false,dpiCalls:[]};
+    const NativeWorker=window.Worker;
+    window.Worker=class TestObservedWorker extends NativeWorker{constructor(...args){super(...args);testState.workerCount++;}postMessage(...args){testState.workerMessages++;if(!testState.holdWorkerMessages)return super.postMessage(...args);}terminate(){testState.workerTerminated++;return super.terminate();}};
+    function query(table){
+      let mode='select',payload=null,filters=[],single=false;
+      const chain={
+        select(){return chain;},eq(key,value){filters.push([key,value]);return chain;},in(key,value){filters.push([key,value,true]);return chain;},
+        insert(value){mode='insert';payload=value;return chain;},update(value){mode='update';payload=value;return chain;},upsert(value){mode='upsert';payload=value;return chain;},
+        maybeSingle(){single=true;return execute();},single(){single=true;return execute();},then(resolve,reject){return execute().then(resolve,reject);}
+      };
+      async function execute(){
+        operations.push({table,mode,payload:clone(payload),filters:clone(filters)});
+        if(testState.failNext?.table===table&&testState.failNext?.mode===mode){const error=testState.failNext.error;testState.failNext=null;return {data:null,error};}
+        const rows=db[table];if(!rows)throw Error('Fixture table unsupported: '+table);
+        let result=rows.filter(row=>filters.every(([key,value,many])=>many?value.includes(row[key]):row[key]===value));
+        if(mode==='insert'){const values=Array.isArray(payload)?payload:[payload];result=values.map(row=>({...clone(row),created_at:row.created_at||new Date().toISOString(),updated_at:row.updated_at||new Date().toISOString()}));rows.push(...result);}
+        if(mode==='update'){result.forEach(row=>Object.assign(row,clone(payload)));if(single&&!result.length)return {data:null,error:{code:'PGRST116',message:'Simulated concurrent change'}};}
+        if(mode==='upsert'){const key=table==='z19p_asset_print_profiles'?'asset_id':'id';let row=rows.find(row=>row[key]===payload[key]);if(row)Object.assign(row,clone(payload));else{row=clone(payload);rows.push(row);}result=[row];}
+        return {data:clone(single?result[0]||null:result),error:null};
+      }
+      return chain;
+    }
+    const supabase={from:query,storage:{from(bucket){if(bucket!=='z19p-assets')throw Error('Unexpected fixture bucket');return {
+      async upload(path,blob){operations.push({storage:'upload',path,size:blob.size});uploads.set(path,blob);urls.set(path,URL.createObjectURL(blob));return {data:{path},error:null};},
+      async remove(paths){operations.push({storage:'remove',paths});for(const path of paths){uploads.delete(path);const url=urls.get(path);if(url?.startsWith('blob:'))URL.revokeObjectURL(url);urls.delete(path);}return {data:[],error:null};}
+    };}}};
+    try{
+      const [{openFilmAssetPicker},{createArtStudio},{createProductionModule}]=await Promise.all([import('/film-picker.js'),import('/art-studio.js'),import('/production-v217.js')]);
+      let picker;
+      const ctx={supabase,accountOwnerId:()=> 'fixture-owner',state:()=>({session:{user:{id:'fixture-user'}}}),publicUrl:path=>urls.get(path)||'',toast:(message,type)=>notifications.push({message,type}),logEvent:async(...args)=>events.push(args),setPngDpi:async(blob,dpi)=>{testState.dpiCalls.push(dpi);return blob;},onAssetChanged:async asset=>changes.push(clone(asset))};
+      const studio=createArtStudio(ctx);
+      const cardHost=document.createElement('section'),cardAssets=[...assets,{id:'photo-only',name:'Foto mockup sem montagem',asset_type:'mockup',processed_path:'fixture/original-one.png',metadata:{}}];cardHost.id='fixture-asset-cards';cardHost.style.cssText='display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:20px 0';
+      const production=createProductionModule({...ctx,app:cardHost,escapeHTML:value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])),state:()=>({...ctx.state(),currentAssets:cardAssets,currentFolders:folders}),openArtGarment:asset=>studio.openGarment(asset),openArtMockup:asset=>studio.openMockup(asset),openArtEditor:asset=>studio.openEditor(asset)});
+      const assetById=id=>clone(assets.find(asset=>asset.id===id));
+      const fixture=window.fixture={assets,profiles,workspaces,projects,folders,uploads,operations,additions,notifications,changes,events,testState,studio,
+        async prepareCardTest(fail=false,visibleIds=null){if(!cardHost.isConnected||visibleIds){document.querySelector('main').append(cardHost);cardHost.innerHTML=cardAssets.filter(asset=>!visibleIds||visibleIds.includes(asset.id)).map(asset=>`<article class="asset-card" data-asset="${asset.id}"><div class="asset-body"><h4>${asset.name}</h4><div class="asset-meta"></div><div class="asset-actions"><button class="btn small">Baixar PNG</button></div></div></article>`).join('')}if(fail)testState.failNext={table:'z19p_asset_print_profiles',mode:'select',error:{message:'Simulated unavailable print profiles'}};await production.enhanceAssetCards();return true;},
+        closeCardTest(){cardHost.remove();},
+        get picker(){return picker;},
+        openPicker(){picker=openFilmAssetPicker({profiles:clone(profiles),assetMap:new Map(assets.map(asset=>[asset.id,clone(asset)])),workspaces,projects,folders,publicUrl:ctx.publicUrl,toast:ctx.toast,onAdd:async items=>additions.push(clone(items)),onGarment:asset=>studio.openGarment(asset,{onSaved:saved=>picker.refreshAsset(asset,saved)}),onMockup:(asset,profile)=>studio.openMockup(asset,{onSaved:saved=>picker.refreshAsset(asset,saved)}),onEdit:(asset,profile)=>studio.openEditor(asset,{onSaved:saved=>picker.refreshAsset(saved,clone(profiles.find(item=>item.asset_id===saved.id)))} )});return true;},
+        async openMockup(id='asset-one'){await studio.openMockup(assetById(id));return true;},
+        async openEditor(id='asset-one'){await studio.openEditor(assetById(id));return true;},
+        async uploadedPixel(path,x,y){const image=new Image();image.src=urls.get(path);await image.decode();const canvas=document.createElement('canvas');canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;const g=canvas.getContext('2d');g.drawImage(image,0,0);return {pixel:[...g.getImageData(x,y,1,1).data],width:canvas.width,height:canvas.height};},
+        setInput(selector,value,type='input'){const input=document.querySelector(selector);if(!input)throw Error('Input missing: '+selector);input.value=String(value);input.dispatchEvent(new Event(type,{bubbles:true}));},
+        click(selector){const target=document.querySelector(selector);if(!target)throw Error('Control missing: '+selector);target.click();},
+        metrics(selector){const box=document.querySelector(selector),rect=box.getBoundingClientRect();return {pageOverflow:document.documentElement.scrollWidth>innerWidth+1,dialogOverflow:box.scrollWidth>box.clientWidth+1,offscreen:rect.left<-.5||rect.right>innerWidth+.5||rect.top<-.5||rect.bottom>innerHeight+.5,width:rect.width,height:rect.height};}
+      };
+      document.querySelector('#start-picker').onclick=()=>fixture.openPicker();document.querySelector('#start-mockup').onclick=()=>fixture.openMockup();document.querySelector('#start-editor').onclick=()=>fixture.openEditor();
+      window.fixtureReady=true;
+    }catch(error){window.fixtureError=error.stack||error.message;console.error(error);document.body.append(String(error));}
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="/"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="art-studio.css"><link rel="stylesheet" href="garment-composer.css"></head><body><button id="fixtureStart">Abrir</button><script type="module">
+import {openGarmentComposer} from '/garment-composer.js';
+const owner='11111111-1111-4111-8111-111111111111',canvas=document.createElement('canvas');canvas.width=200;canvas.height=100;canvas.getContext('2d').fillRect(0,0,200,100);const image=canvas.toDataURL(),uploads=[],downloads=[];
+const asset={id:'private-asset-id',owner_id:owner,name:'Cliente <script> segredo',processed_path:owner+'/arts/a.png',metadata:{privateCost:123,garment_scene:{title:'Camiseta <script>alert(1)<\/script>',model:'oversized',color:'offwhite',layers:[{id:'layer-private',assetId:'private-asset-id',path:owner+'/arts/a.png',name:'Logo cliente',side:'front',width:20,ratio:2,x:30,y:22,halftone:true,privateCost:123}]}}};
+const ctx={accountOwnerId:()=>owner,publicUrl:()=>image,state:()=>({session:{user:{id:owner}}}),getCostUI:()=>null,toast:()=>{},supabase:{
+  from(table){const q={select:()=>q,eq:()=>q,in:()=>q,maybeSingle:async()=>({data:null,error:null}),then:resolve=>resolve({data:table==='z19p_assets'?[asset]:[],error:null})};return q},
+  storage:{from(bucket){return {async upload(path,blob,options){uploads.push({bucket,path,json:JSON.parse(await blob.text()),options});if(fixture.holdUpload)await new Promise(resolve=>fixture.releaseUpload=resolve);return {data:{path},error:fixture.failUpload?{message:'Falha fictícia ao publicar'}:null}}}}}
+}};
+HTMLAnchorElement.prototype.click=function(){downloads.push(this.download)};window.confirm=()=>true;
+window.fixture={uploads,downloads,asset,ctx,open:(initialAction,withAsset=true)=>openGarmentComposer(ctx,withAsset?asset:null,{initialAction}),click:selector=>document.querySelector(selector).click(),viewerCalls:[],viewerClosed:0,holdUpload:false,failUpload:false};document.querySelector('#fixtureStart').onclick=()=>fixture.open();window.fixtureReady=true;
+</script></body></html>

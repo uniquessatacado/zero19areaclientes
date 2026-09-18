@@ -1,11 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import picaFactory from 'https://esm.sh/pica@9.0.1';
+import { createProductionModule } from './production-v217.js?v=2.17.3';
+import { createArtStudio } from './art-studio.js?v=2.17.3';
+import { bindProjectHistory } from './project-history.js?v=2.17.3';
+import { createProductionCostUI } from './production-cost-ui.js?v=2.17.3';
+import { createProductionCostStore, fetchFilmCommissions } from './cost-store.js?v=2.17.3';
+import { createRouteViewportController } from './route-viewport.js?v=2.17.3';
+import { createProjectAdvisorUI } from './project-advisor-ui.js?v=2.17.3';
+import { attachAssetStudioActions } from './asset-studio-actions.js?v=2.17.3';
+import { renderStudioHome } from './studio-home.js?v=2.17.3';
+import { createProductionFinanceUI } from './production-finance.js?v=2.17.3';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
-const BRAND_LOGO = '/zero19-logo.png?v=2.16-logo2';
-const APP_VERSION = '2.16';
+const BRAND_LOGO = '/zero19-logo.png?v=2.17';
+const APP_VERSION = '2.17.3';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'ultra';
@@ -35,14 +45,52 @@ let currentQuotes = [];
 let libraryWorkspaces = {};
 let dashboardAgingTimer = null;
 let unreadQualityComments = 0;
+let productionModule = null;
+let artStudio = null;
+let productionCosts = null;
+let productionCostOwner = null;
+let projectAdvisor = null;
+function getProductionCosts(){
+  const id=accountOwnerId();
+  if(!canViewProductionCosts()){productionCosts?.destroy?.();productionCosts=null;return null;}
+  if(!productionCosts||productionCostOwner!==id){
+    productionCostOwner=id;
+    const costStore=createProductionCostStore({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin:canViewProductionCosts});
+    productionCosts=createProductionCostUI({costStore,isAdmin:canViewProductionCosts,canView:canViewProductionCosts,toast,publicUrl});
+  }
+  return productionCosts;
+}
+function getProductionFinance(){return canViewProductionCosts()?createProductionFinanceUI({supabase,owner:accountOwnerId,user:()=>session?.user?.id,canView:canViewProductionCosts,app,shell,bindCommon,toast}):null;}
+
+let logoutInProgress=false;
+async function signOutWithDraftGuard(){
+  if(logoutInProgress)return;
+  logoutInProgress=true;
+  const userId=session?.user?.id,button=$('#logoutBtn'),previousHTML=button?.innerHTML;
+  try{
+    if(button)button.disabled=true;
+    if(productionModule?.hasPendingFilmDraft?.()){
+      if(button)button.textContent='Salvando filme…';
+      let saved=false;
+      try{saved=await productionModule.flushFilmDraft();}catch{}
+      if(session?.user?.id!==userId)return;
+      if(!saved&&!confirm('As últimas alterações do filme ainda não foram confirmadas na nuvem. Sair agora pode perder essas alterações. Deseja sair mesmo assim?'))return;
+    }
+    if(session?.user?.id!==userId)return;
+    const result=await supabase.auth.signOut();
+    if(result?.error)throw result.error;
+    nav('/');
+  }catch(error){toast(`Não foi possível sair: ${error?.message||'tente novamente.'}`);}
+  finally{logoutInProgress=false;if(button?.isConnected){button.disabled=false;button.innerHTML=previousHTML;}}
+}
 
 
 const DEFAULT_STATUSES = [
-  {name:'Em atendimento',color:'#ff6b2c',sort_order:10},
+  {name:'Em atendimento',color:'#ff6b2c',sort_order:10,queue_stage:'none',is_finalized:false},
   {name:'Aguardando chegar o produto para realizar a personalização',color:'#f0b429',sort_order:20},
   {name:'Cliente não responde',color:'#8b93a7',sort_order:30},
   {name:'Cliente desistiu',color:'#d65c6a',sort_order:40},
-  {name:'Finalizado',color:'#38d39f',sort_order:50}
+  {name:'Finalizado',color:'#38d39f',sort_order:50,queue_stage:'none',is_finalized:true}
 ];
 const DEFAULT_PRODUCTS = [
   '30.1','Oversize Suedine','Oversize 100% algodão','Pima Egípcia','Malha peruana','Cotton','Dry Fit Premium','Dry Fit com poliamida'
@@ -80,7 +128,7 @@ function quoteTotal(quote){return (quote.items||[]).reduce((sum,i)=>sum+Math.max
 function statusById(id){return statuses.find(s=>s.id===id)||null;}
 function statusOptions(selected=''){return statuses.map(s=>`<option value="${s.id}" ${s.id===selected?'selected':''}>${escapeHTML(s.name)}</option>`).join('');}
 function statusPill(status){return status?`<span class="status-pill" style="--status:${escapeHTML(status.color||'#ff6b2c')}"><i></i>${escapeHTML(status.name)}</span>`:'<span class="status-pill muted"><i></i>Sem status</span>';}
-function isFinalizedStatus(status){return String(status?.name||'').trim().toLocaleLowerCase('pt-BR')==='finalizado';}
+function isFinalizedStatus(status){return Boolean(status?.is_finalized);}
 function formatStatusAge(ms){
   const totalHours=Math.max(0,Math.floor(ms/3600000));
   const days=Math.floor(totalHours/24),hours=totalHours%24;
@@ -134,7 +182,14 @@ async function init(){
     console.error('Falha ao recuperar sessão',error);
     session=null;
   }
-  supabase.auth.onAuthStateChange((_e,s)=>{session=s;void renderRoute();});
+  supabase.auth.onAuthStateChange((event,s)=>{
+    const previous=session?.user?.id;session=s;
+    if(previous!==s?.user?.id)clearAccountContext();
+    // Refreshing a token must not replace the page the user is currently editing.
+    if(event==='TOKEN_REFRESHED')return;
+    if(event==='INITIAL_SESSION'&&previous===s?.user?.id)return;
+    if(previous!==s?.user?.id||event==='USER_UPDATED')queueMicrotask(()=>{void renderRoute()});
+  });
   await renderRoute();
 }
 
@@ -150,7 +205,7 @@ function shell(content, {back=false}={}){
 }
 function bindCommon(){
   $$('[data-nav]').forEach(el=>{el.onclick=()=>nav(el.dataset.nav);if(el.getAttribute('role')==='button')el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();nav(el.dataset.nav)}}});
-  $('#logoutBtn')?.addEventListener('click', async()=>{await supabase.auth.signOut(); nav('/');});
+  $('#logoutBtn')?.addEventListener('click',signOutWithDraftGuard);
 }
 
 async function renderRoute(){
@@ -312,8 +367,10 @@ function openSettingsModal(){
   document.body.appendChild(m);draw();
 }
 function openConfigEditor(kind,item,parent,redraw){
-  const isStatus=kind==='status',isFolder=kind==='folder';const label=isStatus?'status':isFolder?'pasta padrão':'produto';const x=document.createElement('div');x.className='modal-backdrop nested';x.innerHTML=`<div class="modal compact"><div class="modal-head"><h2>${item?'Editar':'Adicionar'} ${label}</h2><button class="btn ghost small close">×</button></div><form id="configForm"><div class="form-grid"><div class="field ${isStatus?'':'full'}"><label>Nome *</label><input name="name" required value="${escapeHTML(item?.name||'')}" placeholder="${isFolder?'Ex.: Artes enviadas pelo cliente':''}"></div>${isStatus?`<div class="field"><label>Cor</label><input name="color" type="color" value="${escapeHTML(item?.color||'#ff6b2c')}"></div>`:isFolder?'':`<div class="field full"><label>Preço padrão da peça (opcional)</label><input name="price" inputmode="decimal" value="${item?.default_unit_price!=null?String(item.default_unit_price).replace('.',','):''}" placeholder="Ex.: 60,00"></div>`}</div>${isFolder?'<div class="hint" style="margin-top:10px">Ao criar uma nova empresa, esta pasta já aparecerá pronta para receber as artes.</div>':''}<div class="modal-footer"><button type="button" class="btn close">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></div>`;document.body.appendChild(x);$$('.close',x).forEach(b=>b.onclick=()=>x.remove());
-  $('#configForm',x).onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);const payload={name:fd.get('name').trim(),owner_id:session.user.id,updated_at:new Date().toISOString()};if(isStatus){payload.color=fd.get('color')||'#ff6b2c';payload.sort_order=item?.sort_order??((statuses.length+1)*10);}else if(isFolder){payload.sort_order=item?.sort_order??((folderTemplates.length+1)*10);}else{payload.default_unit_price=fd.get('price')?.trim()?moneyNumber(fd.get('price')):null;payload.sort_order=item?.sort_order??((products.length+1)*10);}const table=isStatus?'z19p_statuses':isFolder?'z19p_folder_templates':'z19p_products';const res=item?await supabase.from(table).update(payload).eq('id',item.id):await supabase.from(table).insert(payload);if(res.error)return toast(res.error.message,'err');x.remove();await loadConfig();if(isStatus)await loadWorkspaces();toast(isFolder?'Pasta padrão salva.':'Configuração salva.','ok');redraw();};
+  const isStatus=kind==='status',isFolder=kind==='folder',label=isStatus?'status':isFolder?'pasta padrão':'produto',x=document.createElement('div');x.className='modal-backdrop nested';
+  const semantic=isStatus?`<div class="field full"><label>Fila operacional</label><select name="queue_stage"><option value="none" ${(item?.queue_stage||'none')==='none'?'selected':''}>Nenhuma</option><option value="art_work" ${item?.queue_stage==='art_work'?'selected':''}>Desenvolver arte</option><option value="ready_production" ${item?.queue_stage==='ready_production'?'selected':''}>Iniciar produção</option><option value="production" ${item?.queue_stage==='production'?'selected':''}>Estampar</option></select><small>A automação usa esta chave, mesmo se o nome do status mudar.</small></div><div class="field full"><label class="check-row"><input name="is_finalized" type="checkbox" ${item?.is_finalized?'checked':''}> Este status encerra/finaliza o projeto</label></div><div class="field full"><label class="check-row"><input name="active" type="checkbox" ${item?.active!==false?'checked':''}> Status ativo</label></div>`:'';
+  x.innerHTML=`<div class="modal compact"><div class="modal-head"><h2>${item?'Editar':'Adicionar'} ${label}</h2><button class="btn ghost small close">×</button></div><form id="configForm"><div class="form-grid"><div class="field ${isStatus?'':'full'}"><label>Nome *</label><input name="name" required value="${escapeHTML(item?.name||'')}" placeholder="${isFolder?'Ex.: Artes enviadas pelo cliente':''}"></div>${isStatus?`<div class="field"><label>Cor</label><input name="color" type="color" value="${escapeHTML(item?.color||'#ff6b2c')}"></div>${semantic}`:isFolder?'':`<div class="field full"><label>Preço padrão da peça (opcional)</label><input name="price" inputmode="decimal" value="${item?.default_unit_price!=null?String(item.default_unit_price).replace('.',','):''}" placeholder="Ex.: 60,00"></div>`}</div>${isFolder?'<div class="hint" style="margin-top:10px">Ao criar uma nova empresa, esta pasta já aparecerá pronta para receber as artes.</div>':''}<div class="modal-footer"><button type="button" class="btn close">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></div>`;document.body.appendChild(x);$$('.close',x).forEach(b=>b.onclick=()=>x.remove());
+  $('#configForm',x).onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),payload={name:fd.get('name').trim(),owner_id:accountOwnerId(),updated_at:new Date().toISOString()};if(isStatus){payload.color=fd.get('color')||'#ff6b2c';payload.sort_order=item?.sort_order??((statuses.length+1)*10);payload.queue_stage=fd.get('queue_stage')||'none';payload.is_finalized=fd.get('is_finalized')==='on';payload.active=fd.get('active')==='on';if(payload.is_finalized&&payload.queue_stage!=='none')return toast('Um status finalizado não pode pertencer a uma fila operacional.','err');}else if(isFolder){payload.sort_order=item?.sort_order??((folderTemplates.length+1)*10);}else{payload.default_unit_price=fd.get('price')?.trim()?moneyNumber(fd.get('price')):null;payload.sort_order=item?.sort_order??((products.length+1)*10);}const table=isStatus?'z19p_statuses':isFolder?'z19p_folder_templates':'z19p_products',res=item?await supabase.from(table).update(payload).eq('id',item.id):await supabase.from(table).insert(payload);if(res.error)return toast(res.error.message,'err');x.remove();await loadConfig();if(isStatus)await loadWorkspaces();toast(isFolder?'Pasta padrão salva.':'Configuração salva.','ok');redraw();};
 }
 async function createDefaultFoldersForWorkspace(workspaceId){
   if(!workspaceId||!session?.user?.id)return true;
@@ -329,12 +386,15 @@ async function deleteWorkspace(w,modal=null){
   if(!confirm(`Excluir a empresa “${w.company_name}” e todos os arquivos dela? Essa ação não pode ser desfeita.`))return;
   const {data:assets,error:ae}=await supabase.from('z19p_assets').select('original_path,processed_path').eq('workspace_id',w.id);if(ae)return toast(ae.message,'err');
   const paths=(assets||[]).flatMap(a=>[a.original_path,a.processed_path]).filter(Boolean);
-  for(let i=0;i<paths.length;i+=100){const {error}=await supabase.storage.from(BUCKET).remove(paths.slice(i,i+100));if(error)return toast('Não foi possível apagar todos os arquivos. Tente novamente.','err');}
-  const {error}=await supabase.from('z19p_workspaces').delete().eq('id',w.id);if(error)return toast(error.message,'err');modal?.remove();toast('Empresa excluída.','ok');if(currentWorkspace?.id===w.id){currentWorkspace=null;nav('/')}else renderDashboard();
+  const {error}=await supabase.from('z19p_workspaces').delete().eq('id',w.id);if(error)return toast(error.message,'err');
+  // Delete records first: paid orders and print jobs may prohibit deletion.
+  for(let i=0;i<paths.length;i+=100){const {error:storageError}=await supabase.storage.from(BUCKET).remove([...new Set(paths.slice(i,i+100))]);if(storageError){toast('Empresa excluída. Alguns arquivos permaneceram no armazenamento para limpeza posterior.','err');break}}
+  modal?.remove();toast('Empresa excluída.','ok');if(currentWorkspace?.id===w.id){currentWorkspace=null;nav('/')}else renderDashboard();
 }
 
-async function loadQuotes(workspaceId){
-  const {data:q,error}=await supabase.from('z19p_quotes').select('*').eq('workspace_id',workspaceId).order('created_at',{ascending:false});
+async function loadQuotes(workspaceId,projectId=null){
+  let query=supabase.from('z19p_quotes').select('*').eq('workspace_id',workspaceId).order('created_at',{ascending:false});if(projectId)query=query.eq('project_id',projectId);
+  const {data:q,error}=await query;
   if(error){toast('Não foi possível carregar o orçamento.','err');currentQuotes=[];return currentQuotes;}
   const qs=q||[];if(!qs.length){currentQuotes=[];return currentQuotes;}
   const {data:items,error:ie}=await supabase.from('z19p_quote_items').select('*').in('quote_id',qs.map(x=>x.id)).order('sort_order');
@@ -354,11 +414,11 @@ function defaultQuoteItem(){
   const p=products[0];return {id:crypto.randomUUID(),product_id:p?.id||null,product_name:p?.name||'',quantity:1,pricing_mode:'total_unit',piece_price:p?.default_unit_price??'',total_unit_price:'',prints:[{placement:'Frente',width_cm:'',price:''}]};
 }
 function openQuoteModal(existing=null){
-  const draft={id:existing?.id||null,title:existing?.title||'Orçamento',delivery_term:existing?.delivery_term||'',notes:existing?.notes||'',items:(existing?.items?.length?existing.items:[defaultQuoteItem()]).map(i=>({...i,_key:i.id||crypto.randomUUID(),prints:(Array.isArray(i.prints)&&i.prints.length?i.prints:[{placement:'Frente',width_cm:'',price:''}]).map(p=>({...p}))}))};
+  const draft={id:existing?.id||null,title:existing?.title||'Orçamento',delivery_term:existing?.delivery_term||'',delivery_date:existing?.delivery_date||'',notes:existing?.notes||'',items:(existing?.items?.length?existing.items:[defaultQuoteItem()]).map(i=>({...i,_key:i.id||crypto.randomUUID(),prints:(Array.isArray(i.prints)&&i.prints.length?i.prints:[{placement:'Frente',width_cm:'',price:''}]).map(p=>({...p}))}))};
   const m=document.createElement('div');m.className='modal-backdrop';document.body.appendChild(m);
-  const render=()=>{m.innerHTML=`<div class="modal wide quote-modal"><div class="modal-head"><div><div class="eyebrow">Orçamento do cliente</div><h2>${existing?'Editar orçamento':'Novo orçamento'}</h2></div><button class="btn ghost small close">×</button></div><div class="quote-top form-grid"><div class="field"><label>Nome do orçamento</label><input id="quoteTitle" value="${escapeHTML(draft.title)}" placeholder="Orçamento"></div><div class="field"><label>Prazo de entrega</label><input id="quoteDelivery" value="${escapeHTML(draft.delivery_term)}" placeholder="Ex.: 5 dias úteis"></div></div><div class="quote-items-head"><div><b>Produtos e personalizações</b><small>Informe largura da estampa; a altura acompanha proporcionalmente.</small></div><button class="btn small" id="addQuoteItem">${icon('plus')} Produto</button></div><div id="quoteItems">${draft.items.map((item,i)=>renderQuoteItem(item,i)).join('')}</div><div class="field quote-notes"><label>Observações para o cliente</label><textarea id="quoteNotes" placeholder="Opcional">${escapeHTML(draft.notes)}</textarea></div><div class="quote-total"><span>Total do orçamento</span><b id="quoteGrandTotal">${fmtMoney(quoteTotal(draft))}</b></div>${quoteCommissionPreviewHTML(draft)}<div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" id="saveQuote">Salvar orçamento</button></div></div>`;
+  const render=()=>{m.innerHTML=`<div class="modal wide quote-modal"><div class="modal-head"><div><div class="eyebrow">Orçamento do cliente</div><h2>${existing?'Editar orçamento':'Novo orçamento'}</h2></div><button class="btn ghost small close">×</button></div><div class="quote-top form-grid"><div class="field"><label>Nome do orçamento</label><input id="quoteTitle" value="${escapeHTML(draft.title)}" placeholder="Orçamento"></div><div class="field"><label>Data de entrega (opcional agora)</label><input id="quoteDeliveryDate" type="date" value="${escapeHTML(draft.delivery_date)}"></div><div class="field full"><label>Observação de prazo (legado/opcional)</label><input id="quoteDelivery" value="${escapeHTML(draft.delivery_term)}" placeholder="Ex.: depende da aprovação da arte"></div></div><div class="quote-items-head"><div><b>Produtos e personalizações</b><small>Informe largura da estampa; a altura acompanha proporcionalmente.</small></div><button class="btn small" id="addQuoteItem">${icon('plus')} Produto</button></div><div id="quoteItems">${draft.items.map((item,i)=>renderQuoteItem(item,i)).join('')}</div><div class="field quote-notes"><label>Observações para o cliente</label><textarea id="quoteNotes" placeholder="Opcional">${escapeHTML(draft.notes)}</textarea></div><div class="quote-total"><span>Total do orçamento</span><b id="quoteGrandTotal">${fmtMoney(quoteTotal(draft))}</b></div>${quoteCommissionPreviewHTML(draft)}<div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" id="saveQuote">Salvar orçamento</button></div></div>`;
     $$('.close',m).forEach(b=>b.onclick=()=>m.remove());
-    $('#quoteTitle',m).oninput=e=>draft.title=e.target.value;$('#quoteDelivery',m).oninput=e=>draft.delivery_term=e.target.value;$('#quoteNotes',m).oninput=e=>draft.notes=e.target.value;
+    $('#quoteTitle',m).oninput=e=>draft.title=e.target.value;$('#quoteDelivery',m).oninput=e=>draft.delivery_term=e.target.value;$('#quoteDeliveryDate',m).oninput=e=>draft.delivery_date=e.target.value;$('#quoteNotes',m).oninput=e=>draft.notes=e.target.value;
     $('#addQuoteItem',m).onclick=()=>{draft.items.push(defaultQuoteItem());render();};
     bindQuoteItemFields();$('#saveQuote',m).onclick=()=>saveQuoteDraft(draft,m);
   };
@@ -384,7 +444,7 @@ function openQuoteModal(existing=null){
 async function saveQuoteDraft(draft,m){
   if(!draft.items.length)return toast('Adicione pelo menos um produto.','err');
   for(const item of draft.items){if(!item.product_name)return toast('Selecione o produto em todos os itens.','err');}
-  const payload={owner_id:session.user.id,workspace_id:currentWorkspace.id,title:draft.title.trim()||'Orçamento',delivery_term:draft.delivery_term.trim()||null,notes:draft.notes.trim()||null,updated_at:new Date().toISOString()};
+  const payload={owner_id:session.user.id,workspace_id:currentWorkspace.id,title:draft.title.trim()||'Orçamento',delivery_term:draft.delivery_term.trim()||null,delivery_date:draft.delivery_date||null,notes:draft.notes.trim()||null,updated_at:new Date().toISOString()};
   let quoteId=draft.id;if(quoteId){const {error}=await supabase.from('z19p_quotes').update(payload).eq('id',quoteId);if(error)return toast(error.message,'err');const {error:de}=await supabase.from('z19p_quote_items').delete().eq('quote_id',quoteId);if(de)return toast(de.message,'err');}
   else{const {data,error}=await supabase.from('z19p_quotes').insert(payload).select().single();if(error)return toast(error.message,'err');quoteId=data.id;}
   const rows=draft.items.map((item,i)=>({owner_id:session.user.id,quote_id:quoteId,product_id:item.product_id||null,product_name:item.product_name,quantity:Math.max(1,parseInt(item.quantity)||1),pricing_mode:item.pricing_mode,piece_price:item.pricing_mode==='piece_plus_print'?moneyNumber(item.piece_price):null,total_unit_price:item.pricing_mode==='total_unit'?moneyNumber(item.total_unit_price):null,prints:(item.prints||[]).map(p=>({placement:p.placement||'Frente',width_cm:String(p.width_cm||'').trim(),price:item.pricing_mode==='piece_plus_print'?moneyNumber(p.price):0})),sort_order:i}));
@@ -480,6 +540,23 @@ function bindAssetCards(){
   $$('.asset-preview-btn').forEach(b=>b.onclick=()=>openAssetPreview(currentAssets.find(a=>a.id===b.dataset.id)));
   $$('.dl-asset').forEach(b=>b.onclick=()=>downloadAsset(currentAssets.find(a=>a.id===b.dataset.id)));
   $$('.more-asset').forEach(b=>b.onclick=()=>openAssetActions(currentAssets.find(a=>a.id===b.dataset.id)));
+  bindStudioAssetCards();
+  productionModule?.enhanceAssetCards?.();
+}
+function assetStudioHandlers(beforeOpen=()=>{}){return {
+  openGarment:asset=>{beforeOpen();return artStudio.openGarment(asset)},
+  open3D:asset=>{beforeOpen();return artStudio.openGarment(asset,{initialAction:'3d'})},
+  openPresentation:asset=>{beforeOpen();return artStudio.openGarment(asset,{initialAction:'share3d'})},
+  openBlank:asset=>{beforeOpen();return artStudio.openGarment(asset,{initialAction:'blank'})},
+  openMockup:asset=>{beforeOpen();return artStudio.openMockup(asset)},
+  openEditor:asset=>{beforeOpen();return artStudio.openEditor(asset)},
+  onError:error=>toast(error.message||'Não foi possível abrir o estúdio.','err')
+}}
+function bindStudioAssetCards(){
+  const handlers=assetStudioHandlers();
+  for(const card of app.querySelectorAll('[data-asset]')){
+    const asset=currentAssets.find(item=>item.id===card.dataset.asset);if(asset)attachAssetStudioActions(card,asset,handlers);
+  }
 }
 async function createFolder(parentId=null){
   const parent=parentId?currentFolders.find(f=>f.id===parentId):null;
@@ -509,23 +586,25 @@ function openAssetPreview(a){
   if(!a)return;const url=publicUrl(a.processed_path||a.original_path);const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal preview-modal"><div class="modal-head"><div><div class="eyebrow">${a.asset_type==='mockup'?'Mockup':'Arte'}</div><h2>${escapeHTML(a.name)}</h2></div><button class="btn ghost small close">×</button></div><div class="large-preview check" id="largePreview"><img src="${url}" alt="${escapeHTML(a.name)}"></div><div class="preview-controls"><div class="seg" id="previewBg"><button data-bg="check" class="active">Transparente</button><button data-bg="white">Branco</button><button data-bg="black">Preto</button></div><div class="preview-dims">${a.width||'?'} × ${a.height||'?'} px • ${a.dpi||300} DPI</div></div><div class="modal-footer spread"><button class="btn" id="previewImage">Salvar como imagem</button><button class="btn primary" id="previewDownload">${icon('download')} Baixar PNG</button></div></div>`;document.body.appendChild(m);$('.close',m).onclick=()=>m.remove();
   $$('#previewBg button',m).forEach(b=>b.onclick=()=>{$$('#previewBg button',m).forEach(x=>x.classList.toggle('active',x===b));const p=$('#largePreview',m);p.classList.remove('check','white','black');p.classList.add(b.dataset.bg);});
   $('#previewDownload',m).onclick=()=>downloadAsset(a);$('#previewImage',m).onclick=()=>saveImageAsset(a);
+  attachAssetStudioActions($('.preview-controls',m),a,assetStudioHandlers(()=>m.remove()));
 }
 function openAssetActions(a){
-  if(!a)return;const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Editar arquivo</div><h2>${escapeHTML(a.name)}</h2></div><button class="btn ghost small close">×</button></div><div class="form-grid"><div class="field full"><label>Nome da arte / arquivo</label><input id="renameAsset" value="${escapeHTML(a.name)}"></div><div class="field"><label>Tipo</label><select id="assetType"><option value="arte" ${a.asset_type==='arte'?'selected':''}>Arte</option><option value="mockup" ${a.asset_type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${a.asset_type==='outro'?'selected':''}>Outro</option></select></div><div class="field"><label>Pasta / projeto</label><select id="assetFolder"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,a.folder_id||'')}</select></div></div><div class="file-actions"><button class="btn" id="assetDownload">${icon('download')} Baixar PNG</button><button class="btn" id="assetSaveImage">Salvar como imagem</button><button class="btn" id="assetPreview">Visualizar</button></div><div class="modal-footer"><button class="btn danger" id="deleteAsset">${icon('trash')} Excluir</button><div class="spacer"></div><button class="btn primary" id="saveAsset">Salvar alterações</button></div></div>`;document.body.appendChild(m);$('.close',m).onclick=()=>m.remove();
-  $('#assetDownload',m).onclick=()=>downloadAsset(a);$('#assetSaveImage',m).onclick=()=>saveImageAsset(a);$('#assetPreview',m).onclick=()=>openAssetPreview(a);
+  if(!a)return;const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Editar arquivo</div><h2>${escapeHTML(a.name)}</h2></div><button class="btn ghost small close">×</button></div><div class="form-grid"><div class="field full"><label>Nome da arte / arquivo</label><input id="renameAsset" value="${escapeHTML(a.name)}"></div><div class="field"><label>Tipo</label><select id="assetType"><option value="arte" ${a.asset_type==='arte'?'selected':''}>Arte</option><option value="mockup" ${a.asset_type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${a.asset_type==='outro'?'selected':''}>Outro</option></select></div><div class="field"><label>Pasta / projeto</label><select id="assetFolder"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,a.folder_id||'')}</select></div></div>${a.asset_type==='arte'?`<div class="production-size-callout"><div><b>Medida física para produção</b><span>Cadastre largura/altura, proporção e informe se é halftone.</span></div><button class="btn primary" id="assetProductionSize">Definir / editar medida</button></div>`:''}<div class="file-actions"><button class="btn" id="assetDownload">${icon('download')} Baixar PNG</button><button class="btn" id="assetSaveImage">Salvar como imagem</button><button class="btn" id="assetPreview">Visualizar</button></div><div class="modal-footer"><button class="btn danger" id="deleteAsset">${icon('trash')} Excluir</button><div class="spacer"></div><button class="btn primary" id="saveAsset">Salvar alterações</button></div></div>`;document.body.appendChild(m);$('.close',m).onclick=()=>m.remove();
+  $('#assetDownload',m).onclick=()=>downloadAsset(a);$('#assetSaveImage',m).onclick=()=>saveImageAsset(a);$('#assetPreview',m).onclick=()=>openAssetPreview(a);$('#assetProductionSize',m)?.addEventListener('click',()=>{m.remove();productionModule.openPrintProfile(a)});
+  attachAssetStudioActions($('.file-actions',m),a,assetStudioHandlers(()=>m.remove()));
   $('#saveAsset',m).onclick=async()=>{const name=$('#renameAsset',m).value.trim();if(!name)return toast('Digite um nome para o arquivo.','err');const {error}=await supabase.from('z19p_assets').update({name,asset_type:$('#assetType',m).value,folder_id:$('#assetFolder',m).value||null}).eq('id',a.id);if(error)return toast(error.message,'err');m.remove();toast('Arquivo atualizado.','ok');renderWorkspace(currentWorkspace.id);};
-  $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const paths=[a.original_path,a.processed_path].filter(Boolean);if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)return toast('Não foi possível apagar o arquivo do armazenamento.','err');}const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.message,'err');m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
+  $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.code==='23503'?'Esta arte está vinculada a um filme salvo e deve ser preservada.':error.message,'err');const paths=[...new Set([a.original_path,a.processed_path].filter(Boolean))];if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)toast('Cadastro excluído; o arquivo foi preservado no armazenamento por falha na limpeza.','err')}m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
 }
 
 function openUploadModal({presetType='arte'}={}){
   uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. Você escolhe o nome de cada arquivo antes de salvar.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div><div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Qualidade / dimensão máxima</b><span>Nunca reduz o arquivo original. Só amplia quando necessário.</span></div><select id="qualityPreset"><option value="original">Original — sem ampliar</option><option value="alta">Alta — até 4032 px</option><option value="ultra" selected>Ultra — até 6000 px</option><option value="maxima">Máxima — até 8192 px</option></select></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
   const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
-  function addFiles(files){for(const f of files){uploadQueue.push({file:f,name:f.name.replace(/\.[^.]+$/,''),type:presetType,folderId:activeFolder!=='all'&&activeFolder!=='root'?activeFolder:'',preview:URL.createObjectURL(f)});}renderUploadList(m,{lockedType:isMockupMode});}
+  function addFiles(files){for(const f of files){const folderId=activeFolder!=='all'&&activeFolder!=='root'?activeFolder:'',readyForPrint=presetType==='arte'&&Boolean(productionModule?.folderInReadyTree(folderId||null));uploadQueue.push({file:f,name:f.name.replace(/\.[^.]+$/,''),type:presetType,folderId,readyForPrint,preview:URL.createObjectURL(f)});}renderUploadList(m,{lockedType:isMockupMode});}
   $('#processUpload',m).onclick=()=>processQueue(m,{mockupMode:isMockupMode});
 }
 function renderUploadList(m,{lockedType=false}={}){
-  const list=$('#uploadList',m);list.innerHTML=uploadQueue.map((q,i)=>`<div class="upload-row clean-upload"><img class="upload-thumb" src="${q.preview}"><div class="upload-name"><label>Nome</label><input data-i="${i}" data-k="name" value="${escapeHTML(q.name)}" placeholder="Nome da arte"></div>${lockedType?'':`<div><label>Tipo</label><select data-i="${i}" data-k="type"><option value="arte" ${q.type==='arte'?'selected':''}>Arte</option><option value="mockup" ${q.type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${q.type==='outro'?'selected':''}>Outro</option></select></div>`}<div><label>Pasta</label><select data-i="${i}" data-k="folderId"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,q.folderId||'')}</select></div><button class="remove-upload" data-remove="${i}" title="Remover">×</button></div>`).join('');
-  $$('input[data-i],select[data-i]',list).forEach(el=>el.oninput=()=>{uploadQueue[+el.dataset.i][el.dataset.k]=el.value;});$$('[data-remove]',list).forEach(b=>b.onclick=()=>{const q=uploadQueue.splice(+b.dataset.remove,1)[0];if(q?.preview)URL.revokeObjectURL(q.preview);renderUploadList(m,{lockedType});});$('#processUpload',m).disabled=!uploadQueue.length;
+  const list=$('#uploadList',m);list.innerHTML=uploadQueue.map((q,i)=>{const autoReady=q.type==='arte'&&Boolean(productionModule?.folderInReadyTree(q.folderId||null));if(autoReady)q.readyForPrint=true;return `<div class="upload-row clean-upload ${q.type==='arte'?'has-ready':''}"><img class="upload-thumb" src="${q.preview}"><div class="upload-name"><label>Nome</label><input data-i="${i}" data-k="name" value="${escapeHTML(q.name)}" placeholder="Nome da arte"></div>${lockedType?'':`<div><label>Tipo</label><select data-i="${i}" data-k="type"><option value="arte" ${q.type==='arte'?'selected':''}>Arte</option><option value="mockup" ${q.type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${q.type==='outro'?'selected':''}>Outro</option></select></div>`}<div><label>Pasta</label><select data-i="${i}" data-k="folderId"><option value="">Sem pasta</option>${folderOptionHTML(currentFolders,q.folderId||'')}</select></div>${q.type==='arte'?`<label class="upload-ready-switch ${autoReady?'automatic':''}"><span class="switch"><input type="checkbox" data-ready="${i}" ${q.readyForPrint?'checked':''} ${autoReady?'disabled':''}><span></span></span><span><b>Arte pronta para impressão</b><small>${autoReady?'Ativada automaticamente pela pasta Artes prontas.':'Ative para informar medida e liberar no Montar Filme.'}</small></span></label>`:''}<button class="remove-upload" data-remove="${i}" title="Remover">×</button></div>`}).join('');
+  $$('[data-i][data-k]',list).forEach(el=>{const update=()=>{const q=uploadQueue[+el.dataset.i],oldFolder=q.folderId;q[el.dataset.k]=el.value;if(el.dataset.k==='type'&&q.type!=='arte')q.readyForPrint=false;if(el.dataset.k==='type'&&q.type==='arte'&&productionModule?.folderInReadyTree(q.folderId||null))q.readyForPrint=true;if(el.dataset.k==='folderId'){const wasReady=productionModule?.folderInReadyTree(oldFolder||null),isReady=productionModule?.folderInReadyTree(q.folderId||null);if(isReady)q.readyForPrint=true;else if(wasReady)q.readyForPrint=false}if(el.dataset.k!=='name')renderUploadList(m,{lockedType})};el.dataset.k==='name'?el.addEventListener('input',update):el.addEventListener('change',update)});$$('[data-ready]',list).forEach(el=>el.onchange=()=>{uploadQueue[+el.dataset.ready].readyForPrint=el.checked});$$('[data-remove]',list).forEach(b=>b.onclick=()=>{const q=uploadQueue.splice(+b.dataset.remove,1)[0];if(q?.preview)URL.revokeObjectURL(q.preview);renderUploadList(m,{lockedType});});$('#processUpload',m).disabled=!uploadQueue.length;
 }
 
 async function processQueue(m,{mockupMode=false}={}){
@@ -583,11 +662,13 @@ function bindPublicDownload(){$$('.public-download').forEach(b=>b.onclick=()=>fo
 
 /* === 019 TEAM / CRM / PRODUTIVIDADE === */
 let currentProfile=null, teamProfiles=[], currentProjects=[], auditEntries=[];
+let accountContextEpoch=0,teamContextPending=null;
 let myCommissionSummary={enabled:false,pending:0,approved:0,paid:0,rejected:0},myCommissionRules=[],commissionTiers=[];
-const accountOwnerId=()=>currentProfile?.account_owner_id||session?.user?.id||null;
+const accountOwnerId=()=>currentProfile?.id===session?.user?.id?(currentProfile?.account_owner_id||session?.user?.id||null):session?.user?.id||null;
 const profileById=id=>teamProfiles.find(p=>p.id===id)||null;
 const profileName=id=>profileById(id)?.full_name||'Não definido';
-const isAdmin=()=>currentProfile?.role==='admin';
+const isAdmin=()=>Boolean(session?.user?.id&&currentProfile?.id===session.user.id&&currentProfile?.active&&currentProfile?.role==='admin');
+const canViewProductionCosts=()=>Boolean(isAdmin()&&session.user.id===accountOwnerId());
 const norm=s=>String(s||'').trim().toLocaleLowerCase('pt-BR');
 const isDesistedStatus=s=>['desistiu','cliente desistiu'].includes(norm(s?.name));
 const isRemarcadoStatus=s=>norm(s?.name)==='remarcado';
@@ -640,18 +721,33 @@ function quoteCommissionPreviewHTML(draft){
   return `<div class="quote-commission-preview"><span><small>Sua comissão estimada</small><b id="quoteCommissionPreviewAmount">${fmtMoney(preview.amount)}</b></span><p>${preview.matched?'Valor previsto se o orçamento for aprovado e pago.':'Ainda não existe uma regra de comissão para esta quantidade.'}</p></div>`;
 }
 
+function clearAccountContext(){
+  window.dispatchEvent(new Event('z19:account-changing'));
+  accountContextEpoch++;teamContextPending=null;currentProfile=null;teamProfiles=[];workspaces=[];currentWorkspace=null;currentProjects=[];currentAssets=[];currentFolders=[];currentQuotes=[];auditEntries=[];statuses=[];products=[];folderTemplates=[];libraryWorkspaces={};
+  myCommissionSummary={enabled:false,pending:0,approved:0,paid:0,rejected:0};myCommissionRules=[];commissionTiers=[];
+  productionCosts?.destroy?.();productionCosts=null;productionCostOwner=null;projectAdvisor?.invalidate();productionModule?.resetAccountState?.();
+  if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null}
+  document.querySelectorAll('.modal-backdrop,.art-studio-backdrop,.garment-library-backdrop').forEach(node=>node.remove());document.body.style.overflow='';
+}
 async function loadTeamContext(){
-  if(!session?.user?.id){currentProfile=null;teamProfiles=[];return false;}
-  const {data:p,error}=await supabase.from('z19p_profiles').select('*').eq('id',session.user.id).maybeSingle();
-  if(error){console.error(error);return false;}
-  if(!p){toast('Seu perfil interno ainda não foi configurado.','err');return false;}
-  if(!p.active){await supabase.auth.signOut();toast('Este acesso está desativado.','err');return false;}
-  currentProfile=p;
-  const {data:list}=await supabase.from('z19p_profiles').select('*').eq('account_owner_id',p.account_owner_id).order('full_name');
-  teamProfiles=list||[p];
-  const loginKey=`z19p_login_${session.user.id}_${session.access_token?.slice(-8)||'s'}`;
-  if(!sessionStorage.getItem(loginKey)){sessionStorage.setItem(loginKey,'1');supabase.rpc('z19p_mark_login').catch?.(()=>{});}
-  return true;
+  const userId=session?.user?.id,epoch=accountContextEpoch;
+  if(!userId){currentProfile=null;teamProfiles=[];return false}
+  if(teamContextPending?.userId===userId&&teamContextPending.epoch===epoch)return teamContextPending.promise;
+  const pending={userId,epoch,promise:null},stillCurrent=()=>session?.user?.id===userId&&accountContextEpoch===epoch;
+  pending.promise=(async()=>{
+    try{
+      const {data:p,error}=await supabase.from('z19p_profiles').select('*').eq('id',userId).maybeSingle();
+      if(!stillCurrent())return false;
+      if(error||!p){currentProfile=null;teamProfiles=[];if(error)console.error(error);toast(error?'Não foi possível confirmar seu acesso. Tente novamente.':'Seu perfil interno ainda não foi configurado.','err');return false}
+      if(!p.active){currentProfile=null;teamProfiles=[];await supabase.auth.signOut();toast('Este acesso está desativado.','err');return false}
+      const result=await supabase.from('z19p_profiles').select('*').eq('account_owner_id',p.account_owner_id).order('full_name');
+      if(!stillCurrent())return false;currentProfile=p;teamProfiles=result.data||[p];
+      const loginKey=`z19p_login_${userId}_${session.access_token?.slice(-8)||'s'}`;
+      try{if(!sessionStorage.getItem(loginKey)){sessionStorage.setItem(loginKey,'1');void supabase.rpc('z19p_mark_login').then(()=>{},()=>{})}}catch{}
+      return true;
+    }catch(error){if(stillCurrent()){currentProfile=null;teamProfiles=[];console.error(error)}return false}
+    finally{if(teamContextPending===pending)teamContextPending=null}
+  })();teamContextPending=pending;return pending.promise;
 }
 async function logEvent(action,description,{workspaceId=null,projectId=null,entityType=null,entityId=null,metadata={}}={}){
   try{await supabase.rpc('z19p_log_event',{p_action:action,p_description:description,p_workspace_id:workspaceId,p_project_id:projectId,p_entity_type:entityType,p_entity_id:entityId,p_metadata:metadata});}catch(e){console.warn('audit',e)}
@@ -679,9 +775,9 @@ shell = function(content,{back=false}={}){
   const adminMenu=isAdmin()?`<div class="drawer-section"><small>Administração</small><a href="/comercial-admin.html">Gestão comercial</a><a href="/comercial-admin.html?tab=commissions">Comissões</a><button data-nav="/equipe">Equipe</button><button data-nav="/produtividade">Dashboard</button><button data-app-action="settings">Configurações</button></div>`:'';
   const current=route(),active=path=>current===path?'active':'';
   return `<div class="app-shell"><header class="topbar"><button class="nav-menu-trigger" type="button" data-drawer-open aria-label="Abrir menu" aria-controls="appDrawer">&#9776;</button>${back?`<button class="btn ghost small top-back" data-nav="/" aria-label="Voltar ao início">${icon('back')}</button>`:''}<div class="brand" data-nav="/" role="button" tabindex="0" aria-label="Ir para o início">${brandLogoHTML()}</div><div class="top-actions"><span class="app-version-badge" title="Versão do sistema">v${APP_VERSION}</span>${who}${session?`<button class="btn ghost small" id="logoutBtn">${icon('logout')} <span class="label">Sair</span></button>`:''}</div></header>
-    <div class="app-drawer-backdrop" data-drawer-close></div><aside class="app-drawer" id="appDrawer" aria-hidden="true"><div class="drawer-head">${brandLogoHTML('drawer-logo')}<button type="button" data-drawer-close aria-label="Fechar menu">×</button></div><nav><div class="drawer-section"><small>Principal</small><button class="${active('/')}" data-nav="/">Clientes e empresas</button><button class="${active('/links')}" data-nav="/links">Links para compartilhar</button></div><div class="drawer-section"><small>Bibliotecas</small><button data-nav="/biblioteca/artes">Artes</button><button data-nav="/biblioteca/videos">Vídeos</button><button data-nav="/biblioteca/mockups">Mockups</button></div>${adminMenu}</nav><div class="drawer-user">${who}<span>v${APP_VERSION}</span></div></aside>
+    <div class="app-drawer-backdrop" data-drawer-close></div><aside class="app-drawer" id="appDrawer" aria-hidden="true"><div class="drawer-head">${brandLogoHTML('drawer-logo')}<button type="button" data-drawer-close aria-label="Fechar menu">×</button></div><nav><div class="drawer-section"><small>Principal</small><button class="${active('/')}" data-nav="/">Clientes e empresas</button><button class="${active('/links')}" data-nav="/links">Links para compartilhar</button></div><div class="drawer-section"><small>Produção</small>${canViewProductionCosts()?`<button class="${active('/financeiro-impressao')}" data-nav="/financeiro-impressao">Financeiro de impressão · privado</button>`:''}<button class="${active('/studio')}" data-nav="/studio">Estúdio de mockups</button><button class="${active('/filme')}" data-nav="/filme">Montar filme DTF</button><button class="${active('/times')}" data-nav="/times">Times / Personalizações</button><button data-nav="/fila/art_work">Fila: Desenvolver arte</button><button data-nav="/fila/ready_production">Fila: Iniciar produção</button><button data-nav="/fila/production">Fila: Estampar</button></div><div class="drawer-section"><small>Bibliotecas</small><button data-nav="/biblioteca/artes">Artes</button><button data-nav="/biblioteca/videos">Vídeos</button><button data-nav="/biblioteca/mockups">Mockups</button></div>${adminMenu}</nav><div class="drawer-user">${who}<span>v${APP_VERSION}</span></div></aside>
     ${content}
-    <nav class="mobile-bottom-nav" aria-label="Navegação principal"><button data-drawer-open><i>&#9776;</i><span>Menu</span></button><button data-nav="/biblioteca/artes"><i>A</i><span>Artes</span></button><button class="main ${active('/')}" data-nav="/"><i>019</i><span>Clientes</span></button><button data-nav="/biblioteca/videos"><i>&#9654;</i><span>Vídeos</span></button><button data-nav="/biblioteca/mockups"><i>M</i><span>Mockups</span></button><button class="${active('/links')}" data-nav="/links"><i>&#8599;</i><span>Links</span></button></nav></div>`;
+    <nav class="mobile-bottom-nav" aria-label="Navegação principal"><button data-drawer-open><i>&#9776;</i><span>Menu</span></button><button class="${active('/biblioteca/artes')}" data-nav="/biblioteca/artes"><i>A</i><span>Artes</span></button><button class="main ${active('/')}" data-nav="/"><i>019</i><span>Clientes</span></button><button class="${active('/biblioteca/videos')}" data-nav="/biblioteca/videos"><i>&#9654;</i><span>Vídeos</span></button><button class="${active('/studio')}" data-nav="/studio"><i>M</i><span>Estúdio</span></button><button class="${active('/links')}" data-nav="/links"><i>&#8599;</i><span>Links</span></button></nav></div>`;
 };
 
 bindCommon = function(){
@@ -692,16 +788,16 @@ bindCommon = function(){
   $$('[data-drawer-open]').forEach(el=>el.onclick=()=>setDrawer(true));
   $$('[data-drawer-close]').forEach(el=>el.onclick=()=>setDrawer(false));
   $$('[data-app-action="settings"]').forEach(el=>el.onclick=()=>{setDrawer(false);openSettingsModal();});
-  $('#logoutBtn')?.addEventListener('click',async()=>{await supabase.auth.signOut();nav('/');});
+  $('#logoutBtn')?.addEventListener('click',signOutWithDraftGuard);
 };
 
 renderAuth = function(){
   app.innerHTML=`<div class="auth"><div class="auth-card"><div class="brand">${brandLogoHTML()}</div><h1>Entrar</h1><p>Acesse os ambientes, artes, clientes e sua fila de atendimento.</p><form id="authForm"><div class="field"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div><div class="field"><label>Senha</label><input type="password" name="password" required minlength="6" autocomplete="current-password"></div><button class="btn primary" type="submit">Entrar</button></form><div class="auth-switch">Primeiro acesso? Use o convite recebido por e-mail para definir sua senha.</div></div></div>`;
-  $('#authForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.innerHTML='<span class="loading"></span>';const res=await supabase.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});btn.disabled=false;btn.textContent='Entrar';if(res.error)return toast(res.error.message,'err');session=res.data.session;await loadTeamContext();nav('/');};
+  $('#authForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),btn=e.currentTarget.querySelector('button');btn.disabled=true;btn.innerHTML='<span class="loading"></span>';const res=await supabase.auth.signInWithPassword({email:fd.get('email'),password:fd.get('password')});btn.disabled=false;btn.textContent='Entrar';if(res.error)return toast(res.error.message,'err');session=res.data.session;await loadTeamContext();nav(route());};
 };
 function renderSetPassword(){
   app.innerHTML=`<div class="auth"><div class="auth-card"><div class="brand">${brandLogoHTML()}</div><h1>Definir sua senha</h1><p>Crie sua senha de acesso. Ela é pessoal e não fica visível para o administrador.</p><form id="firstPasswordForm"><div class="field"><label>Nova senha</label><input type="password" name="password" required minlength="6" autocomplete="new-password"></div><div class="field"><label>Confirmar senha</label><input type="password" name="confirm" required minlength="6" autocomplete="new-password"></div><button class="btn primary">Salvar senha e entrar</button></form></div></div>`;
-  $('#firstPasswordForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);if(fd.get('password')!==fd.get('confirm'))return toast('As senhas não são iguais.','err');const {error}=await supabase.auth.updateUser({password:fd.get('password')});if(error)return toast(error.message,'err');await supabase.rpc('z19p_complete_first_access');await logEvent('first_access','Definiu a senha no primeiro acesso',{entityType:'profile',entityId:session.user.id});history.replaceState({},'',location.pathname+'#/');location.hash='/';};
+  $('#firstPasswordForm').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget);if(fd.get('password')!==fd.get('confirm'))return toast('As senhas não são iguais.','err');const {error}=await supabase.auth.updateUser({password:fd.get('password')});if(error)return toast(error.message,'err');await supabase.rpc('z19p_complete_first_access');await logEvent('first_access','Definiu a senha no primeiro acesso',{entityType:'profile',entityId:session.user.id});history.replaceState({},'',location.pathname+'#/');nav('/');};
 }
 
 renderRoute = async function(){
@@ -728,6 +824,7 @@ ensureDefaults = async function(){
   if(!statusCount)await supabase.from('z19p_statuses').insert([...DEFAULT_STATUSES.filter(x=>norm(x.name)!=='cliente desistiu'),{name:'Desistiu',color:'#d65c6a',sort_order:40},{name:'Remarcado',color:'#6f7cff',sort_order:45}].map(x=>({...x,owner_id:uid})));
   if(!productCount)await supabase.from('z19p_products').insert(DEFAULT_PRODUCTS.map((name,i)=>({owner_id:uid,name,sort_order:(i+1)*10})));
   if(!folderTemplateCount)await supabase.from('z19p_folder_templates').insert(DEFAULT_FOLDER_TEMPLATES.map((x,i)=>({owner_id:uid,name:x.name,purpose:x.purpose,sort_order:(i+1)*10})));
+  else{const {count:readyTemplateCount}=await supabase.from('z19p_folder_templates').select('id',{count:'exact',head:true}).eq('owner_id',uid).eq('purpose','artes_prontas');if(!readyTemplateCount)await supabase.from('z19p_folder_templates').insert({owner_id:uid,name:'Artes prontas',purpose:'artes_prontas',sort_order:20});}
   await ensureLibraries();
 };
 ensureLibraries = async function(){
@@ -784,6 +881,7 @@ renderWorkspaceCards = function(items){
 };
 bindWorkspaceCards = function(){
   $$('.open-workspace').forEach(b=>b.onclick=()=>nav(`/ambiente/${b.dataset.id}`));$$('.workspace-more').forEach(b=>b.onclick=()=>openWorkspaceActions(workspaces.find(w=>w.id===b.dataset.id)));$$('.wa-workspace').forEach(b=>b.onclick=()=>claimWorkspace(workspaces.find(w=>w.id===b.dataset.id),{openChat:true}));$$('.claim-workspace').forEach(b=>b.onclick=()=>claimWorkspace(workspaces.find(w=>w.id===b.dataset.id),{openChat:true}));$$('.card-status-select').forEach(sel=>sel.onchange=async()=>{await updateWorkspaceStatus(sel.dataset.id,sel.value||null);renderDashboard();});
+  productionModule?.enhanceDashboardCards();
 };
 
 function dateRangePreset(key,customStart=null,customEnd=null,month=null){const n=new Date(),start=new Date(n),end=new Date(n);start.setHours(0,0,0,0);end.setHours(23,59,59,999);if(key==='yesterday'){start.setDate(start.getDate()-1);end.setDate(end.getDate()-1);}if(key==='7d'){start.setDate(start.getDate()-6);}if(key==='30d'){start.setDate(start.getDate()-29);}if(key==='last_month'){start.setDate(1);start.setMonth(start.getMonth()-1);end.setDate(0);end.setHours(23,59,59,999);}if(key==='month'&&month){const [y,m]=month.split('-').map(Number);start.setFullYear(y,m-1,1);start.setHours(0,0,0,0);end.setFullYear(y,m,0);end.setHours(23,59,59,999);}if(key==='custom'&&customStart&&customEnd){start.setTime(new Date(customStart+'T00:00:00').getTime());end.setTime(new Date(customEnd+'T23:59:59.999').getTime());}return{start,end};}
@@ -840,7 +938,7 @@ async function renderShareLinks(){
 }
 
 openWorkspaceModal = function(existing=null){
-  const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML=`<div class="modal compact"><div class="modal-head"><h2>${existing?'Editar empresa':'Nova empresa'}</h2><button class="btn ghost small close">×</button></div><form id="workspaceForm"><div class="form-grid"><div class="field full"><label>Empresa *</label><input name="company_name" required value="${escapeHTML(existing?.company_name||'')}"></div><div class="field"><label>Nome do cliente</label><input name="client_name" value="${escapeHTML(existing?.client_name||'')}"></div><div class="field"><label>Telefone / WhatsApp</label><input name="phone" value="${escapeHTML(existing?.phone||'')}" inputmode="tel"></div><div class="field"><label>Estado (UF)</label><select name="state">${stateOptions(existing?.state||'')}</select></div><div class="field"><label>Status</label><select name="status_id"><option value="">Sem status</option>${statusOptions(existing?.status_id||statuses[0]?.id||'')}</select></div><div class="field full"><label>Responsável</label><select name="responsible_user_id">${teamProfiles.filter(p=>p.active).map(p=>`<option value="${p.id}" ${(existing?.responsible_user_id||session.user.id)===p.id?'selected':''}>${escapeHTML(p.full_name)}</option>`).join('')}</select></div><div class="field full"><label>Observações</label><textarea name="notes">${escapeHTML(existing?.notes||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn close">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></div>`;document.body.appendChild(modal);$$('.close',modal).forEach(b=>b.onclick=()=>modal.remove());$('#workspaceForm',modal).onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),selectedStatus=fd.get('status_id')||null,payload={company_name:fd.get('company_name').trim(),client_name:fd.get('client_name').trim()||null,phone:fd.get('phone').trim()||null,state:String(fd.get('state')||'').trim().toUpperCase()||null,notes:fd.get('notes').trim()||null,responsible_user_id:fd.get('responsible_user_id')||session.user.id,owner_id:accountOwnerId(),updated_at:nowISO()};if(!existing)Object.assign(payload,{status_id:selectedStatus,created_by:session.user.id,status_changed_at:nowISO()});const {data,error}=existing?await supabase.from('z19p_workspaces').update(payload).eq('id',existing.id).select().single():await supabase.from('z19p_workspaces').insert(payload).select().single();if(error)return toast(error.message,'err');if(!existing){await createDefaultFoldersForWorkspace(data.id);await startNewProject(data,data.status_id);}else if((existing.status_id||null)!==selectedStatus){const shadow={...existing,...data};const idx=workspaces.findIndex(x=>x.id===existing.id);if(idx>=0)workspaces[idx]=shadow;currentWorkspace?.id===existing.id&&(currentWorkspace=shadow);const ok=await updateWorkspaceStatus(existing.id,selectedStatus);if(!ok)toast('Dados salvos; o status anterior foi mantido.','ok');}modal.remove();toast(existing?'Empresa salva.':'Empresa criada com as pastas padrão.','ok');if(existing&&currentWorkspace?.id===existing.id)renderWorkspace(existing.id);else if(existing)renderDashboard();else nav(`/ambiente/${data.id}`);};
+  const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML=`<div class="modal compact"><div class="modal-head"><h2>${existing?'Editar empresa':'Nova empresa'}</h2><button class="btn ghost small close">×</button></div><form id="workspaceForm"><div class="form-grid"><div class="field full"><label>Empresa *</label><input name="company_name" required value="${escapeHTML(existing?.company_name||'')}"></div><div class="field"><label>Nome do cliente</label><input name="client_name" value="${escapeHTML(existing?.client_name||'')}"></div><div class="field"><label>Telefone / WhatsApp</label><input name="phone" value="${escapeHTML(existing?.phone||'')}" inputmode="tel"></div><div class="field"><label>Estado (UF)</label><select name="state">${stateOptions(existing?.state||'')}</select></div><div class="field"><label>Status</label><select name="status_id"><option value="">Sem status</option>${statusOptions(existing?.status_id||statuses[0]?.id||'')}</select></div><div class="field full"><label>Responsável</label><select name="responsible_user_id">${teamProfiles.filter(p=>p.active).map(p=>`<option value="${p.id}" ${(existing?.responsible_user_id||session.user.id)===p.id?'selected':''}>${escapeHTML(p.full_name)}</option>`).join('')}</select></div><div class="field full"><label>Observações</label><textarea name="notes">${escapeHTML(existing?.notes||'')}</textarea></div></div><div class="modal-footer"><button type="button" class="btn close">Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></div>`;document.body.appendChild(modal);$$('.close',modal).forEach(b=>b.onclick=()=>modal.remove());$('#workspaceForm',modal).onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.currentTarget),selectedStatus=fd.get('status_id')||null,payload={company_name:fd.get('company_name').trim(),client_name:fd.get('client_name').trim()||null,phone:fd.get('phone').trim()||null,state:String(fd.get('state')||'').trim().toUpperCase()||null,notes:fd.get('notes').trim()||null,responsible_user_id:fd.get('responsible_user_id')||session.user.id,owner_id:accountOwnerId(),updated_at:nowISO()};if(!existing&&['art_work','ready_production','production'].includes(statusById(selectedStatus)?.queue_stage))return toast('Comece a empresa em um status comercial; a produção exige orçamento pago e entrega.','err');if(!existing)Object.assign(payload,{status_id:selectedStatus,created_by:session.user.id,status_changed_at:nowISO()});const {data,error}=existing?await supabase.from('z19p_workspaces').update(payload).eq('id',existing.id).select().single():await supabase.from('z19p_workspaces').insert(payload).select().single();if(error)return toast(error.message,'err');if(!existing){const project=await startNewProject(data,data.status_id);if(project)await createDefaultFoldersForWorkspace(data.id);}else if((existing.status_id||null)!==selectedStatus){const shadow={...existing,...data};const idx=workspaces.findIndex(x=>x.id===existing.id);if(idx>=0)workspaces[idx]=shadow;currentWorkspace?.id===existing.id&&(currentWorkspace=shadow);const ok=await updateWorkspaceStatus(existing.id,selectedStatus);if(!ok)toast('Dados salvos; o status anterior foi mantido.','ok');}modal.remove();toast(existing?'Empresa salva.':'Empresa criada com as pastas padrão.','ok');if(existing&&currentWorkspace?.id===existing.id)renderWorkspace(existing.id);else if(existing)renderDashboard();else nav(`/ambiente/${data.id}`);};
 };
 
 createDefaultFoldersForWorkspace = async function(workspaceId){if(!workspaceId||!session?.user?.id)return true;if(!folderTemplates.length)await loadConfig();if(!folderTemplates.length)return true;const rows=folderTemplates.map((f,i)=>({owner_id:accountOwnerId(),workspace_id:workspaceId,name:f.name,purpose:f.purpose||null,sort_order:f.sort_order??((i+1)*10),created_by:session.user.id,updated_by:session.user.id}));const {error}=await supabase.from('z19p_folders').insert(rows);if(error){toast('A empresa foi criada, mas não foi possível gerar as pastas padrão.','err');return false;}return true;};
@@ -869,7 +967,7 @@ function drawProductivity(key,sellerId='all'){
 }
 
 saveQuoteDraft = async function(draft,m){
-  if(!draft.items.length)return toast('Adicione pelo menos um produto.','err');for(const item of draft.items)if(!item.product_name)return toast('Selecione o produto em todos os itens.','err');const project=await getLatestProject(currentWorkspace.id);const payload={owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,title:draft.title.trim()||'Orçamento',delivery_term:draft.delivery_term.trim()||null,notes:draft.notes.trim()||null,project_id:project?.id||null,updated_by:session.user.id,updated_at:nowISO()};let quoteId=draft.id;if(quoteId){const {error}=await supabase.from('z19p_quotes').update(payload).eq('id',quoteId);if(error)return toast(error.message,'err');const {error:de}=await supabase.from('z19p_quote_items').delete().eq('quote_id',quoteId);if(de)return toast(de.message,'err');}else{payload.created_by=session.user.id;const {data,error}=await supabase.from('z19p_quotes').insert(payload).select().single();if(error)return toast(error.message,'err');quoteId=data.id;}const rows=draft.items.map((item,i)=>({owner_id:accountOwnerId(),quote_id:quoteId,product_id:item.product_id||null,product_name:item.product_name,quantity:Math.max(1,parseInt(item.quantity)||1),pricing_mode:item.pricing_mode,piece_price:item.pricing_mode==='piece_plus_print'?moneyNumber(item.piece_price):null,total_unit_price:item.pricing_mode==='total_unit'?moneyNumber(item.total_unit_price):null,prints:(item.prints||[]).map(p=>({placement:p.placement||'Frente',width_cm:String(p.width_cm||'').trim(),price:item.pricing_mode==='piece_plus_print'?moneyNumber(p.price):0})),sort_order:i,created_by:session.user.id,updated_by:session.user.id}));const {error}=await supabase.from('z19p_quote_items').insert(rows);if(error)return toast(error.message,'err');await logEvent(draft.id?'quote_updated':'quote_created',`${draft.id?'Atualizou':'Criou'} o orçamento “${payload.title}”`,{workspaceId:currentWorkspace.id,projectId:project?.id||null,entityType:'quote',entityId:quoteId});m.remove();toast('Orçamento salvo e disponível para o cliente.','ok');renderWorkspace(currentWorkspace.id);
+  if(!draft.items.length)return toast('Adicione pelo menos um produto.','err');for(const item of draft.items)if(!item.product_name)return toast('Selecione o produto em todos os itens.','err');const project=await getLatestProject(currentWorkspace.id);const payload={owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,title:draft.title.trim()||'Orçamento',delivery_term:draft.delivery_term.trim()||null,delivery_date:draft.delivery_date||null,notes:draft.notes.trim()||null,project_id:project?.id||null,updated_by:session.user.id,updated_at:nowISO()};let quoteId=draft.id;if(quoteId){const {error}=await supabase.from('z19p_quotes').update(payload).eq('id',quoteId);if(error)return toast(error.message,'err');const {error:de}=await supabase.from('z19p_quote_items').delete().eq('quote_id',quoteId);if(de)return toast(de.message,'err');}else{payload.created_by=session.user.id;const {data,error}=await supabase.from('z19p_quotes').insert(payload).select().single();if(error)return toast(error.message,'err');quoteId=data.id;}const rows=draft.items.map((item,i)=>({owner_id:accountOwnerId(),quote_id:quoteId,product_id:item.product_id||null,product_name:item.product_name,quantity:Math.max(1,parseInt(item.quantity)||1),pricing_mode:item.pricing_mode,piece_price:item.pricing_mode==='piece_plus_print'?moneyNumber(item.piece_price):null,total_unit_price:item.pricing_mode==='total_unit'?moneyNumber(item.total_unit_price):null,prints:(item.prints||[]).map(p=>({placement:p.placement||'Frente',width_cm:String(p.width_cm||'').trim(),price:item.pricing_mode==='piece_plus_print'?moneyNumber(p.price):0})),sort_order:i,created_by:session.user.id,updated_by:session.user.id}));const {error}=await supabase.from('z19p_quote_items').insert(rows);if(error)return toast(error.message,'err');if(project&&payload.delivery_date)await supabase.from('z19p_projects').update({delivery_date:payload.delivery_date,updated_at:nowISO(),updated_by:session.user.id}).eq('id',project.id);await logEvent(draft.id?'quote_updated':'quote_created',`${draft.id?'Atualizou':'Criou'} o orçamento “${payload.title}”`,{workspaceId:currentWorkspace.id,projectId:project?.id||null,entityType:'quote',entityId:quoteId});m.remove();toast('Orçamento salvo e disponível para o cliente.','ok');renderWorkspace(currentWorkspace.id);
 };
 
 const _baseCreateFolder=createFolder;
@@ -877,9 +975,20 @@ createFolder = async function(parentId=null){const parent=parentId?currentFolder
 
 const _baseProcessQueue=processQueue;
 processQueue = async function(m,{mockupMode=false}={}){
-  if(!uploadQueue.length)return;const trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m);btn.disabled=true;const prog=$('#progress',m);prog.classList.remove('hidden');let done=0;
-  for(const q of uploadQueue){try{$('#progressText',m).textContent=`${mockupMode?'Salvando':'Processando'} ${done+1}/${uploadQueue.length}: ${q.name}`;const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0),result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget}),assetId=crypto.randomUUID(),base=`${session.user.id}/${currentWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`;let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;const {error}=await supabase.from('z19p_assets').insert({id:assetId,owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,folder_id:q.folderId||null,name:q.name.trim()||'Sem nome',asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:qualityTarget>0&&result.upscaled,created_by:session.user.id,updated_by:session.user.id,metadata:{source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled}});if(error)throw error;done++;prog.firstElementChild.style.width=`${Math.round(done/uploadQueue.length*100)}%`;}catch(err){console.error(err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');}}
-  $('#progressText',m).textContent=`Concluído: ${done} de ${uploadQueue.length} arquivo(s).`;toast(`${done} arquivo(s) salvo(s).`,'ok');setTimeout(()=>{uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));m.remove();renderWorkspace(currentWorkspace.id)},500);
+  if(!uploadQueue.length)return;
+  const trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m),prog=$('#progress',m),readyAssets=[];btn.disabled=true;prog.classList.remove('hidden');let done=0;
+  for(const q of uploadQueue){
+    try{
+      $('#progressText',m).textContent=`${mockupMode?'Salvando':'Processando'} ${done+1}/${uploadQueue.length}: ${q.name}`;
+      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0),result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget}),assetId=crypto.randomUUID(),base=`${session.user.id}/${currentWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`,project=await getLatestProject(currentWorkspace.id),assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:project?.id||null,folder_id:q.folderId||null,name:q.name.trim()||'Sem nome',asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:qualityTarget>0&&result.upscaled,created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule.folderInReadyTree(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled}};
+      let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
+      const {error}=await supabase.from('z19p_assets').insert(assetRow);if(error)throw error;if(q.type==='arte'&&(q.readyForPrint||productionModule.folderInReadyTree(q.folderId||null)))readyAssets.push(assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/uploadQueue.length*100)}%`;
+    }catch(err){console.error(err);toast(`Erro em ${q.name}: ${err.message||err}`,'err')}
+  }
+  $('#progressText',m).textContent=`Concluído: ${done} de ${uploadQueue.length} arquivo(s).`;toast(`${done} arquivo(s) salvo(s).${readyAssets.length?' Agora informe as medidas das artes prontas.':''}`,'ok');
+  uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));m.remove();
+  const configureReadyAsset=index=>{const asset=readyAssets[index];if(!asset)return renderWorkspace(currentWorkspace.id);productionModule.openPrintProfile(asset,{required:true,render:false,onSaved:()=>configureReadyAsset(index+1),onCancel:()=>configureReadyAsset(index+1)})};
+  readyAssets.length?configureReadyAsset(0):renderWorkspace(currentWorkspace.id);
 };
 
 const VIDEO_MAX_BYTES=50*1024*1024;
@@ -938,6 +1047,8 @@ bindAssetCards = function(){
   $$('.dl-asset').forEach(b=>b.onclick=()=>downloadAsset(currentAssets.find(a=>a.id===b.dataset.id)));
   $$('.more-asset').forEach(b=>b.onclick=()=>{const a=currentAssets.find(x=>x.id===b.dataset.id);isVideoAsset(a)?openVideoActions(a):openAssetActions(a);});
   $$('.demonstrate-video').forEach(b=>b.onclick=()=>openDemoComposer([b.dataset.id]));
+  bindStudioAssetCards();
+  productionModule?.enhanceAssetCards?.();
 };
 
 
@@ -951,7 +1062,7 @@ openWorkspaceActions = function(w){
 };
 
 renderWorkspace = async function(id){
-  await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadCommissionContext()]);const [{data:w,error:we},{data:f},{data:a},{data:ps}]=await Promise.all([supabase.from('z19p_workspaces').select('*').eq('id',id).single(),supabase.from('z19p_folders').select('*').eq('workspace_id',id).order('sort_order').order('name'),supabase.from('z19p_assets').select('*').eq('workspace_id',id).order('created_at',{ascending:false}),supabase.from('z19p_projects').select('*').eq('workspace_id',id).order('sequence_no',{ascending:false})]);if(we||!w){toast('Ambiente não encontrado.','err');return nav('/');}currentWorkspace=w;currentFolders=f||[];currentAssets=a||[];currentProjects=ps||[];activeFolder='all';const isLibrary=w.workspace_type&&w.workspace_type!=='client',isMockupsLibrary=w.workspace_type==='library_mockups',isVideosLibrary=w.workspace_type==='library_videos';if(isLibrary)currentQuotes=[];else await loadQuotes(id);let audits=[];if(isAdmin()&&!isLibrary){const {data}=await supabase.from('z19p_audit_log').select('*').eq('workspace_id',id).order('created_at',{ascending:false}).limit(30);audits=data||[];}const st=statusById(w.status_id),logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa'),logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null,logoUrl=logoAsset?publicUrl(logoAsset.processed_path||logoAsset.original_path):'',bannerIcon=logoUrl?`<div class="workspace-banner-logo"><img src="${logoUrl}" alt="Logo"></div>`:'';const bannerActions=isLibrary?`${isVideosLibrary?`<button class="btn" id="qualityCatalogAdmin">Gerenciar qualidades</button><button class="btn whatsapp" id="demoComposerBtn">WA Demonstrar</button>`:''}<button class="btn primary" id="uploadBtn">${icon('upload')} ${isVideosLibrary?'Salvar vídeo':isMockupsLibrary?'Adicionar mockup':'Subir arte'}</button>`:`${w.phone?`<button class="btn whatsapp" id="workspaceWhatsapp">WA WhatsApp</button>`:''}<button class="btn" id="mockupBtn">${icon('image')} Adicionar mockup</button><button class="btn primary" id="uploadBtn">${icon('upload')} Subir arte</button><button class="btn ghost" id="workspaceMore">•••</button>`;const attention=isLibrary?null:workspaceStatusAttention(w),statusAge=isLibrary?null:workspaceStatusDuration(w),agingNotice=attention?`<div class="workspace-aging-notice"><span class="attention-pulse"></span><div><b>${attention.reminder?escapeHTML(attention.label):`Status sem alteração há ${escapeHTML(attention.label)}`}</b><small>Entre em contato e atualize o andamento.</small></div>${w.phone?`<button class="btn whatsapp small" id="agingWhatsapp">WA WhatsApp</button>`:''}</div>`:'',statusAgeDetail=statusAge?`<div class="workspace-status-age" data-status-age-since="${escapeHTML(statusAge.changedAt.toISOString())}"><span class="status-age-dot"></span><span>Há <b>${escapeHTML(statusAge.label)}</b> neste status</span></div>`:'';
+  await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadCommissionContext()]);const [{data:w,error:we},{data:f},{data:a},{data:ps}]=await Promise.all([supabase.from('z19p_workspaces').select('*').eq('id',id).single(),supabase.from('z19p_folders').select('*').eq('workspace_id',id).order('sort_order').order('name'),supabase.from('z19p_assets').select('*').eq('workspace_id',id).order('created_at',{ascending:false}),supabase.from('z19p_projects').select('*').eq('workspace_id',id).order('sequence_no',{ascending:false})]);if(we||!w){toast('Ambiente não encontrado.','err');return nav('/');}currentWorkspace=w;currentProjects=ps||[];const isLibrary=w.workspace_type&&w.workspace_type!=='client',isMockupsLibrary=w.workspace_type==='library_mockups',isVideosLibrary=w.workspace_type==='library_videos',activeProject=currentProjects[0]||null;currentFolders=isLibrary?(f||[]):(f||[]).filter(folder=>activeProject?folder.project_id===activeProject.id:!folder.project_id);currentAssets=isLibrary?(a||[]):(a||[]).filter(asset=>activeProject?asset.project_id===activeProject.id:!asset.project_id);activeFolder='all';if(isLibrary)currentQuotes=[];else await loadQuotes(id,activeProject?.id);let audits=[];if(isAdmin()&&!isLibrary){const {data}=await supabase.from('z19p_audit_log').select('*').eq('workspace_id',id).order('created_at',{ascending:false}).limit(30);audits=data||[];}const st=statusById(w.status_id),logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa'),logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null,logoUrl=logoAsset?publicUrl(logoAsset.processed_path||logoAsset.original_path):'',bannerIcon=logoUrl?`<div class="workspace-banner-logo"><img src="${logoUrl}" alt="Logo"></div>`:'';const bannerActions=isLibrary?`${isVideosLibrary?`<button class="btn" id="qualityCatalogAdmin">Gerenciar qualidades</button><button class="btn whatsapp" id="demoComposerBtn">WA Demonstrar</button>`:''}<button class="btn primary" id="uploadBtn">${icon('upload')} ${isVideosLibrary?'Salvar vídeo':isMockupsLibrary?'Adicionar mockup':'Subir arte'}</button>`:`${w.phone?`<button class="btn whatsapp" id="workspaceWhatsapp">WA WhatsApp</button>`:''}<button class="btn" id="mockupBtn">${icon('image')} Adicionar mockup</button><button class="btn primary" id="uploadBtn">${icon('upload')} Subir arte</button><button class="btn ghost" id="workspaceMore">•••</button>`;const attention=isLibrary?null:workspaceStatusAttention(w),statusAge=isLibrary?null:workspaceStatusDuration(w),agingNotice=attention?`<div class="workspace-aging-notice"><span class="attention-pulse"></span><div><b>${attention.reminder?escapeHTML(attention.label):`Status sem alteração há ${escapeHTML(attention.label)}`}</b><small>Entre em contato e atualize o andamento.</small></div>${w.phone?`<button class="btn whatsapp small" id="agingWhatsapp">WA WhatsApp</button>`:''}</div>`:'',statusAgeDetail=statusAge?`<div class="workspace-status-age" data-status-age-since="${escapeHTML(statusAge.changedAt.toISOString())}"><span class="status-age-dot"></span><span>Há <b>${escapeHTML(statusAge.label)}</b> neste status</span></div>`:'';
   const lifetime=currentProjects.reduce((o,p)=>{o.projects++;if(p.finalized_at)o.finalized++;o.shirt+=moneyNumber(p.shirt_revenue);o.print+=moneyNumber(p.print_revenue);o.total+=moneyNumber(p.total_revenue);return o;},{projects:0,finalized:0,shirt:0,print:0,total:0});const latest=currentProjects[0];const teamInfo=isLibrary?'':`<section class="workspace-team-card"><div><small>Cadastrado por</small><b>${escapeHTML(profileName(w.created_by))}</b></div><div><small>Responsável atual</small><b>${escapeHTML(profileName(w.responsible_user_id))}</b></div>${!isFinalizedStatus(st)&&w.responsible_user_id!==session.user.id?`<button class="btn small" id="claimWorkspaceDetail">Puxar pra mim</button>`:''}${isAdmin()?`<select id="assignResponsible" class="btn compact-select">${teamProfiles.filter(p=>p.active).map(p=>`<option value="${p.id}" ${w.responsible_user_id===p.id?'selected':''}>${escapeHTML(p.full_name)}</option>`).join('')}</select>`:''}</section>`;
   const lifetimeHTML=isLibrary?'':`<section class="lifetime-summary"><div><small>Projetos</small><b>${lifetime.projects}</b></div><div><small>Finalizados</small><b>${lifetime.finalized}</b></div><div><small>Camisas</small><b>${fmtMoney(lifetime.shirt)}</b></div><div><small>Estampas</small><b>${fmtMoney(lifetime.print)}</b></div><div class="total"><small>Total da empresa</small><b>${fmtMoney(lifetime.total)}</b></div></section>`;
   const projectHistory=isLibrary?'':`<section class="project-history"><div class="section-title-row"><div><div class="eyebrow">Projetos</div><h2>Histórico da empresa</h2></div></div><div class="project-history-list">${currentProjects.length?currentProjects.map(p=>{const pst=statusById(p.status_id),when=p.finalized_at||p.desisted_at||p.started_at;return `<div class="project-history-row"><div><b>${escapeHTML(p.title||`Projeto ${p.sequence_no}`)}</b><small>Iniciado em ${new Date(p.started_at).toLocaleDateString('pt-BR')} • ${escapeHTML(profileName(p.responsible_user_id||p.created_by))}</small></div><span>${pst?escapeHTML(pst.name):'Sem status'}</span><strong>${p.finalized_at?fmtMoney(p.total_revenue):when?new Date(when).toLocaleDateString('pt-BR'):'—'}</strong></div>`}).join(''):'<div class="empty mini">Nenhum projeto registrado.</div>'}</div></section>`;
@@ -974,6 +1085,82 @@ bindWorkspaceUI = function(){
 
 renderPublic = async function(token){
   app.innerHTML=`<div class="public-shell"><div class="public-header"><div class="public-header-inner">${brandLogoHTML()}<div><h1>Carregando ambiente…</h1><p>019 Personalizações</p></div></div></div><div class="public-content"><div class="empty"><span class="loading"></span></div></div></div>`;const {data,error}=await supabase.rpc('z19p_get_public_workspace',{p_token:token});if(error||!data?.workspace)return app.innerHTML=`<div class="auth"><div class="auth-card"><div class="brand">${brandLogoHTML()}<div class="brand-title">019 Personalizações</div></div><h1>Link indisponível</h1><p>Esse ambiente não existe ou o compartilhamento foi desativado.</p></div></div>`;const w=data.workspace,assets=data.assets||[],folders=data.folders||[],quotes=data.quotes||[],mockups=assets.filter(a=>a.asset_type==='mockup'),files=assets.filter(a=>a.asset_type!=='mockup'&&a.asset_type!=='video'),r=w.responsible;const seller=r?`<section class="public-seller"><div class="avatar">${escapeHTML((r.name||'0').slice(0,1))}</div><div><small>Responsável pelo seu projeto</small><h3>${escapeHTML(r.name)}</h3><p>Atendimento das ${escapeHTML(w.service_hours||'9h às 18h')}</p></div>${r.phone?`<button class="btn whatsapp" id="publicSellerWa">WA Falar agora</button>`:''}</section>`:'';app.innerHTML=`<div class="public-shell"><div class="public-header"><div class="public-header-inner">${brandLogoHTML()}<div class="public-company"><div class="eyebrow">Área do cliente</div><h1>${escapeHTML(w.company_name)}</h1><p>${escapeHTML(w.client_name||'Artes e personalizações')}</p>${w.status?statusPill(w.status):''}</div></div></div><div class="public-content">${seller}${publicDiscoveryBannerHTML()}${renderPublicQuotes(quotes)}${mockups.length?`<section class="public-mockups"><div class="public-section-head"><div><div class="eyebrow">Mockup</div><h2>Como sua peça vai ficar</h2><p>Visual de referência do projeto.</p></div><div class="seg public-bg-control"><button data-bg="check" class="active">Transparente</button><button data-bg="white">Branco</button><button data-bg="black">Preto</button></div></div><div class="asset-grid public-mockup-grid">${renderPublicAssets(mockups,w.client_can_download)}</div></section>`:''}<section class="public-files"><div class="public-section-head"><div><div class="eyebrow">Arquivos</div><h2>Artes do projeto</h2><p>${files.length} arquivo(s) disponível(is)</p></div><div class="seg public-bg-control"><button data-bg="check" class="active">Transparente</button><button data-bg="white">Branco</button><button data-bg="black">Preto</button></div></div><div class="toolbar"><div class="search">${icon('search')}<input id="publicSearch" placeholder="Buscar arquivo..."></div><select class="btn" id="publicFolder"><option value="all">Todas as pastas</option><option value="root">Sem pasta</option>${folders.map(f=>`<option value="${f.id}">${escapeHTML(f.name)}</option>`).join('')}</select></div><div id="publicGrid" class="asset-grid">${renderPublicAssets(files,w.client_can_download)}</div></section></div></div>`;$('#publicSellerWa')?.addEventListener('click',()=>{const d=normalizeWaPhone(r.phone);if(d)window.open(`https://wa.me/${d}?text=${encodeURIComponent(`Olá, ${r.name}! Estou entrando em contato pelo meu projeto na Zero 19.`)}`,'_blank','noopener,noreferrer')});const bindBg=()=>{$$('.public-bg-control button').forEach(b=>b.onclick=()=>{const group=b.closest('.public-bg-control');$$('button',group).forEach(x=>x.classList.toggle('active',x===b));const section=b.closest('section');$$('.public-preview',section).forEach(p=>{p.classList.remove('white','black');if(b.dataset.bg!=='check')p.classList.add(b.dataset.bg);});});};const redraw=()=>{const q=($('#publicSearch')?.value||'').toLowerCase(),f=$('#publicFolder')?.value||'all',list=files.filter(a=>a.name.toLowerCase().includes(q)&&(f==='all'||(f==='root'&&!a.folder_id)||a.folder_id===f));$('#publicGrid').innerHTML=renderPublicAssets(list,w.client_can_download);bindPublicDownload();};if($('#publicSearch'))$('#publicSearch').oninput=redraw;if($('#publicFolder'))$('#publicFolder').onchange=redraw;bindBg();bindPublicDownload();
+};
+
+productionModule=createProductionModule({
+  supabase,app,escapeHTML,fmtMoney,quoteTotal,quoteItemUnit,publicUrl,setPngDpi,toast,nav,shell,bindCommon,
+  accountOwnerId,profileName,logEvent,getLatestProject,startNewProject,createDefaultFoldersForWorkspace,
+  renderWorkspace:(id)=>renderWorkspace(id),
+  renderDashboard:()=>renderDashboard(),
+  getCostUI:getProductionCosts,
+  onFilmExported:details=>getProductionFinance()?.offerRecord(details),
+  enhanceAdviceCards:()=>projectAdvisor?.decorateCards(),
+  getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
+  openArtMockup:(asset,options)=>artStudio.openMockup(asset,options),openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>artStudio.openGarment(asset,options),
+  openArt3D:asset=>artStudio.openGarment(asset,{initialAction:'3d'}),openArtPresentation:asset=>artStudio.openGarment(asset,{initialAction:'share3d'}),openArtBlank:asset=>artStudio.openGarment(asset,{initialAction:'blank'}),
+  prepareDashboard:async()=>{await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
+  state:()=>({session,currentProfile,teamProfiles,workspaces,currentProjects,currentWorkspace,currentFolders,currentAssets,currentQuotes,statuses})
+});
+
+artStudio=createArtStudio({supabase,publicUrl,setPngDpi,toast,logEvent,accountOwnerId,getCostUI:getProductionCosts,state:()=>({session}),onAssetChanged:async()=>{if(route().startsWith('/ambiente/')&&currentWorkspace)await renderWorkspace(currentWorkspace.id);else if(route()==='/filme')await productionModule.renderFilm()}});
+
+projectAdvisor=createProjectAdvisorUI({supabase,app,accountOwnerId,route,nav,toast,state:()=>({workspaces,currentWorkspace,currentProjects,currentAssets,currentFolders,currentQuotes,statuses,teamProfiles,session}),openQuote:()=>openQuoteModal(),editWorkspace:workspace=>openWorkspaceModal(workspace),openPrintProfile:asset=>productionModule.openPrintProfile(asset),askDeliveryDate:initial=>productionModule.askDeliveryDate(initial),renderWorkspace:id=>renderWorkspace(id)});
+
+const renderDashboardV216=renderDashboard;
+renderDashboard=async function(){const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderDashboardV216();const libraries=app.querySelector('.library-launcher');if(libraries&&!libraries.querySelector('[data-open-studio]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card studio-launch-card" data-open-studio><span class="library-symbol">◈</span><span><b>Estúdio de mockups</b><small>Comece pela camiseta. Monte frente, costas e mangas.</small></span><i>→</i></button>');libraries.querySelector('[data-open-studio]').onclick=()=>nav('/studio')}await productionModule.enhanceDashboard();await projectAdvisor.refreshDashboard();if(ticket)routeViewport.complete(ticket);};
+
+const renderWorkspaceV216=renderWorkspace;
+renderWorkspace=async function(id){const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderWorkspaceV216(id);if(currentWorkspace?.id===id){const banner=app.querySelector('.workspace-banner');if(banner&&currentWorkspace.workspace_type!=='library_videos'&&!banner.querySelector('[data-open-studio]')){const button=document.createElement('button');button.className='btn';button.dataset.openStudio='';button.textContent='◈ Estúdio de mockups';button.onclick=()=>nav('/studio');banner.append(button)}await productionModule.enhanceWorkspace();bindProjectHistory(app,{supabase,workspace:currentWorkspace,projects:currentProjects,statuses,publicUrl,profileName,fmtMoney,quoteTotal,quoteItemUnit,toast});await projectAdvisor.enhanceWorkspace()}if(ticket)routeViewport.complete(ticket);};
+
+const renderPublicV216=renderPublic;
+renderPublic=async function(token){await renderPublicV216(token);await productionModule.enhancePublic(token);};
+
+const updateWorkspaceStatusV216=updateWorkspaceStatus;
+updateWorkspaceStatus=async function(workspaceId,statusId,options={}){
+  const next=statusById(statusId);
+  if(next&&['art_work','ready_production','production'].includes(next.queue_stage)){
+    const ok=await productionModule.changeOperationalStatus(workspaceId,statusId);
+    if(ok){await loadWorkspaces();if(options.rerender)await renderWorkspace(workspaceId);}
+    return ok;
+  }
+  return updateWorkspaceStatusV216(workspaceId,statusId,options);
+};
+
+const renderRouteV216=renderRoute;
+const routeViewport=createRouteViewportController({getRoute:route,root:app});
+let renderingRoute=false,routeRequested=false;
+async function renderCurrentRoute(){
+  if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}
+  const current=route();
+  const accessParams=new URLSearchParams(location.search);
+  if(accessParams.get('first_access')==='1'||accessParams.get('reset_password')==='1')return renderRouteV216();
+  if(session&&!current.startsWith('/cliente/')&&!await loadTeamContext())throw new Error('Não foi possível confirmar o perfil desta conta. Tente novamente ou entre novamente.');
+  if(session&&(current==='/times'||current==='/filme'||current.startsWith('/fila/')))await loadConfig();
+  if(session&&current.startsWith('/fila/'))return productionModule.renderQueue(current.split('/')[2]);
+  if(session&&current==='/times')return productionModule.renderTeams();
+  if(session&&current==='/filme')return productionModule.renderFilm();
+  if(session&&current==='/studio')return renderStudioHome({app,shell,bindCommon,artStudio,publicUrl,toast});
+  if(session&&current==='/financeiro-impressao'){
+    if(canViewProductionCosts())return getProductionFinance().render();
+    app.innerHTML=shell('<main class="container"><div class="empty"><h2>Acesso restrito</h2><p>Este financeiro é exclusivo do titular da conta.</p><button class="btn" data-nav="/">Voltar ao início</button></div></main>',{back:true});bindCommon();return;
+  }
+  return renderRouteV216();
+};
+renderRoute=async function(){
+  routeRequested=true;if(renderingRoute)return;
+  renderingRoute=true;
+  try{
+    while(routeRequested){
+      routeRequested=false;const ticket=routeViewport.begin(route());
+      try{await renderCurrentRoute()}catch(error){
+        if(ticket.path!==route()||routeRequested){routeRequested=true;continue}
+        console.error('Falha ao abrir tela',error);
+        app.innerHTML=shell(`<main class="container"><div class="empty"><h2>Não foi possível abrir esta tela</h2><p>${escapeHTML(error?.message||'Confira a conexão e tente novamente.')}</p><button class="btn primary" id="retryCurrentRoute">Tentar novamente</button></div></main>`,{back:true});bindCommon();$('#retryCurrentRoute').onclick=()=>renderRoute();
+      }
+      if(ticket.path!==route()){routeRequested=true;continue}
+      routeViewport.complete(ticket);
+    }
+  }finally{renderingRoute=false}
 };
 
 

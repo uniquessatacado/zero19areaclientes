@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';import {createGarmentSharePayload,parseGarmentSharePayload,isGarmentSharePath,isPublicGarmentArtPath,assertGarmentAssetsBelongToAccount} from '../garment-share.js';
+const owner='11111111-1111-4111-8111-111111111111',id='22222222-2222-4222-8222-222222222222',path=`${owner}/${id}/processed.png`;
+const payload=createGarmentSharePayload({title:'<img src=x>',model:'oversized',color:'offwhite',secret:'private',price:40,layers:[{assetId:'secret-id',name:'Arte',path,side:'right',width:10,ratio:2,x:8,y:12,halftone:true}]});
+assert.equal(payload.scene.layers[0].path,path);assert.equal(payload.scene.layers[0].locked,true);assert.ok(!JSON.stringify(payload).includes('secret'));assert.ok(!JSON.stringify(payload).includes('price'));assert.ok(!JSON.stringify(payload).includes('halftone'));assert.equal(parseGarmentSharePayload(payload).color,'offwhite');
+assert.ok(isGarmentSharePath(`${owner}/presentations/${id}/scene.json`));
+for(const bad of ['https://evil.example/a.png','data:image/png,x',`${owner}/../x.png`,`${owner}/%2e%2e/x.png`,`${owner}/a.png?x=2`,`${owner}/a.svg`,`${owner}//x.png`,`${owner}/a\\b.png`])assert.equal(isPublicGarmentArtPath(bad),false,bad);
+for(const bad of ['https://evil.example/x','../scene.json',`${owner}/presentations/${id}/scene.html`])assert.equal(isGarmentSharePath(bad),false);
+assert.throws(()=>parseGarmentSharePayload({...payload,version:2}));const bad=structuredClone(payload);bad.scene.layers[0].width=Infinity;assert.throws(()=>parseGarmentSharePayload(bad));
+const polluted=structuredClone(payload);polluted.scene.privateCost=500;polluted.scene.layers[0].assetId='private';assert.ok(!JSON.stringify(parseGarmentSharePayload(polluted)).includes('private'));
+assert.throws(()=>createGarmentSharePayload({layers:[{path:'fake.png'}]}));console.log('Garment share: strict paths/schema, sizes, public-data whitelist and malformed payload rejection passed.');
+const employeePath='33333333-3333-4333-8333-333333333333/uploads/processed.png',asset={id:'art',owner_id:owner,processed_path:employeePath},ctx={accountOwnerId:()=>owner,state:()=>({session:{user:{id:owner}}}),supabase:{from(){const q={select:()=>q,eq:()=>q,in:async()=>({data:[asset]})};return q}}};
+await assertGarmentAssetsBelongToAccount(ctx,{layers:[{assetId:'art',path:employeePath}]});
+await assert.rejects(assertGarmentAssetsBelongToAccount(ctx,{layers:[{assetId:'art',path:owner+'/forged.png'}]}),/não está disponível/);
+asset.owner_id='other-account';await assert.rejects(assertGarmentAssetsBelongToAccount(ctx,{layers:[{assetId:'art',path:employeePath}]}),/não está disponível/);
+console.log('Share ownership: legacy employee path accepted by actual owner row, forged paths and cross-account rows blocked.');

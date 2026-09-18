@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {GLYPH_KEYS,suggestGlyphKey,validateGlyphAssignments} from '../customization-preparer.js';
+assert.equal(GLYPH_KEYS.length,36);
+assert.equal(suggestGlyphKey('a.svg'),'A');
+assert.equal(suggestGlyphKey('0.SVG'),'0');
+assert.equal(suggestGlyphKey('numero-10.svg'),'','multi-character drawings must never be guessed as separate glyphs');
+assert.equal(suggestGlyphKey('all-sponsor.svg'),'');
+const glyphs=validateGlyphAssignments([{name:'a.svg',key:'A',ext:'svg',markup:'<svg />'},{name:'1.svg',key:'1',ext:'svg',markup:'<svg />'},{name:'arquivo.cdr',key:'',ext:'cdr'}]);
+assert.equal(glyphs.size,2);
+assert.equal(glyphs.get('1').name,'1.svg');
+assert.throws(()=>validateGlyphAssignments([{name:'one.svg',key:'1',ext:'svg',markup:'<svg />'},{name:'outro.svg',key:'1',ext:'svg',markup:'<svg />'}]),/dois arquivos/);
+assert.throws(()=>validateGlyphAssignments([{name:'dez.svg',key:'10',ext:'svg',markup:'<svg />'}]),/A–Z/);
+assert.throws(()=>validateGlyphAssignments([{name:'source.cdr',key:'A',ext:'cdr'}]),/SVG válido/);
+assert.throws(()=>validateGlyphAssignments([{name:'empty.svg',key:'A',ext:'svg',markup:''}]),/SVG válido/);
+console.log('customization preparer tests: character mapping, duplicate prevention, archive-only files and no false SVG decomposition passed');

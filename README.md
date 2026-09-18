@@ -6,8 +6,8 @@ Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups,
 
 - Site: https://019-personalizacoes.vercel.app
 - Supabase: projeto já configurado no front com chave publishable.
-- Produção atual: **v2.15.1**.
-- Candidata local para teste: **v2.16** (ainda não publicada).
+- Produção atual confirmada no domínio: **v2.16**.
+- Candidata local em revisão: **v2.17.3**, disponível no servidor local. Não publicada nesta revisão.
 
 ## Regra de manutenção
 
@@ -31,3 +31,24 @@ Toda alteração deve seguir: **ler memória → registrar nova versão → alte
 ## Falha que não deve voltar
 
 Não usar loaders que baixam chunks compactados e fazem gzip/base64/`DecompressionStream` no navegador para iniciar a aplicação. Essa arquitetura causou `Failed to decode data` / `Failed to fetch` em produção. Desde v2.10 o app deve carregar arquivos estáticos normais do mesmo deployment.
+
+## Revisão da produção DTF
+
+Consulte `IMPLEMENTATION_CHECKLIST_v217.md` para o escopo completo, testes e pendências reais.
+
+- Filme: seleção visual multiempresa, quantidade/medidas, organização automática, rotação livre opcional, travas, prévia com fundos de visualização e PNG transparente em 300 DPI inteiro ou recortado.
+- Estúdio: provador individual e botão **Montar camiseta completa**, com modelos normal/oversized, três cores, quatro vistas, várias estampas e exportação para apresentação. Essas imagens de mockup não são o arquivo físico DTF.
+- Custos: compras e perfis de impressora, análise local das cores, estimativas e simulador sem cadastro. Preços ausentes não são tratados como zero; calibração inicial não substitui medições do equipamento.
+- Orientador: verificações locais baseadas em evidências do projeto, sem API paga nem envio a IA. Não é um modelo generativo ou aprendizagem automática.
+
+As migrations de integridade operacional, custos privados, financeiro, montagens, filme em edição e apresentações foram aplicadas ao Supabase em 18/09. Configurações e montagens usam o banco como fonte principal. Cadastros antigos locais são preservados para transferência explícita; não há novo salvamento de negócio exclusivamente no navegador. Custos/financeiro são exclusivos do titular Clovis, protegidos também por RLS.
+
+### Verificação local
+
+`node scripts/validate-static.mjs` valida os módulos e scripts. Os arquivos `scripts/test-*.mjs` executam regressões puras. Os scripts `*-browser-test.mjs` usam Edge isolado e fixtures locais: não substituem teste autenticado de RLS e gravação na conta real. `scripts/` não é publicado.
+
+O visualizador `mockup-3d.html` usa uma malha real licenciada (CC BY 4.0), com cores e estampas; o corte normal é adaptação declarada do oversized. A galeria `mockup-viewer.html` lê apenas um manifesto JSON validado e mostra as vistas fotográficas empilhadas, sem abas ou execução de HTML armazenado. O PDF da apresentação contém uma vista por página. Publicações explícitas usam o bucket separado `z19p-presentations`, sem custos internos.
+
+O seletor do estúdio consulta 24 artes por página, filtra empresa/cliente/nome/data e limita as prévias a duas requisições simultâneas. Prévia leve não altera o original utilizado na impressão.
+
+`supabase/tests/v217_cloud_rls_rollback.sql` verificou as permissões reais de titular, funcionário e visitante, revisão otimista e exportação única; os dados fictícios foram revertidos na mesma transação. A revisão de segurança não encontrou novos alertas nos módulos criados; existem avisos históricos de outros sistemas no banco compartilhado, fora do escopo desta alteração.

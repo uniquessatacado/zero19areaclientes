@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Teste isolado de análise de consumo</title>
+<style>body{font:16px system-ui;background:#0d0e12;color:#eee;padding:24px}pre{white-space:pre-wrap;overflow-wrap:anywhere}.ok{color:#a8efb4}.error{color:#ff8585}</style></head>
+<body><h1>Análise de consumo · teste isolado</h1><p>Somente imagens sintéticas locais. Sem autenticação, cadastro, upload ou banco de dados.</p><pre id="result">Executando…</pre>
+<script type="module">
+import {analyzeImageForProduction,analyzeRgbaInWorker} from '../production-cost-analysis.js';
+const expect=(condition,message)=>{if(!condition)throw Error(message);};
+const near=(a,b)=>Math.abs(a-b)<.0001;
+const calls=[],OriginalWorker=window.Worker;
+window.Worker=class extends OriginalWorker{constructor(...args){super(...args);calls.push(String(args[0]));}};
+const source=document.createElement('canvas');source.width=1024;source.height=512;
+const context=source.getContext('2d');context.fillStyle='#000';context.fillRect(0,0,512,512);
+let blobUrl;
+try{
+  const analysis=await analyzeImageForProduction(source.toDataURL(),{channelMode:'CMYW'});
+  expect(analysis.width===512&&analysis.height===256&&analysis.sampled,'Source must downsample to 512 px preserving ratio.');
+  expect(analysis.sourceWidth===1024&&analysis.sourceHeight===512,'Original dimensions must be retained.');
+  expect(near(analysis.alphaCoverage,.5)&&near(analysis.channels.C,.5)&&near(analysis.channels.W,.5),'Transparency must weight ink coverage, not turn white.');
+  const blob=await new Promise(resolve=>source.toBlob(resolve,'image/png'));blobUrl=URL.createObjectURL(blob);
+  const separated=await analyzeImageForProduction(blobUrl,{channelMode:'CMYKW',maxDimension:256});
+  expect(separated.width===256&&separated.height===128,'Explicit sample bound must be respected.');
+  expect(near(separated.channels.K,.5)&&separated.channels.C===0&&near(separated.channels.W,.5),'CMYKW must separate black instead of CMY.');
+  context.clearRect(0,0,source.width,source.height);context.fillStyle='#fff';context.fillRect(0,0,source.width,source.height);
+  const white=await analyzeImageForProduction(source.toDataURL(),{channelMode:'CMYW',maxDimension:32});
+  expect(white.channels.W===1&&white.channels.C===0&&white.channels.M===0&&white.channels.Y===0,'White artwork must consume white without CMY.');
+  const pixels=new ImageData(new Uint8ClampedArray([255,0,0,255]),1,1),original=Array.from(pixels.data);
+  const red=await analyzeRgbaInWorker(pixels,{channelMode:'CMYW'});
+  expect(red.channels.C===0&&red.channels.M===1&&red.channels.Y===1,'Direct worker must return channel coverage.');
+  expect(pixels.data.length===4&&Array.from(pixels.data).join()===original.join(),'Worker must not detach or mutate caller pixels.');
+  let invalid=false;try{await analyzeRgbaInWorker({data:new Uint8ClampedArray([0,0,0]),width:1,height:1});}catch(error){invalid=/RGBA/.test(error.message);}expect(invalid,'Invalid pixels must be rejected by actual worker.');
+  const controller=new AbortController();controller.abort();let cancelled=false;
+  try{await analyzeImageForProduction(source.toDataURL(),{signal:controller.signal});}catch(error){cancelled=error.name==='AbortError';}expect(cancelled,'An aborted request must not fetch images.');
+  const during=new AbortController(),pending=analyzeRgbaInWorker(pixels,{signal:during.signal});during.abort();cancelled=false;try{await pending;}catch(error){cancelled=error.name==='AbortError';}expect(cancelled,'In-flight worker cancellation must reject cleanly.');
+  let rejected=false;try{await analyzeImageForProduction(source.toDataURL(),{maxDimension:513});}catch{rejected=true;}expect(rejected,'Unsafe sampling dimensions must be rejected.');
+  const WorkerBeforeFallback=window.Worker;window.Worker=undefined;let fallback;
+  try{fallback=await analyzeRgbaInWorker(pixels);}finally{window.Worker=WorkerBeforeFallback;}
+  expect(fallback.channels.M===1,'Synchronous small-sample fallback must work if Workers are unavailable.');
+  expect(calls.length>=6&&calls.every(url=>url.includes('production-cost-worker.js')),'Real local module worker must have been used.');
+  window.costTestResult={ok:true,workerCount:calls.length,analysis,separated,white,checks:['data URL','blob URL','512 px bound','alpha preservation','CMYW','CMYKW','white ink','actual module worker','source bytes unchanged','malformed buffer rejection','abort before fetch','abort running worker','no-worker fallback']};
+  document.querySelector('#result').className='ok';document.querySelector('#result').textContent=JSON.stringify(window.costTestResult,null,2);
+}catch(error){window.costTestResult={ok:false,error:error.stack||String(error)};document.querySelector('#result').className='error';document.querySelector('#result').textContent=window.costTestResult.error;}
+finally{if(blobUrl)URL.revokeObjectURL(blobUrl);source.width=source.height=1;}
+</script></body></html>

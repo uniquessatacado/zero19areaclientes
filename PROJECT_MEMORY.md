@@ -216,4 +216,62 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - [ ] Logo e rotas públicas retornam 200.
 - [ ] Só depois responder ao usuário que está publicado.
 
-**Candidata atual: v2.16 local — aguarda teste autenticado do usuário antes de commit/publicação.**
+## 16. v2.17 — produção, projetos e montagem DTF (EM IMPLEMENTAÇÃO — 18/09/2026)
+
+### Estado reconciliado antes da alteração
+- `main` local e `origin/main`: commit `29c8331` (`attnova1`), árvore limpa no início do trabalho.
+- O domínio canônico respondeu HTTP 200 e entregou `z19-version="2.16"`; `app.js` e `styles.css` também responderam 200 com os mesmos tamanhos dos arquivos locais.
+- A documentação acima e o `README.md` ainda descreviam v2.16 como candidata e v2.15.1 como produção. Essa divergência foi confirmada; a produção real é v2.16 e a próxima versão escolhida é v2.17.
+- O Vercel CLI não possui sessão autenticada neste ambiente. O ID/estado interno do deployment não foi confirmado e nenhuma publicação deve ser afirmada sem autenticar e revalidar domínio, aliases e boot.
+- O Supabase CLI local não estava vinculado ao projeto. Alterações de banco serão preparadas em migration nova, aditiva e idempotente; aplicação remota exige auditoria/credencial e validação prévia.
+
+### Objetivo
+- Evoluir o fluxo empresa → projeto → orçamento → pagamento → entrega → filas operacionais sem substituir a arquitetura atual.
+- Adicionar PDF persistente do orçamento, medida obrigatória para Artes prontas, times/personalizações oficiais e montagem de filme DTF 28/58 cm com exportação PNG 300 DPI.
+- Tornar as novas telas e ações adequadas a celular e desktop, mantendo o tema e o layout canônico.
+
+### Plano por checkpoints
+1. Banco: status semântico, isolamento por projeto, data de entrega, trava de pagamento, documentos PDF, perfis de impressão, times/glyphs e print jobs.
+2. Operação: filas ordenadas, posições, destaque do responsável, novo projeto explícito, badges de pagamento e seletor de data mobile-first.
+3. Orçamento/arte: pagar com data obrigatória, PDF real, compartilhamento seguro, medida proporcional e halftone.
+4. Times/filme: cadastro e preparação assistida, itens mistos, nesting normal/máximo, métricas e exportação segmentada em 300 DPI.
+5. Validação: sintaxe, migrations, funções puras, smoke browser, viewport mobile e fluxos autenticados quando houver sessão.
+
+### Riscos e mitigação
+- Schema remoto não está introspectável sem vínculo/autenticação: migration deve usar `if exists`/`if not exists`, preservar dados e não será aplicada às cegas.
+- O app atual atualiza workspace/projeto diretamente: a transição para fila precisa de RPC/trigger no banco para não depender só do frontend.
+- Geração de bitmap grande pode estourar memória mobile: calcular memória antes e segmentar sem reduzir DPI nem cortar item.
+- CDR não terá promessa de interpretação automática: original privado + SVG/PDF de trabalho e mapeamento assistido.
+- PDF e bibliotecas críticas não dependerão de novo CDN; a geração será local no navegador e o arquivo será persistido no Storage quando autorizado.
+
+### Pontos obrigatórios de não regressão
+- Boot estático local, SPA/hashchange, autenticação, RLS, bucket `z19p-assets`, empresas, artes, mockups, pastas, equipe, produtividade, comissões, qualidades, portfólio e área pública.
+- Sem remoção automática de fundo; mockup sem crop/upscale; criador original separado do responsável; nomes de pasta completos; mobile sem overflow.
+- Nenhum commit, migration remota ou deployment será declarado concluído antes das validações correspondentes.
+
+**Candidata atual: v2.17 em implementação local. Produção confirmada no domínio: v2.16.**
+
+## 17. Revisão v2.17.3 — experiência de produção (LOCAL, em andamento)
+- Pedido atual: seletor visual de múltiplas artes entre empresas/clientes; provador proporcional frente/costas preto/branco; edição manual de cor com conta-gotas, desfazer, duplicar ou atualizar; revisão de filas e integridade do filme.
+- A remoção de cor é manual e explicitamente autorizada pelo usuário nesta revisão; não reintroduzir remoção automática de fundo no upload.
+- Plano: módulos locais independentes de seletor e estúdio; dimensões reais calibradas pela largura/comprimento da camisa; preservar arquivo original e salvar revisões PNG em caminhos novos; compartilhar perfil de impressão entre card/provador/filme.
+- Riscos: fotos são referência visual, tamanho real depende da medida informada da peça; navegação autenticada precisa de validação específica; edições não podem destruir imagens usadas em jobs anteriores.
+- Não regressão: assets originais, alpha, 300 DPI, medidas exatas, pagamento/entrega, RLS, biblioteca, projetos e comissões.
+- Falhas confirmadas em revisão: fila perdia badges ao redesenhar cards; orçamento pendente recente escondia pago; encaixe arredondava tamanho físico e não aplicava gap corretamente. Correções em andamento com regressão reproduzível.
+
+### Expansão da revisão: estúdio, custos, navegação e orientador
+
+- Checklist canônico detalhado: `IMPLEMENTATION_CHECKLIST_v217.md`. Não esquecer pedidos anteriores ao receber adições ao vivo.
+- Filme: quantidade antes/depois de adicionar, medidas editáveis, posicionamento magnético com colisão/limites, fundo apenas visual, prévia centralizada e limitada em altura. 101 peças testadas no Edge desktop/mobile: roda propaga e toque rola por padrão; botão permite arrastar.
+- PNG: tamanho físico em 300 DPI, exportação inteira ou recorte da união real dos pixels alpha. Ângulos livres preservam largura/altura originais; bbox rotacionado não é novo tamanho. Para exportação angular recortada, renderizar a mesma prancheta inteira antes do crop: transladar/re-renderizar num canvas menor altera quantização antialias. Regressão compara RGBA exato.
+- Rotação: opção explícita, heurística em 30° (núcleo também aceita 15°), controle manual arbitrário; políticas sem rotação e travas respeitadas. Limite de trabalho retorna baseline seguro sem aumento de comprimento, sinalizando busca limitada; não prometer ótimo global.
+- Estúdio completo: normal/oversized, preto/branco/off-white, frente/costas/mangas, múltiplas artes e medidas físicas calibráveis. Salvar medida de camada secundária exige consultar perfil/asset atuais e preservar ready/halftone/projeto/política/criador. Montagem salva em metadata sem modificar os arquivos originais.
+- Assets fotográficos nativos 1254×1254 (vista individual 627 px); exportar em 2000 px não cria detalhe nativo. Prompts e limites em `assets/MOCKUP_PROMPTS.md`. Não chamar apresentação 2D de 3D. PNGs do estúdio são apresentações, não arquivos DTF em tamanho real.
+- Custos: `production-cost-core`, análise/Worker, UI e `cost-store`. CMYW inicial conforme referência fornecida; consumos e tempo são estimativas/calibração. Canal K só se configurado. 30 cm proporcional exige opt-in explícito. Compras reais em m/ml/g, ausência de preço/calibração permanece desconhecida. Comissão integral de projeto é mostrada à parte e só somada com confirmação explícita de administrador, não inferir rateio por arte.
+- Referência de equipamento: fornecedor Bulk Ink Jet Brasil, T3170 adaptada, 58 cm úteis/60 nominal e aproximadamente 52 minutos/metro. Especificações não permitem custo exato por pixel/ICC/RIP. Preços da imagem do usuário são exemplo, não compras reais.
+- Custos privados: migration `20260918054035_v217_production_cost_settings.sql` aplicada em 18/09 após conector oficial restabelecido. RLS **somente titular Clovis** (auth.uid=owner e admin), não funcionários nem admins delegados. Nuvem canônica; cadastros antigos locais são apenas fonte de migração explícita sem perda. Integridade `20260918044500` também aplicada. Não contornar indisponibilidade futura do conector via cliente alternativo.
+- Navegação: `route-viewport.js` distingue nova rota (topo) de reload (mesma rota/posição), espera conteúdo tardio sem apagar destino e cancela restauração quando usuário interage. Atualização de token não deve redesenhar a tela em edição. Rotas novas respeitam primeiro acesso/reset de senha e carregam contexto da equipe antes de consultar dados.
+- Usuário recusou custos de API de IA. Orientador de projetos é local, determinístico, com evidências, priorização e ações manuais; sem envio a modelo externo, sem prometer geração/autoaprendizagem. Dados não carregados não podem virar alertas falsos de ausência.
+- Toda funcionalidade nova relacionada ao fluxo deve atualizar as verificações do orientador e seus testes por `registerProjectAdvisorRule` ou regra revisada no núcleo. Isso é manutenção explícita, não aprendizagem autônoma em runtime.
+- QA local: testes puros de filas, lettering/fontes Unicode, jobs, PDF/histórico, cores, dimensões, rotação, custos/permissões/conflitos, estúdio e viewport. Fixtures Edge reais em 1280 e 390 px, sem autenticação real nem writes de rede. Não confundir fixtures com validação de políticas na conta real.
+- Sem commit/deploy nesta revisão. Produção não foi alterada; preservar alterações anteriores do usuário. Pendências reais: ativação remota das migrations, validação autenticada completa e eventual modelo 3D realista.

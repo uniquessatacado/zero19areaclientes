@@ -4,7 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 
 const edge = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-const baseUrl = process.argv[2] || 'http://127.0.0.1:4173';
+const baseUrl = process.argv[2] || 'http://127.0.0.1:8080';
 const port = 9300 + Math.floor(Math.random() * 500);
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'z19-edge-cdp-'));
 const child = spawn(edge, [
@@ -82,16 +82,23 @@ try {
   await send('Runtime.enable');
 
   const pages = [
-    ['home', '/'],
-    ['qualidades', '/qualidades.html'],
-    ['portfolio', '/portfolio.html'],
-    ['comercial', '/comercial-admin.html?tab=commissions'],
-    ['demo', '/demo.html'],
+    ['home', '/', {width: 1280, height: 800, mobile: false}],
+    ['home-mobile', '/', {width: 390, height: 844, mobile: true}],
+    ['qualidades', '/qualidades.html', {width: 390, height: 844, mobile: true}],
+    ['portfolio', '/portfolio.html', {width: 390, height: 844, mobile: true}],
+    ['comercial', '/comercial-admin.html?tab=commissions', {width: 390, height: 844, mobile: true}],
+    ['demo', '/demo.html', {width: 390, height: 844, mobile: true}],
   ];
   const report = [];
   const screenshots = [];
-  for (const [name, pathname] of pages) {
+  for (const [name, pathname, viewport] of pages) {
     events.length = 0;
+    await send('Emulation.setDeviceMetricsOverride', {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: viewport.mobile ? 3 : 1,
+      mobile: viewport.mobile,
+    });
     await send('Page.navigate', { url: new URL(pathname, baseUrl).href });
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const state = await send('Runtime.evaluate', {
@@ -101,7 +108,7 @@ try {
       if (state.result.value === 'complete') break;
       await delay(100);
     }
-    if (name === 'home') {
+    if (name.startsWith('home')) {
       for (let attempt = 0; attempt < 80; attempt += 1) {
         const body = await send('Runtime.evaluate', {
           expression: 'document.body.innerText',
@@ -120,11 +127,13 @@ try {
         visibleButtons: [...document.querySelectorAll('button')].filter(b => b.getClientRects().length).map(b => b.innerText.trim()).filter(Boolean),
         visibleLinks: [...document.querySelectorAll('a')].filter(a => a.getClientRects().length).map(a => ({text:a.innerText.trim(),href:a.getAttribute('href')})),
         brokenImages: [...document.images].filter(i => i.complete && !i.naturalWidth).map(i => i.getAttribute('src')),
+        viewport: {width: innerWidth, height: innerHeight},
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
       })`,
       returnByValue: true,
     });
     report.push({ name, ...JSON.parse(result.result.value) });
-    if (name === 'home' || name === 'qualidades') {
+    if (name === 'home' || name === 'home-mobile' || name === 'qualidades') {
       const shot = await send('Page.captureScreenshot', {
         format: 'png',
         captureBeyondViewport: false,
@@ -134,7 +143,13 @@ try {
       screenshots.push(screenshotPath);
     }
   }
-  console.log(JSON.stringify({ ok: true, screenshots, report }, null, 2));
+  const expectedOrigin=new URL(baseUrl).origin;
+  const failures=report.filter(page=>{
+    let actualOrigin='';try{actualOrigin=new URL(page.url).origin}catch{}
+    return page.url.startsWith('chrome-error:')||actualOrigin!==expectedOrigin||page.readyState!=='complete'||page.brokenImages.length>0||page.horizontalOverflow;
+  });
+  console.log(JSON.stringify({ ok: failures.length===0, screenshots, failures:failures.map(page=>page.name), report }, null, 2));
+  if(failures.length)throw new Error(`Smoke test falhou em: ${failures.map(page=>page.name).join(', ')}`);
 } finally {
   try { socket?.close(); } catch {}
   child.kill();

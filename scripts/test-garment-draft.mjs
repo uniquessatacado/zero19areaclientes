@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {createGarmentDraftStore} from '../garment-draft.js';
+const values=new Map(),storage={getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)};
+let owner='owner-one',checks=0;const test=(label,fn)=>{fn();checks++;console.log('PASS '+label)},store=()=>createGarmentDraftStore({owner:()=>owner,storage});
+test('new account has no drafts and performs no write on read',()=>{assert.deepEqual(store().list(),[]);assert.equal(values.size,0)});
+let draft;
+test('empty shirt saves without an asset or remote table',()=>{draft=store().save({title:'Camiseta lisa',model:'oversized',color:'offwhite',layers:[]});assert.equal(draft.revision,1);assert.equal(draft.scene.layers.length,0);assert.equal(draft.scene.model,'oversized');assert.equal(values.size,1)});
+test('persisted scene reopens with stable id and calibration',()=>{const reopened=store().get(draft.id);assert.equal(reopened.id,draft.id);assert.equal(reopened.title,'Camiseta lisa');assert.equal(reopened.scene.measurements.bodyWidth,64)});
+test('draft list is copied, not a reference to live stored scene',()=>{const list=store().list();list[0].scene.title='modified externally';assert.equal(store().get(draft.id).scene.title,'Camiseta lisa')});
+test('multiple faces/assets and original widths persist independently',()=>{draft=store().save({...draft.scene,layers:[{id:'a',assetId:'one',path:'one.png',side:'front',width:12.5,ratio:2,x:18,y:20},{id:'b',assetId:'two',path:'two.png',side:'back',width:22,ratio:1.2,x:32,y:27}]},{id:draft.id,expectedRevision:1});assert.equal(draft.revision,2);assert.equal(store().get(draft.id).scene.layers[1].side,'back');assert.equal(store().get(draft.id).scene.layers[0].width,12.5)});
+test('stale tab cannot silently overwrite a newer revision',()=>{assert.throws(()=>store().save(draft.scene,{id:draft.id,expectedRevision:1}),/outra aba/);assert.equal(store().get(draft.id).revision,2)});
+test('unknown draft id does not overwrite or create unrelated record',()=>{assert.throws(()=>store().save(draft.scene,{id:'missing',expectedRevision:1}),/não foi encontrada/);assert.equal(store().list().length,1)});
+test('accounts have separate drafts and old store refuses changed account',()=>{const old=store();owner='owner-two';assert.deepEqual(store().list(),[]);assert.throws(()=>old.list(),/conta mudou/);store().save({title:'Segundo dono',layers:[]});owner='owner-one';assert.equal(store().list().length,1);assert.equal(store().list()[0].title,'Camiseta lisa')});
+test('separate montages do not replace the most recent automatically',()=>{const another=store().save({title:'Outra montagem',layers:[]});assert.notEqual(another.id,draft.id);assert.equal(store().list().length,2)});
+test('corrupt JSON cannot be silently replaced',()=>{const bad=new Map([['z19p:garment-drafts:v1:x','{bad']]),broken=createGarmentDraftStore({owner:'x',storage:{getItem:key=>bad.get(key),setItem:(key,value)=>bad.set(key,value)}});assert.throws(()=>broken.list(),/inválido/);assert.throws(()=>broken.save({layers:[]}),/inválido/);assert.equal([...bad.values()][0],'{bad')});
+test('cross-owner envelopes are rejected even if copied under another key',()=>{const copied=createGarmentDraftStore({owner:'copied',storage:{getItem:()=>[...values.values()][0]}});assert.throws(()=>copied.list(),/incompatível/)});
+test('storage quota errors are explicit, never claim cloud or success',()=>{const blocked=createGarmentDraftStore({owner:'x',storage:{getItem:()=>null,setItem:()=>{throw Error('quota')}}});assert.throws(()=>blocked.save({layers:[]}),/Não foi possível salvar no navegador/)});
+console.log(`Garment local drafts: ${checks} checks passed, no database or API.`);

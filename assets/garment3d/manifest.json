@@ -1,0 +1,166 @@
+{
+  "version": 1,
+  "checkedAt": "2026-09-18",
+  "models": {
+    "oversized": {
+      "path": "assets/garment3d/oversized-kylelhb-original.glb",
+      "label": "Oversized — malha real, caimento adaptado",
+      "author": "kylelhb",
+      "authorUrl": "https://sketchfab.com/kylelhb",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "https://sketchfab.com/3d-models/oversized-t-shirt-3b6e78d6a1a74370a6e5af6f312d38f7",
+      "downloadSource": "https://raw.githubusercontent.com/AvatarParzival/3d/bb289a14ebf5fd2d40759b81b05ae2c039cd3420/Models/shirt1.glb",
+      "redistributor": "https://github.com/AvatarParzival/3d",
+      "sourceCommit": "bb289a14ebf5fd2d40759b81b05ae2c039cd3420",
+      "bytes": 17714904,
+      "sha256": "e08ed7dba10f4b6cc11d82b8fa108b628df2410b4a41b1a0de2aac93a1a4938f",
+      "changes": "Arquivo GLB original sem alterações. Na visualização: cor e estampas aplicadas, queda dos ombros e curvatura frontal da gola ajustadas digitalmente por Zero 19. Adaptação artística de caimento, não simulação física de tecido nem digitalização independente.",
+      "orientation": [
+        0,
+        0,
+        0
+      ],
+      "upAxis": "Y",
+      "orientationNote": "O nó raiz já converte o OBJ original de Z-up para Y-up. Não aplicar outra rotação de -90 graus.",
+      "worldBounds": {
+        "min": [
+          -0.31248798966407776,
+          0.9200469851493835,
+          -0.16307899355888367
+        ],
+        "max": [
+          0.324537992477417,
+          1.6308540105819702,
+          0.15813300013542175
+        ],
+        "size": [
+          0.6370259821414948,
+          0.7108070254325867,
+          0.3212119936943054
+        ]
+      },
+      "geometry": {
+        "meshes": 4,
+        "nodes": 6,
+        "verticesWithPrimitiveDuplicates": 237893,
+        "triangles": 426350,
+        "hasNormals": true,
+        "hasTangents": true,
+        "hasUv0OnEveryPrimitive": true,
+        "meshNames": [
+          "Object_0",
+          "Object_1",
+          "Object_2",
+          "Object_3"
+        ],
+        "meshNodeNames": [
+          "Object_2",
+          "Object_3",
+          "Object_4",
+          "Object_5"
+        ]
+      },
+      "materials": [
+        {
+          "name": "Material.001",
+          "doubleSided": true,
+          "baseColorTexture": true,
+          "metallicRoughnessTexture": true,
+          "normalTexture": true,
+          "normalScale": 0.6628591629993539
+        }
+      ],
+      "textures": {
+        "embedded": 3,
+        "format": "image/png",
+        "external": 0
+      },
+      "physicalSizeNote": "As unidades e proporções geométricas não certificam tamanho real de uma camiseta comercial. A escala de impressão deve ser calibrada no aplicativo com medidas informadas.",
+      "uvNote": "TEXCOORD_0 está presente em todas as quatro primitivas. Não é um gabarito de corte industrial nem garante correspondência com molde/tamanho comercial.",
+      "performanceNote": "Modelo original com aproximadamente 426 mil triângulos; carregamento sob demanda e teste em dispositivos móveis são necessários.",
+      "viewDeformation": "relaxed-shoulders-neckline-v1"
+    },
+    "normal": {
+      "path": "assets/garment3d/oversized-kylelhb-original.glb",
+      "label": "Normal · adaptação da malha oversized",
+      "author": "kylelhb",
+      "authorUrl": "https://sketchfab.com/kylelhb",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "source": "https://sketchfab.com/3d-models/oversized-t-shirt-3b6e78d6a1a74370a6e5af6f312d38f7",
+      "downloadSource": "https://raw.githubusercontent.com/AvatarParzival/3d/bb289a14ebf5fd2d40759b81b05ae2c039cd3420/Models/shirt1.glb",
+      "redistributor": "https://github.com/AvatarParzival/3d",
+      "sourceCommit": "bb289a14ebf5fd2d40759b81b05ae2c039cd3420",
+      "bytes": 17714904,
+      "sha256": "e08ed7dba10f4b6cc11d82b8fa108b628df2410b4a41b1a0de2aac93a1a4938f",
+      "changes": "Adaptação geométrica Zero 19 durante a visualização: corpo mais estreito, mangas reduzidas e caimento dos ombros/gola refinado digitalmente. Arquivo GLB original preservado. Não é digitalização independente, simulação física de tecido nem réplica certificada de uma camiseta comercial.",
+      "orientation": [
+        0,
+        0,
+        0
+      ],
+      "upAxis": "Y",
+      "orientationNote": "O nó raiz já converte o OBJ original de Z-up para Y-up. Não aplicar outra rotação de -90 graus.",
+      "worldBounds": {
+        "min": [
+          -0.31248798966407776,
+          0.9200469851493835,
+          -0.16307899355888367
+        ],
+        "max": [
+          0.324537992477417,
+          1.6308540105819702,
+          0.15813300013542175
+        ],
+        "size": [
+          0.6370259821414948,
+          0.7108070254325867,
+          0.3212119936943054
+        ]
+      },
+      "geometry": {
+        "meshes": 4,
+        "nodes": 6,
+        "verticesWithPrimitiveDuplicates": 237893,
+        "triangles": 426350,
+        "hasNormals": true,
+        "hasTangents": true,
+        "hasUv0OnEveryPrimitive": true,
+        "meshNames": [
+          "Object_0",
+          "Object_1",
+          "Object_2",
+          "Object_3"
+        ],
+        "meshNodeNames": [
+          "Object_2",
+          "Object_3",
+          "Object_4",
+          "Object_5"
+        ]
+      },
+      "materials": [
+        {
+          "name": "Material.001",
+          "doubleSided": true,
+          "baseColorTexture": true,
+          "metallicRoughnessTexture": true,
+          "normalTexture": true,
+          "normalScale": 0.6628591629993539
+        }
+      ],
+      "textures": {
+        "embedded": 3,
+        "format": "image/png",
+        "external": 0
+      },
+      "physicalSizeNote": "As unidades e proporções geométricas não certificam tamanho real de uma camiseta comercial. A escala de impressão deve ser calibrada no aplicativo com medidas informadas.",
+      "uvNote": "TEXCOORD_0 está presente em todas as quatro primitivas. Não é um gabarito de corte industrial nem garante correspondência com molde/tamanho comercial.",
+      "performanceNote": "Modelo original com aproximadamente 426 mil triângulos; carregamento sob demanda e teste em dispositivos móveis são necessários.",
+      "adaptation": "regular-from-oversized-v1",
+      "viewDeformation": "relaxed-shoulders-neckline-v1"
+    }
+  },
+  "unavailable": {}
+}

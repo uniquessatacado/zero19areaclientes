@@ -1,0 +1,11 @@
+# Generated local QA renders and simulated documents (not application source).
+/tmp/
+.vercel/
+.env
+.env.*
+.agents/
+.codex/
+node_modules/
+output/
+
+.vercel

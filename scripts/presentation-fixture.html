@@ -1,0 +1,13 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Isolated presentation QA</title><body><p>Fixtures artificiais. Nenhum serviço remoto.</p><script type="module">
+import {createPresentationViews,presentationPDF,publishPresentation} from '../garment-presentation.js';
+const owner='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const art=document.createElement('canvas');art.width=800;art.height=800;const g=art.getContext('2d');g.fillStyle='#fb7029';g.beginPath();g.arc(400,400,365,0,Math.PI*2);g.fill();g.fillStyle='#fff';g.textAlign='center';g.font='bold 170px system-ui';g.fillText('ZERO',400,370);g.fillText('19',400,555);
+const data=art.toDataURL('image/png');
+const scene={title:'Apresentação QA - quatro vistas',model:'normal',color:'black',layers:['front','back','left','right'].map((side,i)=>({id:'qa-'+side,assetId:'qa-art-'+i,path:owner+'/art-'+i+'.png',side,name:'Identidade Zero 19 - '+side,width:i<2?22:8,ratio:1}))};
+window.qaFixture={ready:false};
+try{const views=await createPresentationViews(scene,{publicUrl:()=>data}),pdf=presentationPDF(views),uploads=[];
+await publishPresentation({accountOwnerId:()=>owner,state:()=>({session:{user:{id:owner}}}),supabase:{storage:{from(bucket){return {async upload(path,blob,options){uploads.push({bucket,path,type:blob.type,options,json:blob.type==='application/json'?JSON.parse(await blob.text()):null});return {error:null}}}}}}},scene,views);
+const bytes=new Uint8Array(await pdf.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));
+window.qaFixture={ready:true,views,pdf:btoa(binary),uploads};
+}catch(error){window.qaFixture={ready:true,error:error.stack||error.message}}
+</script></body></html>
