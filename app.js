@@ -1,21 +1,21 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 import picaFactory from 'https://esm.sh/pica@9.0.1';
-import { createProductionModule } from './production-v217.js?v=2.17.3';
-import { createArtStudio } from './art-studio.js?v=2.17.3';
-import { bindProjectHistory } from './project-history.js?v=2.17.3';
-import { createProductionCostUI } from './production-cost-ui.js?v=2.17.3';
-import { createProductionCostStore, fetchFilmCommissions } from './cost-store.js?v=2.17.3';
-import { createRouteViewportController } from './route-viewport.js?v=2.17.3';
-import { createProjectAdvisorUI } from './project-advisor-ui.js?v=2.17.3';
-import { attachAssetStudioActions } from './asset-studio-actions.js?v=2.17.3';
-import { renderStudioHome } from './studio-home.js?v=2.17.3';
-import { createProductionFinanceUI } from './production-finance.js?v=2.17.3';
+import { createProductionModule } from './production-v217.js?v=2.17.4';
+import { createArtStudio } from './art-studio.js?v=2.17.4';
+import { bindProjectHistory } from './project-history.js?v=2.17.4';
+import { createProductionCostUI } from './production-cost-ui.js?v=2.17.4';
+import { createProductionCostStore, fetchFilmCommissions } from './cost-store.js?v=2.17.4';
+import { createRouteViewportController } from './route-viewport.js?v=2.17.4';
+import { createProjectAdvisorUI } from './project-advisor-ui.js?v=2.17.4';
+import { attachAssetStudioActions } from './asset-studio-actions.js?v=2.17.4';
+import { renderStudioHome } from './studio-home.js?v=2.17.4';
+import { createProductionFinanceUI } from './production-finance.js?v=2.17.4';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
-const APP_VERSION = '2.17.3';
+const APP_VERSION = '2.17.4';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'ultra';

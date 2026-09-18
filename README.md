@@ -6,8 +6,8 @@ Sistema interno da Zero 19 para atendimento, empresas, projetos, artes, mockups,
 
 - Site: https://019-personalizacoes.vercel.app
 - Supabase: projeto já configurado no front com chave publishable.
-- Produção atual confirmada no domínio: **v2.16**.
-- Candidata local em revisão: **v2.17.3**, disponível no servidor local. Não publicada nesta revisão.
+- Produção atualmente publicada antes desta correção: **v2.17.3**.
+- Candidata desta correção: **v2.17.4** — exportação DTF em um único PNG contínuo.
 
 ## Regra de manutenção
 
@@ -36,7 +36,7 @@ Não usar loaders que baixam chunks compactados e fazem gzip/base64/`Decompressi
 
 Consulte `IMPLEMENTATION_CHECKLIST_v217.md` para o escopo completo, testes e pendências reais.
 
-- Filme: seleção visual multiempresa, quantidade/medidas, organização automática, rotação livre opcional, travas, prévia com fundos de visualização e PNG transparente em 300 DPI inteiro ou recortado.
+- Filme: seleção visual multiempresa, quantidade/medidas, organização automática, rotação livre opcional, travas, prévia com fundos de visualização e PNG transparente em 300 DPI inteiro ou recortado, sempre em **um único arquivo por filme**; não há divisão automática em segmentos.
 - Estúdio: provador individual e botão **Montar camiseta completa**, com modelos normal/oversized, três cores, quatro vistas, várias estampas e exportação para apresentação. Essas imagens de mockup não são o arquivo físico DTF.
 - Custos: compras e perfis de impressora, análise local das cores, estimativas e simulador sem cadastro. Preços ausentes não são tratados como zero; calibração inicial não substitui medições do equipamento.
 - Orientador: verificações locais baseadas em evidências do projeto, sem API paga nem envio a IA. Não é um modelo generativo ou aprendizagem automática.

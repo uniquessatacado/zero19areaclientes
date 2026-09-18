@@ -275,3 +275,14 @@ A v2.16 foi reconstruída localmente a partir do último runtime estável ínteg
 - Toda funcionalidade nova relacionada ao fluxo deve atualizar as verificações do orientador e seus testes por `registerProjectAdvisorRule` ou regra revisada no núcleo. Isso é manutenção explícita, não aprendizagem autônoma em runtime.
 - QA local: testes puros de filas, lettering/fontes Unicode, jobs, PDF/histórico, cores, dimensões, rotação, custos/permissões/conflitos, estúdio e viewport. Fixtures Edge reais em 1280 e 390 px, sem autenticação real nem writes de rede. Não confundir fixtures com validação de políticas na conta real.
 - Sem commit/deploy nesta revisão. Produção não foi alterada; preservar alterações anteriores do usuário. Pendências reais: ativação remota das migrations, validação autenticada completa e eventual modelo 3D realista.
+
+## 18. v2.17.4 — exportação DTF em PNG único (18/09/2026)
+
+- **Relato:** um filme contínuo com aproximadamente 1,30–1,50 m estava sendo exportado automaticamente em vários PNGs por causa da segmentação de segurança/memória.
+- **Regra nova e explícita:** a exportação para o RIP deve gerar **um único PNG contínuo**, mantendo o comprimento total calculado da prancheta e 300 DPI. O sistema não pode dividir automaticamente um mesmo filme em vários arquivos.
+- **Correção:** a exportação automática passa a usar um único trecho cobrindo todo o `lengthMm`; o nome final é `filme-completo.png` (ou `filme-completo-recortado.png` quando o recorte externo for escolhido).
+- **Limites:** se o PNG único ultrapassar o limite de dimensão/canvas ou uma estimativa segura de memória do navegador, mostrar erro claro e pedir que o usuário divida o job manualmente. **Nunca** voltar a criar vários PNGs silenciosamente.
+- **Medida:** largura e comprimento continuam derivados diretamente do layout em centímetros a 300 DPI; nenhuma arte pode ser reduzida, cortada ou reposicionada durante a exportação.
+- **Não regressão:** manter transparência, alpha/antialias, rotação, posições, espaçamento/gap, opção de recorte externo e largura inteira.
+- Esta regra substitui a orientação anterior de segmentação automática para filmes longos.
+- Status neste commit: candidata v2.17.4; publicar somente após preview/validação do domínio.

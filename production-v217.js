@@ -1,13 +1,13 @@
-import {buildSafeSegments,cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.3';
-import {openFilmAssetPicker} from './film-picker.js?v=2.17.3';
-import {mountFilmPreview} from './film-preview.js?v=2.17.3';
-import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.3';
-import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.3';
-import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.3';
-import {openCustomizationPreparer} from './customization-preparer.js?v=2.17.3';
-import {resolveFilmDraftMedia} from './film-draft.js?v=2.17.3';
-import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.3';
-import {attachAssetStudioActions} from './asset-studio-actions.js?v=2.17.3';
+import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.4';
+import {openFilmAssetPicker} from './film-picker.js?v=2.17.4';
+import {mountFilmPreview} from './film-preview.js?v=2.17.4';
+import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.4';
+import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.4';
+import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.4';
+import {openCustomizationPreparer} from './customization-preparer.js?v=2.17.4';
+import {resolveFilmDraftMedia} from './film-draft.js?v=2.17.4';
+import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.4';
+import {attachAssetStudioActions} from './asset-studio-actions.js?v=2.17.4';
 
 const OPERATIONAL_STAGES=new Set(['art_work','ready_production','production']);
 const STAGE_LABELS={art_work:'Desenvolver arte',ready_production:'Iniciar produção',production:'Estampar'};
@@ -54,7 +54,7 @@ export function createProductionModule(ctx){
     const loading=(async()=>{
       const family=`z19_${String(source.id||'official').replace(/[^a-z0-9_]/gi,'_')}_${++fontFaceSequence}`,url=await signedSourceUrl(source.storage_path),response=await fetch(url);
       if(!response.ok)throw new Error('Não foi possível baixar a fonte oficial. Confira a conexão e tente novamente.');
-      const buffer=await response.arrayBuffer(),{parseFontCmap}=await import('./font-cmap.js?v=2.17.3'),coverage=parseFontCmap(buffer),face=new FontFace(family,buffer);
+      const buffer=await response.arrayBuffer(),{parseFontCmap}=await import('./font-cmap.js?v=2.17.4'),coverage=parseFontCmap(buffer),face=new FontFace(family,buffer);
       await face.load();if(face.status!=='loaded')throw new Error('A fonte oficial não carregou. Tente novamente.');
       if(accountGeneration!==productionAccountGeneration)throw new Error('A conta mudou durante o carregamento da fonte. Reabra a personalização.');
       document.fonts.add(face);fontCoverageByFamily.set(family,coverage);return family;
@@ -77,7 +77,7 @@ export function createProductionModule(ctx){
   function runNesting(items,options){
     if(!window.Worker)return Promise.resolve(options.operation==='move'?snapFilmPlacement(items,options.placements,options.moving,options):nestItems(items,options));
     return new Promise((resolve,reject)=>{
-      const worker=new Worker(new URL('./nesting-worker.js?v=2.17.3',import.meta.url),{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(new Error('O cálculo excedeu o tempo seguro. Reduza a quantidade de itens.'))},120000);
+      const worker=new Worker(new URL('./nesting-worker.js?v=2.17.4',import.meta.url),{type:'module'}),timer=setTimeout(()=>{worker.terminate();reject(new Error('O cálculo excedeu o tempo seguro. Reduza a quantidade de itens.'))},120000);
       const finish=()=>{clearTimeout(timer);worker.terminate()};
       worker.onmessage=event=>{finish();event.data?.ok?resolve(event.data.result):reject(new Error(event.data?.error||'Falha no cálculo do filme.'))};
       worker.onerror=event=>{finish();reject(new Error(event.message||'Falha ao iniciar o cálculo do filme.'))};
@@ -769,7 +769,7 @@ export function createProductionModule(ctx){
     const preview=app.querySelector('#filmPreview');if(!preview||!lastFilm)return;const generation=++filmPreviewGeneration;
     const metrics=()=>{app.querySelector('#filmMetrics').innerHTML=`<span><small>Filme</small><b>${lastFilm.filmWidthMm/10} cm</b></span><span><small>Comprimento</small><b>${(lastFilm.lengthMm/10).toFixed(1)} cm</b></span><span><small>Metros</small><b>${(lastFilm.lengthMm/1000).toFixed(3)} m</b></span><span><small>Aproveitamento aprox.</small><b>${lastFilm.efficiency.toFixed(1)}%</b></span><span><small>Desperdício aprox.</small><b>${lastFilm.waste.toFixed(1)}%</b></span><span><small>Modo</small><b>${lastFilm.mode==='maximum'?'Máximo':'Normal'}</b></span>`};
     metrics();mountFilmPreview({element:preview,layout:lastFilm,items:filmItems,publicUrl:ctx.publicUrl,
-      validate:async (placements,moving)=>{const items=await filmNestingItems(),settings={filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep};if(moving)return runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:lastFilm.lengthMm});const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.3');return validateFilmPlacements(items,placements,settings)},
+      validate:async (placements,moving)=>{const items=await filmNestingItems(),settings={filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep};if(moving)return runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:lastFilm.lengthMm});const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.4');return validateFilmPlacements(items,placements,settings)},
       onChange:layout=>{if(generation!==filmPreviewGeneration||!preview.isConnected)return;lastFilm=layout;filmDraftNote='';saveFilmDraft();metrics();filmCostPanel?.refresh()},
       onRepack:async lockedPlacements=>runNesting(await filmNestingItems(),{filmWidthMm:lastFilm.filmWidthMm,mode:lastFilm.mode,gapMm:lastFilm.gapMm,cellMm:lastFilm.cellMm||2,freeRotation:lastFilm.freeRotation,angleStep:lastFilm.angleStep,lockedPlacements})});
     if(ctx.getCostUI?.()){let slot=app.querySelector('#filmCostSummary');if(!slot){slot=document.createElement('section');slot.id='filmCostSummary';app.querySelector('.film-workspace').insertAdjacentElement('afterend',slot)}filmCostPanel?.destroy();filmCostPanel=ctx.getCostUI().mountFilmCost(slot,{getLayout:()=>lastFilm,getItems:()=>filmItems,getImageUrl:item=>item.previewDataUrl||(item.path?ctx.publicUrl(item.path):null),getCommission:()=>ctx.getFilmCommissions?.(filmItems)})}
@@ -794,11 +794,14 @@ export function createProductionModule(ctx){
     const exportId=crypto.randomUUID();
     const {items,layout}=checkedFilmSnapshot({filmItems,lastFilm}),profile=media.find(m=>m.id===app.querySelector('#filmMedia').value);
     if(!profile)throw new Error('Selecione um perfil de filme válido.');
-    // Choose safe segments from the actual 300-DPI width, not an unreachable
-    // setting hidden in the database. Never cut through an artwork to fit RAM.
-    const fullWidthPixels=cmToPx(layout.filmWidthMm/10),memorySafeLimitMm=Math.max(1,Math.floor((60e6/fullWidthPixels)*25.4/300)-2);
-    const segments=buildSafeSegments(layout.placements,layout.lengthMm,Math.min(Number(profile.max_segment_cm||100)*10,memorySafeLimitMm)),modal=document.createElement('div'),previousFocus=document.activeElement,urls=new Set();let busy=false,closed=false;
-    modal.className='modal-backdrop';modal.innerHTML='<style>.film-export-modal{width:min(650px,calc(100vw - 24px));max-height:calc(100dvh - 30px);overflow:auto}.film-export-options{display:grid;gap:12px;margin:20px 0}.film-export-option{display:flex;gap:12px;padding:15px;border:1px solid #39393f;border-radius:14px;cursor:pointer;align-items:flex-start}.film-export-option input{width:20px;height:20px;flex:0 0 20px;accent-color:#ff6428}.film-export-option small{display:block;line-height:1.5;color:#a9a9b5;margin-top:6px}.film-export-result{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 0;border-top:1px solid #35353b}.film-export-result small{display:block;color:#aaa;line-height:1.5}.film-export-error{color:#ff9d91;min-height:24px}.film-export-hint{font-size:12px;line-height:1.6;color:#aaa}@media(max-width:480px){.film-export-result{grid-template-columns:1fr}.film-export-result .btn{justify-content:center;width:100%}}</style><div class="modal film-export-modal" role="dialog" aria-modal="true" aria-labelledby="filmExportTitle"><div class="modal-head"><div><div class="eyebrow">Arquivo final · fundo transparente</div><h2 id="filmExportTitle">Exportar filme em 300 DPI</h2></div><button class="btn ghost small" data-close-film-export aria-label="Fechar">×</button></div><div class="film-export-options"><label class="film-export-option"><input type="radio" name="filmExportMode" value="trimmed" checked><span><b>Recortar no limite das artes</b><small>Remove somente as margens transparentes externas. Mantém o tamanho real, as posições relativas e os espaços entre todas as artes. Não amplia nem reduz o desenho.</small></span></label><label class="film-export-option"><input type="radio" name="filmExportMode" value="full"><span><b>Preservar a largura inteira do filme</b><small>Mantém a prancheta de '+h(layout.filmWidthMm/10)+' cm e as posições originais, inclusive áreas transparentes vazias.</small></span></label></div><p class="film-export-hint">'+segments.length+' segmento(s) seguro(s), sem cortar peças. As cores do fundo da prévia não são impressas. O recorte considera inclusive pixels semitransparentes, sem remover branco ou preto.</p><p class="film-export-error" role="alert" data-film-export-error></p><div data-film-export-results></div><div class="modal-footer"><button class="btn" data-close-film-export>Fechar</button><button class="btn primary" data-generate-film-export>Preparar PNGs</button></div></div>';
+    // Exportação para o RIP é sempre um único PNG contínuo. Não dividir o filme
+    // automaticamente: a medida física calculada na prancheta precisa chegar inteira ao RIP.
+    const fullWidthPixels=cmToPx(layout.filmWidthMm/10),fullHeightPixels=cmToPx(layout.lengthMm/10);
+    if(fullWidthPixels<=0||fullHeightPixels<=0||fullWidthPixels>32767||fullHeightPixels>32767)throw new Error('O filme ultrapassa o limite de dimensão de um único PNG neste navegador. Reduza o comprimento do job antes de exportar.');
+    const estimatedRgbaBytes=fullWidthPixels*fullHeightPixels*4;
+    if(estimatedRgbaBytes>900e6)throw new Error('Este filme é grande demais para gerar um único PNG com segurança neste navegador. Divida o job manualmente em dois filmes; a exportação automática nunca separa as artes.');
+    const segments=[{start:0,end:layout.lengthMm}],modal=document.createElement('div'),previousFocus=document.activeElement,urls=new Set();let busy=false,closed=false;
+    modal.className='modal-backdrop';modal.innerHTML='<style>.film-export-modal{width:min(650px,calc(100vw - 24px));max-height:calc(100dvh - 30px);overflow:auto}.film-export-options{display:grid;gap:12px;margin:20px 0}.film-export-option{display:flex;gap:12px;padding:15px;border:1px solid #39393f;border-radius:14px;cursor:pointer;align-items:flex-start}.film-export-option input{width:20px;height:20px;flex:0 0 20px;accent-color:#ff6428}.film-export-option small{display:block;line-height:1.5;color:#a9a9b5;margin-top:6px}.film-export-result{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 0;border-top:1px solid #35353b}.film-export-result small{display:block;color:#aaa;line-height:1.5}.film-export-error{color:#ff9d91;min-height:24px}.film-export-hint{font-size:12px;line-height:1.6;color:#aaa}@media(max-width:480px){.film-export-result{grid-template-columns:1fr}.film-export-result .btn{justify-content:center;width:100%}}</style><div class="modal film-export-modal" role="dialog" aria-modal="true" aria-labelledby="filmExportTitle"><div class="modal-head"><div><div class="eyebrow">Arquivo final · fundo transparente</div><h2 id="filmExportTitle">Exportar filme em 300 DPI</h2></div><button class="btn ghost small" data-close-film-export aria-label="Fechar">×</button></div><div class="film-export-options"><label class="film-export-option"><input type="radio" name="filmExportMode" value="trimmed" checked><span><b>Recortar no limite das artes</b><small>Remove somente as margens transparentes externas. Mantém o tamanho real, as posições relativas e os espaços entre todas as artes. Não amplia nem reduz o desenho.</small></span></label><label class="film-export-option"><input type="radio" name="filmExportMode" value="full"><span><b>Preservar a largura inteira do filme</b><small>Mantém a prancheta de '+h(layout.filmWidthMm/10)+' cm e as posições originais, inclusive áreas transparentes vazias.</small></span></label></div><p class="film-export-hint">Será gerado <b>um único PNG contínuo</b> com todo o comprimento calculado do filme. As cores do fundo da prévia não são impressas. O recorte considera inclusive pixels semitransparentes, sem remover branco ou preto.</p><p class="film-export-error" role="alert" data-film-export-error></p><div data-film-export-results></div><div class="modal-footer"><button class="btn" data-close-film-export>Fechar</button><button class="btn primary" data-generate-film-export>Preparar PNG</button></div></div>';
     const close=()=>{if(busy||closed)return;closed=true;modal.remove();for(const url of urls)URL.revokeObjectURL(url);previousFocus?.focus?.();document.removeEventListener('keydown',onKey)};
     const onKey=event=>{if(event.key==='Escape')close();if(event.key==='Tab'){const controls=[...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),a[href]')],first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
     document.body.appendChild(modal);document.addEventListener('keydown',onKey);modal.querySelectorAll('[data-close-film-export]').forEach(button=>button.onclick=close);modal.querySelector('input')?.focus();
@@ -807,30 +810,30 @@ export function createProductionModule(ctx){
       for(const url of urls)URL.revokeObjectURL(url);urls.clear();output.innerHTML='';errorOutput.textContent='';modal.querySelectorAll('button,input').forEach(control=>control.disabled=true);
       try{
         for(const [index,segment] of segments.entries()){
-          button.textContent='Preparando '+(index+1)+' de '+segments.length+'…';
+          button.textContent='Preparando filme completo…';
           const placements=layout.placements.filter(p=>p.yMm>=segment.start-.001&&p.yMm+p.heightMm<=segment.end+.001).map(p=>({...p,x:cmToPx(p.xMm/10),y:cmToPx((p.yMm-segment.start)/10),w:cmToPx(p.widthMm/10),h:cmToPx(p.heightMm/10)}));
-          if(!placements.length)throw new Error('Há um segmento vazio nesta montagem. Recalcule o filme.');
+          if(!placements.length)throw new Error('O filme está vazio. Recalcule a montagem.');
           // Start a trimmed export at the union of placement rectangles, then scan
           // native alpha to remove transparent image margins without resampling.
           const pretrim=trim&&!placements.some(p=>Math.abs(p.rotation%90)>.000001),fullWidth=cmToPx(layout.filmWidthMm/10),fullHeight=cmToPx((segment.end-segment.start)/10),left=pretrim?Math.max(0,Math.min(...placements.map(p=>p.x))-2):0,top=pretrim?Math.max(0,Math.min(...placements.map(p=>p.y))-2):0,right=pretrim?Math.min(fullWidth,Math.max(...placements.map(p=>p.x+p.w))+2):fullWidth,bottom=pretrim?Math.min(fullHeight,Math.max(...placements.map(p=>p.y+p.h))+2):fullHeight,widthPx=right-left,heightPx=bottom-top;
-          if(widthPx<=0||heightPx<=0||widthPx>32767||heightPx>32767||widthPx*heightPx*4>240e6)throw new Error('Este trecho não tem uma faixa livre para corte dentro do limite de memória. Separe as peças em filmes menores ou mova as artes para abrir uma faixa horizontal de corte. Nenhuma arte será cortada ou reduzida automaticamente.');
+          if(widthPx<=0||heightPx<=0||widthPx>32767||heightPx>32767||widthPx*heightPx*4>900e6)throw new Error('O filme completo ultrapassa o limite de memória segura para um único PNG neste navegador. Divida o job manualmente; o sistema não separa mais a exportação automaticamente.');
           const canvas=document.createElement('canvas');canvas.width=widthPx;canvas.height=heightPx;const g=canvas.getContext('2d',{willReadFrequently:true});
-          if(!g)throw new Error('O navegador não tem memória suficiente para este segmento.');
+          if(!g)throw new Error('O navegador não tem memória suficiente para gerar o filme completo em um único PNG.');
           try{
             for(const p of placements){const item=items.find(item=>item.localId===p.id),x=p.x-left,y=p.y-top,sourceW=cmToPx((p.sourceWidthMm||item.widthCm*10)/10),sourceH=cmToPx((p.sourceHeightMm||item.heightCm*10)/10);if(item.type==='asset'){const asset=assetMap.get(item.sourceId),source=item.path||asset?.processed_path||asset?.original_path;if(!source)throw new Error('Uma arte não tem arquivo para exportar.');const image=new Image();image.crossOrigin='anonymous';image.src=ctx.publicUrl(source);await image.decode();drawPlacedImage(g,image,x,y,p.w,p.h,p.rotation,sourceW,sourceH)}else{g.save();try{g.translate(x+p.w/2,y+p.h/2);g.rotate((p.rotation||0)*Math.PI/180);await drawTeamCustomization(g,item,-sourceW/2,-sourceH/2,sourceW,sourceH)}finally{g.restore()}}}
             let rendered=canvas,bounds;if(trim){const cropped=await cropCanvasToAlpha(canvas);rendered=cropped.canvas;bounds=cropped.bounds}else{bounds=await findCanvasAlphaBounds(canvas);if(!bounds)throw new Error('O segmento está totalmente transparente. Confira as artes antes de exportar.');}
             const finalWidth=rendered.width,finalHeight=rendered.height;let blob=await blobFromCanvas(rendered);if(rendered!==canvas){rendered.width=1;rendered.height=1}blob=await ctx.setPngDpi(blob,300);
-            const name='filme-'+String(index+1).padStart(2,'0')+(trim?'-recortado':'')+'.png',url=URL.createObjectURL(blob);urls.add(url);const row=document.createElement('div');row.className='film-export-result';row.innerHTML='<div><b>'+h(name)+'</b><small>'+finalWidth+' × '+finalHeight+' px · '+(finalWidth/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' × '+(finalHeight/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' cm<br>300 DPI · '+(trim?'Recorte externo, sem redimensionar':'Largura inteira preservada')+'</small></div><a class="btn primary" data-download-film-export href="'+url+'" download="'+h(name)+'">Baixar PNG</a>';output.appendChild(row);
+            const name='filme-completo'+(trim?'-recortado':'')+'.png',url=URL.createObjectURL(blob);urls.add(url);const row=document.createElement('div');row.className='film-export-result';row.innerHTML='<div><b>'+h(name)+'</b><small>'+finalWidth+' × '+finalHeight+' px · '+(finalWidth/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' × '+(finalHeight/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' cm<br>300 DPI · '+(trim?'Recorte externo, sem redimensionar':'Largura inteira preservada')+'</small></div><a class="btn primary" data-download-film-export href="'+url+'" download="'+h(name)+'">Baixar PNG</a>';output.appendChild(row);
           }finally{canvas.width=1;canvas.height=1}
           await new Promise(resolve=>setTimeout(resolve,0));
         }
-        ctx.toast('PNGs preparados. Toque em “Baixar PNG” para salvar cada segmento.','ok');
+        ctx.toast('PNG completo preparado. Toque em “Baixar PNG” para salvar o filme inteiro.','ok');
         if(ctx.getCostUI?.()&&ctx.onFilmExported){
           const financeItems=items.map(item=>({...item,workspaceId:item.workspaceId||assetMap.get(item.sourceId)?.workspace_id||null}));
           const companies=financeItems.filter(item=>item.workspaceId).map(item=>({id:item.workspaceId,name:item.companyName||state().workspaces?.find(workspace=>workspace.id===item.workspaceId)?.company_name||item.label?.split(' • ')[0]||'Empresa'}));
           ctx.onFilmExported({exportId,items:financeItems,snapshot:filmCostPanel?.getSnapshot?.()||null,companies});
         }
-      }catch(error){errorOutput.textContent=(error.message||'Não foi possível preparar os PNGs.')+(output.children.length?' Os segmentos já preparados continuam disponíveis abaixo.':'')}
+      }catch(error){errorOutput.textContent=error.message||'Não foi possível preparar o PNG completo.'}
       finally{busy=false;modal.querySelectorAll('button,input').forEach(control=>control.disabled=false);button.textContent='Preparar novamente'}
     };
   }
@@ -926,7 +929,7 @@ export function createProductionModule(ctx){
       if(assetIds.some(id=>!assetProjects.has(id)))throw new Error('Uma das artes foi removida ou não está mais acessível. Revise os itens antes de salvar.');
       for(const item of items)if(item.type==='asset')item.projectId=assetProjects.get(item.sourceId);
       const projectIds=new Set(items.map(item=>item.type==='asset'?item.projectId:null)),projectId=projectIds.size===1&&![...projectIds].includes(null)?[...projectIds][0]:null;
-      const snapshot={snapshot_version:2,renderer_version:'2.17.3',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
+      const snapshot={snapshot_version:2,renderer_version:'2.17.4',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
       const jobPayload={id:jobId,owner_id:accountId,project_id:projectId,name:'Filme '+new Date().toLocaleString('pt-BR'),media_profile_id:profile.id,film_width_cm:layout.filmWidthMm/10,nesting_mode:layout.mode,gap_mm:layout.gapMm,status:'draft',calculated_length_cm:layout.lengthMm/10,settings_snapshot:snapshot,created_by:actorId,updated_by:actorId};
       attempted=true;
       const inserted=await supabase.from('z19p_print_jobs').insert(jobPayload).select('id').single();if(inserted.error)throw inserted.error;if(inserted.data?.id!==jobId)throw new Error('Não foi possível confirmar o registro do job.');
