@@ -278,35 +278,44 @@ async function ensureLibraries(){
 }
 async function loadConfig(){
   if(!session)return;
+  const stillCurrent=accountReadGuard();
   const [{data:s,error:se},{data:p,error:pe},{data:f,error:fe}]=await Promise.all([
     supabase.from('z19p_statuses').select('*').order('sort_order').order('name'),
     supabase.from('z19p_products').select('*').order('sort_order').order('name'),
     supabase.from('z19p_folder_templates').select('*').order('sort_order').order('name')
   ]);
+  if(!stillCurrent())return;
   if(se)toast('Não foi possível carregar os status.','err');else statuses=s||[];
   if(pe)toast('Não foi possível carregar os produtos.','err');else products=p||[];
   if(fe)toast('Não foi possível carregar as pastas padrão.','err');else folderTemplates=f||[];
 }
 async function loadWorkspaces(){
+  const stillCurrent=accountReadGuard();
   const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('workspace_type','client').order('created_at',{ascending:false});
+  if(!stillCurrent())return [];
   if(error){toast('Não foi possível carregar os ambientes.','err');return [];}
-  workspaces=data||[];
-  const ids=workspaces.map(w=>w.id);
+  let rows=data||[];
+  const ids=rows.map(w=>w.id);
   if(ids.length){
     const {data:logoFolders}=await supabase.from('z19p_folders').select('id,workspace_id').in('workspace_id',ids).eq('purpose','logo_empresa');
+    if(!stillCurrent())return [];
     const folderIds=(logoFolders||[]).map(f=>f.id);
     if(folderIds.length){
       const {data:logoAssets}=await supabase.from('z19p_assets').select('id,workspace_id,folder_id,processed_path,original_path,created_at').in('folder_id',folderIds).order('created_at',{ascending:false});
+      if(!stillCurrent())return [];
       const latest={};for(const a of logoAssets||[])if(!latest[a.workspace_id])latest[a.workspace_id]=a;
-      workspaces=workspaces.map(w=>({...w,_logo_url:latest[w.id]?publicUrl(latest[w.id].processed_path||latest[w.id].original_path):''}));
+      rows=rows.map(w=>({...w,_logo_url:latest[w.id]?publicUrl(latest[w.id].processed_path||latest[w.id].original_path):''}));
     }
   }
-  return workspaces;
+  workspaces=rows;return workspaces;
 }
 async function renderLibrary(kind){
+  const stillCurrent=accountReadGuard(true);
   await ensureDefaults();
+  if(!stillCurrent())return;
   const type=kind==='mockups'?'library_mockups':kind==='videos'?'library_videos':'library_artes';
   await ensureLibraries();
+  if(!stillCurrent())return;
   const w=libraryWorkspaces[type];
   if(!w){toast('Biblioteca não encontrada.','err');return nav('/');}
   return renderWorkspace(w.id);
@@ -395,11 +404,14 @@ async function deleteWorkspace(w,modal=null){
 }
 
 async function loadQuotes(workspaceId,projectId=null){
+  const stillCurrent=accountReadGuard();
   let query=supabase.from('z19p_quotes').select('*').eq('workspace_id',workspaceId).order('created_at',{ascending:false});if(projectId)query=query.eq('project_id',projectId);
   const {data:q,error}=await query;
+  if(!stillCurrent())return [];
   if(error){toast('Não foi possível carregar o orçamento.','err');currentQuotes=[];return currentQuotes;}
   const qs=q||[];if(!qs.length){currentQuotes=[];return currentQuotes;}
   const {data:items,error:ie}=await supabase.from('z19p_quote_items').select('*').in('quote_id',qs.map(x=>x.id)).order('sort_order');
+  if(!stillCurrent())return [];
   if(ie){toast('Não foi possível carregar os itens do orçamento.','err');currentQuotes=qs.map(x=>({...x,items:[]}));return currentQuotes;}
   currentQuotes=qs.map(x=>({...x,items:(items||[]).filter(i=>i.quote_id===x.id)}));return currentQuotes;
 }
@@ -664,7 +676,7 @@ function bindPublicDownload(){$$('.public-download').forEach(b=>b.onclick=()=>fo
 
 /* === 019 TEAM / CRM / PRODUTIVIDADE === */
 let currentProfile=null, teamProfiles=[], currentProjects=[], auditEntries=[];
-let accountContextEpoch=0,teamContextPending=null;
+let accountContextEpoch=0,teamContextPending=null,routeAccessCheck=null;
 let myCommissionSummary={enabled:false,pending:0,approved:0,paid:0,rejected:0},myCommissionRules=[],commissionTiers=[];
 const accountOwnerId=()=>currentProfile?.id===session?.user?.id?(currentProfile?.account_owner_id||session?.user?.id||null):session?.user?.id||null;
 const profileById=id=>teamProfiles.find(p=>p.id===id)||null;
@@ -682,19 +694,26 @@ const clientKey=w=>normalizeWaPhone(w?.phone)||norm(w?.client_name)||norm(w?.com
 const uniqueClients=list=>new Set((list||[]).map(clientKey).filter(Boolean)).size;
 
 async function loadCommissionContext(){
+  const stillCurrent=accountReadGuard();
   myCommissionSummary={enabled:false,pending:0,approved:0,paid:0,rejected:0};myCommissionRules=[];commissionTiers=[];
   if(!session?.user?.id)return myCommissionSummary;
+  const controller=new AbortController(),deadline=setTimeout(()=>controller.abort(),15000);
   try{
     const [{data:summary,error:summaryError},{data:rules,error:rulesError},{data:tiers,error:tiersError}]=await Promise.all([
-      supabase.rpc('z19p_get_my_commission_summary'),
-      supabase.from('z19p_commission_rules').select('*').eq('seller_user_id',session.user.id).eq('active',true),
-      supabase.from('z19p_price_tiers').select('*').eq('active',true).order('min_qty',{ascending:false})
+      supabase.rpc('z19p_get_my_commission_summary').abortSignal(controller.signal),
+      supabase.from('z19p_commission_rules').select('*').eq('seller_user_id',session.user.id).eq('active',true).abortSignal(controller.signal),
+      supabase.from('z19p_price_tiers').select('*').eq('active',true).order('min_qty',{ascending:false}).abortSignal(controller.signal)
     ]);
-    if(summaryError)throw summaryError;
+    if(!stillCurrent())return;
+    if(summaryError||rulesError||tiersError)throw summaryError||rulesError||tiersError;
     myCommissionSummary={...myCommissionSummary,...(summary||{})};
     if(!rulesError)myCommissionRules=rules||[];
     if(!tiersError)commissionTiers=tiers||[];
-  }catch(error){console.warn('commission context',error);}
+  }catch(error){if(stillCurrent()){
+    myCommissionSummary={enabled:false,unavailable:true,pending:null,approved:null,paid:null,rejected:null};myCommissionRules=[];commissionTiers=[];
+    toast(controller.signal.aborted?'A consulta de comissões excedeu 15 segundos. Os valores estão indisponíveis; tente novamente.':'Não foi possível carregar as comissões. Os valores estão indisponíveis; tente novamente.','err');
+    console.warn('commission context',{kind:controller.signal.aborted?'timeout':'read-error'});
+  }}finally{clearTimeout(deadline)}
   return myCommissionSummary;
 }
 
@@ -725,15 +744,22 @@ function quoteCommissionPreviewHTML(draft){
 
 function clearAccountContext(){
   window.dispatchEvent(new Event('z19:account-changing'));
-  accountContextEpoch++;teamContextPending=null;currentProfile=null;teamProfiles=[];workspaces=[];currentWorkspace=null;currentProjects=[];currentAssets=[];currentFolders=[];currentQuotes=[];auditEntries=[];statuses=[];products=[];folderTemplates=[];libraryWorkspaces={};
+  accountContextEpoch++;teamContextPending=null;routeAccessCheck=null;currentProfile=null;teamProfiles=[];workspaces=[];currentWorkspace=null;currentProjects=[];currentAssets=[];currentFolders=[];currentQuotes=[];auditEntries=[];statuses=[];products=[];folderTemplates=[];libraryWorkspaces={};
   myCommissionSummary={enabled:false,pending:0,approved:0,paid:0,rejected:0};myCommissionRules=[];commissionTiers=[];
   productionCosts?.destroy?.();productionCosts=null;productionCostOwner=null;projectAdvisor?.invalidate();productionModule?.resetAccountState?.();
   if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null}
   document.querySelectorAll('.modal-backdrop,.art-studio-backdrop,.garment-library-backdrop').forEach(node=>node.remove());document.body.style.overflow='';
 }
-async function loadTeamContext(){
+function accountReadGuard(includeRoute=false){
+  const userId=session?.user?.id,epoch=accountContextEpoch,path=includeRoute?route():null;
+  return ()=>userId===session?.user?.id&&epoch===accountContextEpoch&&(!includeRoute||path===route());
+}
+async function loadTeamContext({reuseRoute=false}={}){
   const userId=session?.user?.id,epoch=accountContextEpoch;
   if(!userId){currentProfile=null;teamProfiles=[];return false}
+  const access=reuseRoute&&routeAccessCheck?.userId===userId&&routeAccessCheck.epoch===epoch&&routeAccessCheck.path===route()?routeAccessCheck:null;
+  if(access?.confirmed&&currentProfile?.id===userId&&currentProfile.active)return true;
+  if(!reuseRoute&&routeAccessCheck)routeAccessCheck.confirmed=false;
   if(teamContextPending?.userId===userId&&teamContextPending.epoch===epoch)return teamContextPending.promise;
   const pending={userId,epoch,promise:null},stillCurrent=()=>session?.user?.id===userId&&accountContextEpoch===epoch;
   pending.promise=(async()=>{
@@ -746,6 +772,7 @@ async function loadTeamContext(){
       if(!stillCurrent())return false;currentProfile=p;teamProfiles=result.data||[p];
       const loginKey=`z19p_login_${userId}_${session.access_token?.slice(-8)||'s'}`;
       try{if(!sessionStorage.getItem(loginKey)){sessionStorage.setItem(loginKey,'1');void supabase.rpc('z19p_mark_login').then(()=>{},()=>{})}}catch{}
+      if(access&&routeAccessCheck===access&&access.path===route())access.confirmed=true;
       return true;
     }catch(error){if(stillCurrent()){currentProfile=null;teamProfiles=[];console.error(error)}return false}
     finally{if(teamContextPending===pending)teamContextPending=null}
@@ -806,7 +833,7 @@ renderRoute = async function(){
   if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}
   const r=route(); if(r.startsWith('/cliente/'))return renderPublic(r.split('/')[2]);
   if(!session)return renderAuth();
-  await loadTeamContext();
+  const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;
   const qs=new URLSearchParams(location.search);if(qs.get('first_access')==='1'||qs.get('reset_password')==='1')return renderSetPassword();
   if(r==='/equipe')return renderTeamAdmin();
   if(r==='/produtividade')return renderProductivity();
@@ -849,7 +876,7 @@ ensureLibraries = async function(){
   if(epoch===accountContextEpoch&&uid===accountOwnerId())libraryWorkspaces=Object.fromEntries((fresh||[]).map(w=>[w.workspace_type,w]));
 };
 
-async function loadProjects(){const {data,error}=await supabase.from('z19p_projects').select('*').order('started_at',{ascending:false});if(error){console.error(error);return [];}currentProjects=data||[];return currentProjects;}
+async function loadProjects(){const stillCurrent=accountReadGuard();const {data,error}=await supabase.from('z19p_projects').select('*').order('started_at',{ascending:false});if(!stillCurrent())return [];if(error){console.error(error);return [];}currentProjects=data||[];return currentProjects;}
 async function getLatestProject(workspaceId){const {data}=await supabase.from('z19p_projects').select('*').eq('workspace_id',workspaceId).order('sequence_no',{ascending:false}).limit(1).maybeSingle();return data||null;}
 async function startNewProject(workspace,newStatusId,{reminderAt=null}={}){
   const last=await getLatestProject(workspace.id),seq=(last?.sequence_no||0)+1;const {data,error}=await supabase.from('z19p_projects').insert({owner_id:accountOwnerId(),workspace_id:workspace.id,sequence_no:seq,title:`Projeto ${seq}`,created_by:session.user.id,responsible_user_id:workspace.responsible_user_id||session.user.id,status_id:newStatusId||null,reminder_at:reminderAt}).select().single();if(error){toast(error.message,'err');return null;}await logEvent('project_started',`Iniciou o Projeto ${seq}`,{workspaceId:workspace.id,projectId:data.id,entityType:'project',entityId:data.id});return data;
@@ -905,7 +932,9 @@ function publicDiscoveryBannerHTML(){return `<section class="public-discovery"><
 function homeSummaryHTML(){const r=dateRangePreset('today');const started=currentProjects.filter(p=>inRange(p.started_at,r)).length,finalized=currentProjects.filter(p=>inRange(p.finalized_at,r)),revenue=finalized.reduce((s,p)=>s+moneyNumber(p.total_revenue),0),active=workspaces.filter(w=>w.workspace_type==='client'&&!isTerminalStatus(statusById(w.status_id))).length,overdue=workspaces.filter(w=>w.workspace_type==='client'&&workspaceStatusAttention(w)).length;return `<section class="daily-summary compact-daily-summary"><div class="summary-head"><div><div class="eyebrow">Resumo de hoje</div><h2>Operação em tempo real</h2></div>${isAdmin()?'<button class="btn small" id="productivityBtn">Ver produtividade →</button>':''}</div><div class="summary-cards"><div><small>Em andamento</small><b>${active}</b></div><div class="warn"><small>Precisam de atenção</small><b>${overdue}</b></div><div><small>Iniciados hoje</small><b>${started}</b></div><div><small>Finalizados hoje</small><b>${finalized.length}</b></div><div class="money"><small>Faturamento hoje</small><b>${fmtMoney(revenue)}</b></div></div></section>`;}
 
 function myCommissionCardHTML(){
-  if(isAdmin()||!myCommissionSummary.enabled)return '';
+  if(isAdmin())return '';
+  if(myCommissionSummary.unavailable)return '<section class="my-commission-card" role="status"><div><div class="eyebrow">Minha comissão</div><h2>Valores indisponíveis</h2><p>Não foi possível atualizar as comissões. Isso não significa saldo zero. Reabra esta página para tentar novamente.</p></div></section>';
+  if(!myCommissionSummary.enabled)return '';
   return `<section class="my-commission-card"><div><div class="eyebrow">Minha comissão</div><h2>Seus valores</h2><p>Somente você e o administrador conseguem ver estes valores.</p></div><div class="my-commission-values"><span><small>Aguardando</small><b>${fmtMoney(myCommissionSummary.pending)}</b></span><span><small>Aprovada</small><b>${fmtMoney(myCommissionSummary.approved)}</b></span><span class="paid"><small>Recebida</small><b>${fmtMoney(myCommissionSummary.paid)}</b></span></div></section>`;
 }
 
@@ -915,7 +944,7 @@ function dashboardClientListsHTML(items=workspaces){
 }
 
 renderDashboard = async function(){
-  await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadWorkspaces(),loadProjects(),loadQualityCommentCount(),loadCommissionContext()]);
+  const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects(),loadQualityCommentCount(),loadCommissionContext()]);if(!stillCurrent())return;
   const content=`<main class="container simple-container dashboard-home"><section class="simple-hero dashboard-hero"><div><div class="eyebrow">019 Personalizações</div><h1>Clientes</h1><p>Acompanhe primeiro os atendimentos que precisam de ação.</p></div><div class="hero-actions"><button class="btn primary" id="newWorkspace">${icon('plus')} Nova empresa</button></div></section>${homeSummaryHTML()}${myCommissionCardHTML()}<div class="toolbar clean-toolbar client-toolbar"><div class="search">${icon('search')}<input id="workspaceSearch" placeholder="Buscar empresa, cliente ou telefone..."></div><div class="status-filter-wrap"><select id="statusFilter" class="btn compact-select"><option value="all">Todos os status</option><option value="none">Sem status</option>${statuses.map(s=>`<option value="${s.id}">${escapeHTML(s.name)}</option>`).join('')}</select></div></div><div id="dashboardClientLists">${dashboardClientListsHTML(workspaces)}</div></main>`;
   app.innerHTML=shell(content);bindCommon();$('#newWorkspace').onclick=()=>openWorkspaceModal();$('#productivityBtn')?.addEventListener('click',()=>nav('/produtividade'));
   const redraw=()=>{const q=($('#workspaceSearch').value||'').toLowerCase(),st=$('#statusFilter').value;const f=workspaces.filter(w=>`${w.company_name} ${w.client_name||''} ${w.phone||''}`.toLowerCase().includes(q)&&(st==='all'||(st==='none'&&!w.status_id)||w.status_id===st));$('#dashboardClientLists').innerHTML=dashboardClientListsHTML(f);bindWorkspaceCards();};$('#workspaceSearch').oninput=redraw;$('#statusFilter').onchange=redraw;bindWorkspaceCards();updateStatusAgeLabels();dashboardAgingTimer=setInterval(()=>{if(route()==='/'){redraw();updateStatusAgeLabels();}},60000);
@@ -955,8 +984,9 @@ openWorkspaceModal = function(existing=null){
 createDefaultFoldersForWorkspace = async function(workspaceId){if(!workspaceId||!session?.user?.id)return true;if(!folderTemplates.length)await loadConfig();if(!folderTemplates.length)return true;const rows=folderTemplates.map((f,i)=>({owner_id:accountOwnerId(),workspace_id:workspaceId,name:f.name,purpose:f.purpose||null,sort_order:f.sort_order??((i+1)*10),created_by:session.user.id,updated_by:session.user.id}));const {error}=await supabase.from('z19p_folders').insert(rows);if(error){toast('A empresa foi criada, mas não foi possível gerar as pastas padrão.','err');return false;}return true;};
 
 async function renderTeamAdmin(){
-  await loadTeamContext();if(!isAdmin()){toast('Área disponível apenas para o administrador.','err');return nav('/');}
+  const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;if(!isAdmin()){toast('Área disponível apenas para o administrador.','err');return nav('/');}
   const {data:loginHistory}=await supabase.from('z19p_audit_log').select('*').eq('action','login').order('created_at',{ascending:false}).limit(80);
+  if(!stillCurrent())return;
   const rows=teamProfiles.map(p=>`<article class="team-row ${p.active?'':'disabled'}"><div class="avatar">${escapeHTML((p.full_name||'?').slice(0,1).toUpperCase())}</div><div class="team-copy"><b>${escapeHTML(p.full_name)}</b><span>${escapeHTML(p.email||'')}</span><small>${p.phone?escapeHTML(p.phone)+' • ':''}${p.role==='admin'?'Administrador':'Funcionário'}${p.last_login_at?` • Último acesso ${new Date(p.last_login_at).toLocaleString('pt-BR')}`:''}</small></div><div class="team-actions">${p.id!==session.user.id?`<button class="btn small reset-user" data-id="${p.id}">Redefinir senha</button><button class="btn small toggle-user" data-id="${p.id}" data-active="${p.active?'0':'1'}">${p.active?'Desativar':'Reativar'}</button>`:''}<button class="btn ghost small edit-profile" data-id="${p.id}">Editar</button></div></article>`).join('');
   app.innerHTML=shell(`<main class="container simple-container"><section class="simple-hero"><div><div class="eyebrow">Administração</div><h1>Equipe</h1><p>Convites, contatos, acessos e histórico da equipe.</p></div><div class="hero-actions"><button class="btn" data-nav="/produtividade">Produtividade</button><button class="btn primary" id="inviteUser">+ Novo usuário</button></div></section><div class="security-note"><b>Senhas são privadas.</b><span>O funcionário define a própria senha no primeiro acesso. O administrador pode enviar uma redefinição, mas não visualizar a senha atual.</span></div><section class="team-list">${rows}</section><section class="activity-section login-history"><div class="section-title-row"><div><div class="eyebrow">Segurança</div><h2>Histórico de acessos</h2><p>Entradas registradas por usuário.</p></div></div><div class="activity-list">${(loginHistory||[]).length?(loginHistory||[]).map(a=>`<div class="activity-row"><span class="avatar tiny">${escapeHTML(profileName(a.actor_user_id).slice(0,1))}</span><div><b>${escapeHTML(profileName(a.actor_user_id))}</b><p>Entrou no sistema</p><small>${new Date(a.created_at).toLocaleString('pt-BR')}</small></div></div>`).join(''):'<div class="empty mini">Nenhum acesso registrado ainda.</div>'}</div></section></main>`,{back:true});bindCommon();$('#inviteUser').onclick=openInviteUser;$$('.reset-user').forEach(b=>b.onclick=()=>teamAdminAction('reset_password',{user_id:b.dataset.id}));$$('.toggle-user').forEach(b=>b.onclick=()=>teamAdminAction('set_active',{user_id:b.dataset.id,active:b.dataset.active==='1'}));$$('.edit-profile').forEach(b=>b.onclick=()=>openEditProfile(profileById(b.dataset.id)));
 }
@@ -966,8 +996,8 @@ function openEditProfile(p){if(!p)return;const m=document.createElement('div');m
 
 function periodLabel(key,range){return key==='today'?'Hoje':key==='yesterday'?'Ontem':key==='7d'?'Últimos 7 dias':key==='30d'?'Últimos 30 dias':key==='last_month'?'Mês passado':`${range.start.toLocaleDateString('pt-BR')} a ${range.end.toLocaleDateString('pt-BR')}`;}
 async function renderProductivity(){
-  await loadTeamContext();await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);if(!isAdmin()){toast('Dashboard de produtividade disponível para o administrador.','err');return nav('/');}
-  const {data:a}=await supabase.from('z19p_audit_log').select('*').order('created_at',{ascending:false}).limit(500);auditEntries=a||[];
+  const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);if(!stillCurrent())return;if(!isAdmin()){toast('Dashboard de produtividade disponível para o administrador.','err');return nav('/');}
+  const {data:a}=await supabase.from('z19p_audit_log').select('*').order('created_at',{ascending:false}).limit(500);if(!stillCurrent())return;auditEntries=a||[];
   app.innerHTML=shell(`<main class="container simple-container"><section class="simple-hero"><div><div class="eyebrow">Gestão</div><h1>Produtividade</h1><p>Atendimentos, conversão, faturamento e responsabilidade por usuário.</p></div><div class="hero-actions"><button class="btn" data-nav="/equipe">Equipe</button></div></section><div class="period-toolbar"><select id="periodPreset" class="btn compact-select"><option value="today">Hoje</option><option value="yesterday">Ontem</option><option value="7d">Últimos 7 dias</option><option value="30d">Últimos 30 dias</option><option value="last_month">Mês passado</option><option value="month">Escolher mês</option><option value="custom">Data personalizada</option></select><input id="periodMonth" type="month" class="btn period-extra hidden"><input id="periodStart" type="date" class="btn period-extra hidden"><input id="periodEnd" type="date" class="btn period-extra hidden"><select id="sellerFilter" class="btn compact-select"><option value="all">Todos os vendedores</option>${teamProfiles.map(p=>`<option value="${p.id}">${escapeHTML(p.full_name)}</option>`).join('')}</select></div><div id="productivityBody"></div></main>`,{back:true});bindCommon();const redraw=()=>drawProductivity($('#periodPreset').value,$('#sellerFilter').value);$('#periodPreset').onchange=()=>{const v=$('#periodPreset').value;$('#periodMonth').classList.toggle('hidden',v!=='month');$('#periodStart').classList.toggle('hidden',v!=='custom');$('#periodEnd').classList.toggle('hidden',v!=='custom');redraw();};$('#sellerFilter').onchange=redraw;$('#periodMonth').onchange=redraw;$('#periodStart').onchange=redraw;$('#periodEnd').onchange=redraw;redraw();
 }
 function drawProductivity(key,sellerId='all'){
@@ -1073,7 +1103,7 @@ openWorkspaceActions = function(w){
 };
 
 renderWorkspace = async function(id){
-  await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadCommissionContext()]);const [{data:w,error:we},{data:f},{data:a},{data:ps}]=await Promise.all([supabase.from('z19p_workspaces').select('*').eq('id',id).single(),supabase.from('z19p_folders').select('*').eq('workspace_id',id).order('sort_order').order('name'),supabase.from('z19p_assets').select('*').eq('workspace_id',id).order('created_at',{ascending:false}),supabase.from('z19p_projects').select('*').eq('workspace_id',id).order('sequence_no',{ascending:false})]);if(we||!w){toast('Ambiente não encontrado.','err');return nav('/');}currentWorkspace=w;currentProjects=ps||[];const isLibrary=w.workspace_type&&w.workspace_type!=='client',isMockupsLibrary=w.workspace_type==='library_mockups',isVideosLibrary=w.workspace_type==='library_videos',activeProject=currentProjects[0]||null;currentFolders=isLibrary?(f||[]):(f||[]).filter(folder=>activeProject?folder.project_id===activeProject.id:!folder.project_id);currentAssets=isLibrary?(a||[]):(a||[]).filter(asset=>activeProject?asset.project_id===activeProject.id:!asset.project_id);activeFolder='all';if(isLibrary)currentQuotes=[];else await loadQuotes(id,activeProject?.id);let audits=[];if(isAdmin()&&!isLibrary){const {data}=await supabase.from('z19p_audit_log').select('*').eq('workspace_id',id).order('created_at',{ascending:false}).limit(30);audits=data||[];}const st=statusById(w.status_id),logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa'),logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null,logoUrl=logoAsset?publicUrl(logoAsset.processed_path||logoAsset.original_path):'',bannerIcon=logoUrl?`<div class="workspace-banner-logo"><img src="${logoUrl}" alt="Logo"></div>`:'';const bannerActions=isLibrary?`${isVideosLibrary?`<button class="btn" id="qualityCatalogAdmin">Gerenciar qualidades</button><button class="btn whatsapp" id="demoComposerBtn">WA Demonstrar</button>`:''}<button class="btn primary" id="uploadBtn">${icon('upload')} ${isVideosLibrary?'Salvar vídeo':isMockupsLibrary?'Adicionar mockup':'Subir arte'}</button>`:`${w.phone?`<button class="btn whatsapp" id="workspaceWhatsapp">WA WhatsApp</button>`:''}<button class="btn" id="mockupBtn">${icon('image')} Adicionar mockup</button><button class="btn primary" id="uploadBtn">${icon('upload')} Subir arte</button><button class="btn ghost" id="workspaceMore">•••</button>`;const attention=isLibrary?null:workspaceStatusAttention(w),statusAge=isLibrary?null:workspaceStatusDuration(w),agingNotice=attention?`<div class="workspace-aging-notice"><span class="attention-pulse"></span><div><b>${attention.reminder?escapeHTML(attention.label):`Status sem alteração há ${escapeHTML(attention.label)}`}</b><small>Entre em contato e atualize o andamento.</small></div>${w.phone?`<button class="btn whatsapp small" id="agingWhatsapp">WA WhatsApp</button>`:''}</div>`:'',statusAgeDetail=statusAge?`<div class="workspace-status-age" data-status-age-since="${escapeHTML(statusAge.changedAt.toISOString())}"><span class="status-age-dot"></span><span>Há <b>${escapeHTML(statusAge.label)}</b> neste status</span></div>`:'';
+  const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadCommissionContext()]);if(!stillCurrent())return;const [{data:w,error:we},{data:f,error:fe},{data:a,error:ae},{data:ps,error:pe}]=await Promise.all([supabase.from('z19p_workspaces').select('*').eq('id',id).single(),supabase.from('z19p_folders').select('*').eq('workspace_id',id).order('sort_order').order('name'),supabase.from('z19p_assets').select('*').eq('workspace_id',id).order('created_at',{ascending:false}),supabase.from('z19p_projects').select('*').eq('workspace_id',id).order('sequence_no',{ascending:false})]);if(!stillCurrent())return;for(const [error,part] of [[we,'os dados da empresa'],[fe,'as pastas da empresa'],[ae,'as artes da empresa'],[pe,'os projetos da empresa']])if(error)throw new Error('Não foi possível carregar '+part+'. Verifique a conexão e tente novamente.');if(!w){toast('Ambiente não encontrado.','err');return nav('/');}currentWorkspace=w;currentProjects=ps||[];const isLibrary=w.workspace_type&&w.workspace_type!=='client',isMockupsLibrary=w.workspace_type==='library_mockups',isVideosLibrary=w.workspace_type==='library_videos',activeProject=currentProjects[0]||null;currentFolders=isLibrary?(f||[]):(f||[]).filter(folder=>activeProject?folder.project_id===activeProject.id:!folder.project_id);currentAssets=isLibrary?(a||[]):(a||[]).filter(asset=>activeProject?asset.project_id===activeProject.id:!asset.project_id);activeFolder='all';if(isLibrary)currentQuotes=[];else{await loadQuotes(id,activeProject?.id);if(!stillCurrent())return;}let audits=[];if(isAdmin()&&!isLibrary){const {data}=await supabase.from('z19p_audit_log').select('*').eq('workspace_id',id).order('created_at',{ascending:false}).limit(30);if(!stillCurrent())return;audits=data||[];}const st=statusById(w.status_id),logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa'),logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null,logoUrl=logoAsset?publicUrl(logoAsset.processed_path||logoAsset.original_path):'',bannerIcon=logoUrl?`<div class="workspace-banner-logo"><img src="${logoUrl}" alt="Logo"></div>`:'';const bannerActions=isLibrary?`${isVideosLibrary?`<button class="btn" id="qualityCatalogAdmin">Gerenciar qualidades</button><button class="btn whatsapp" id="demoComposerBtn">WA Demonstrar</button>`:''}<button class="btn primary" id="uploadBtn">${icon('upload')} ${isVideosLibrary?'Salvar vídeo':isMockupsLibrary?'Adicionar mockup':'Subir arte'}</button>`:`${w.phone?`<button class="btn whatsapp" id="workspaceWhatsapp">WA WhatsApp</button>`:''}<button class="btn" id="mockupBtn">${icon('image')} Adicionar mockup</button><button class="btn primary" id="uploadBtn">${icon('upload')} Subir arte</button><button class="btn ghost" id="workspaceMore">•••</button>`;const attention=isLibrary?null:workspaceStatusAttention(w),statusAge=isLibrary?null:workspaceStatusDuration(w),agingNotice=attention?`<div class="workspace-aging-notice"><span class="attention-pulse"></span><div><b>${attention.reminder?escapeHTML(attention.label):`Status sem alteração há ${escapeHTML(attention.label)}`}</b><small>Entre em contato e atualize o andamento.</small></div>${w.phone?`<button class="btn whatsapp small" id="agingWhatsapp">WA WhatsApp</button>`:''}</div>`:'',statusAgeDetail=statusAge?`<div class="workspace-status-age" data-status-age-since="${escapeHTML(statusAge.changedAt.toISOString())}"><span class="status-age-dot"></span><span>Há <b>${escapeHTML(statusAge.label)}</b> neste status</span></div>`:'';
   const lifetime=currentProjects.reduce((o,p)=>{o.projects++;if(p.finalized_at)o.finalized++;o.shirt+=moneyNumber(p.shirt_revenue);o.print+=moneyNumber(p.print_revenue);o.total+=moneyNumber(p.total_revenue);return o;},{projects:0,finalized:0,shirt:0,print:0,total:0});const latest=currentProjects[0];const teamInfo=isLibrary?'':`<section class="workspace-team-card"><div><small>Cadastrado por</small><b>${escapeHTML(profileName(w.created_by))}</b></div><div><small>Responsável atual</small><b>${escapeHTML(profileName(w.responsible_user_id))}</b></div>${!isFinalizedStatus(st)&&w.responsible_user_id!==session.user.id?`<button class="btn small" id="claimWorkspaceDetail">Puxar pra mim</button>`:''}${isAdmin()?`<select id="assignResponsible" class="btn compact-select">${teamProfiles.filter(p=>p.active).map(p=>`<option value="${p.id}" ${w.responsible_user_id===p.id?'selected':''}>${escapeHTML(p.full_name)}</option>`).join('')}</select>`:''}</section>`;
   const lifetimeHTML=isLibrary?'':`<section class="lifetime-summary"><div><small>Projetos</small><b>${lifetime.projects}</b></div><div><small>Finalizados</small><b>${lifetime.finalized}</b></div><div><small>Camisas</small><b>${fmtMoney(lifetime.shirt)}</b></div><div><small>Estampas</small><b>${fmtMoney(lifetime.print)}</b></div><div class="total"><small>Total da empresa</small><b>${fmtMoney(lifetime.total)}</b></div></section>`;
   const projectHistory=isLibrary?'':`<section class="project-history"><div class="section-title-row"><div><div class="eyebrow">Projetos</div><h2>Histórico da empresa</h2></div></div><div class="project-history-list">${currentProjects.length?currentProjects.map(p=>{const pst=statusById(p.status_id),when=p.finalized_at||p.desisted_at||p.started_at;return `<div class="project-history-row"><div><b>${escapeHTML(p.title||`Projeto ${p.sequence_no}`)}</b><small>Iniciado em ${new Date(p.started_at).toLocaleDateString('pt-BR')} • ${escapeHTML(profileName(p.responsible_user_id||p.created_by))}</small></div><span>${pst?escapeHTML(pst.name):'Sem status'}</span><strong>${p.finalized_at?fmtMoney(p.total_revenue):when?new Date(when).toLocaleDateString('pt-BR'):'—'}</strong></div>`}).join(''):'<div class="empty mini">Nenhum projeto registrado.</div>'}</div></section>`;
@@ -1109,7 +1139,7 @@ productionModule=createProductionModule({
   getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
   openArtMockup:(asset,options)=>artStudio.openMockup(asset,options),openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>artStudio.openGarment(asset,options),
   openArt3D:asset=>artStudio.openGarment(asset,{initialAction:'3d'}),openArtPresentation:asset=>artStudio.openGarment(asset,{initialAction:'share3d'}),openArtBlank:asset=>artStudio.openGarment(asset,{initialAction:'blank'}),
-  prepareDashboard:async()=>{await loadTeamContext();await ensureDefaults();await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
+  prepareDashboard:async()=>{const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
   state:()=>({session,currentProfile,teamProfiles,workspaces,currentProjects,currentWorkspace,currentFolders,currentAssets,currentQuotes,statuses})
 });
 
@@ -1118,10 +1148,10 @@ artStudio=createArtStudio({supabase,publicUrl,setPngDpi,toast,logEvent,accountOw
 projectAdvisor=createProjectAdvisorUI({supabase,app,accountOwnerId,route,nav,toast,state:()=>({workspaces,currentWorkspace,currentProjects,currentAssets,currentFolders,currentQuotes,statuses,teamProfiles,session}),openQuote:()=>openQuoteModal(),editWorkspace:workspace=>openWorkspaceModal(workspace),openPrintProfile:asset=>productionModule.openPrintProfile(asset),askDeliveryDate:initial=>productionModule.askDeliveryDate(initial),renderWorkspace:id=>renderWorkspace(id)});
 
 const renderDashboardV216=renderDashboard;
-renderDashboard=async function(){const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderDashboardV216();const libraries=app.querySelector('.library-launcher');if(libraries&&!libraries.querySelector('[data-open-studio]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card studio-launch-card" data-open-studio><span class="library-symbol">◈</span><span><b>Estúdio de mockups</b><small>Comece pela camiseta. Monte frente, costas e mangas.</small></span><i>→</i></button>');libraries.querySelector('[data-open-studio]').onclick=()=>nav('/studio')}await productionModule.enhanceDashboard();await projectAdvisor.refreshDashboard();if(ticket)routeViewport.complete(ticket);};
+renderDashboard=async function(){const stillCurrent=accountReadGuard(true);const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderDashboardV216();if(!stillCurrent())return;const libraries=app.querySelector('.library-launcher');if(libraries&&!libraries.querySelector('[data-open-studio]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card studio-launch-card" data-open-studio><span class="library-symbol">◈</span><span><b>Estúdio de mockups</b><small>Comece pela camiseta. Monte frente, costas e mangas.</small></span><i>→</i></button>');libraries.querySelector('[data-open-studio]').onclick=()=>nav('/studio')}await productionModule.enhanceDashboard();if(!stillCurrent())return;await projectAdvisor.refreshDashboard();if(!stillCurrent())return;if(ticket)routeViewport.complete(ticket);};
 
 const renderWorkspaceV216=renderWorkspace;
-renderWorkspace=async function(id){const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderWorkspaceV216(id);if(currentWorkspace?.id===id){const banner=app.querySelector('.workspace-banner');if(banner&&currentWorkspace.workspace_type!=='library_videos'&&!banner.querySelector('[data-open-studio]')){const button=document.createElement('button');button.className='btn';button.dataset.openStudio='';button.textContent='◈ Estúdio de mockups';button.onclick=()=>nav('/studio');banner.append(button)}await productionModule.enhanceWorkspace();bindProjectHistory(app,{supabase,workspace:currentWorkspace,projects:currentProjects,statuses,publicUrl,profileName,fmtMoney,quoteTotal,quoteItemUnit,toast});await projectAdvisor.enhanceWorkspace()}if(ticket)routeViewport.complete(ticket);};
+renderWorkspace=async function(id){const stillCurrent=accountReadGuard(true);const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderWorkspaceV216(id);if(!stillCurrent())return;if(currentWorkspace?.id===id){const banner=app.querySelector('.workspace-banner');if(banner&&currentWorkspace.workspace_type!=='library_videos'&&!banner.querySelector('[data-open-studio]')){const button=document.createElement('button');button.className='btn';button.dataset.openStudio='';button.textContent='◈ Estúdio de mockups';button.onclick=()=>nav('/studio');banner.append(button)}await productionModule.enhanceWorkspace();if(!stillCurrent())return;bindProjectHistory(app,{supabase,workspace:currentWorkspace,projects:currentProjects,statuses,publicUrl,profileName,fmtMoney,quoteTotal,quoteItemUnit,toast});await projectAdvisor.enhanceWorkspace();if(!stillCurrent())return}if(ticket)routeViewport.complete(ticket);};
 
 const renderPublicV216=renderPublic;
 renderPublic=async function(token){await renderPublicV216(token);await productionModule.enhancePublic(token);};
@@ -1141,12 +1171,15 @@ const renderRouteV216=renderRoute;
 const routeViewport=createRouteViewportController({getRoute:route,root:app});
 let renderingRoute=false,routeRequested=false;
 async function renderCurrentRoute(){
+  const stillCurrent=accountReadGuard(true);
   if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}
   const current=route();
   const accessParams=new URLSearchParams(location.search);
   if(accessParams.get('first_access')==='1'||accessParams.get('reset_password')==='1')return renderRouteV216();
-  if(session&&!current.startsWith('/cliente/')&&!await loadTeamContext())throw new Error('Não foi possível confirmar o perfil desta conta. Tente novamente ou entre novamente.');
+  if(session&&!current.startsWith('/cliente/')&&!await loadTeamContext({reuseRoute:true}))throw new Error('Não foi possível confirmar o perfil desta conta. Tente novamente ou entre novamente.');
+  if(!stillCurrent())return;
   if(session&&(current==='/times'||current==='/filme'||current.startsWith('/fila/')))await loadConfig();
+  if(!stillCurrent())return;
   if(session&&current.startsWith('/fila/'))return productionModule.renderQueue(current.split('/')[2]);
   if(session&&current==='/times')return productionModule.renderTeams();
   if(session&&current==='/filme')return productionModule.renderFilm();
@@ -1163,6 +1196,7 @@ renderRoute=async function(){
   try{
     while(routeRequested){
       routeRequested=false;const ticket=routeViewport.begin(route());
+      routeAccessCheck={userId:session?.user?.id,epoch:accountContextEpoch,path:ticket.path,confirmed:false};
       try{await renderCurrentRoute()}catch(error){
         if(ticket.path!==route()||routeRequested){routeRequested=true;continue}
         console.error('Falha ao abrir tela',error);
@@ -1171,7 +1205,7 @@ renderRoute=async function(){
       if(ticket.path!==route()){routeRequested=true;continue}
       routeViewport.complete(ticket);
     }
-  }finally{renderingRoute=false}
+  }finally{renderingRoute=false;routeAccessCheck=null}
 };
 
 

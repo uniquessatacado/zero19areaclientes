@@ -1,6 +1,25 @@
+  const letteringLayoutCache=new Map();
+  let letteringLayoutCacheGeneration=-1,letteringLayoutCacheEpoch=0;
+  function clearLetteringLayoutCache(){letteringLayoutCache.clear();letteringLayoutCacheGeneration=productionAccountGeneration;letteringLayoutCacheEpoch++;}
   async function prepareLetteringLayout(item){
-    const legacy=await prepareLegacyLetteringLayout(item);
-    return refineLetteringLayout(item,legacy,{drawLine:drawPreparedLetteringLine,sanitizeSvg,hasGlyph:(family,char)=>fontCoverageByFamily.get(family)?.hasGlyph(char)===true});
+    if(letteringLayoutCacheGeneration!==productionAccountGeneration)clearLetteringLayoutCache();
+    // Cache the exact recipe, not a version flag. Geometry, text, spacing, font
+    // paths/mappings, SVG contents and all future recipe fields remain in the key.
+    // Only presentation/identity fields that are not read by either layout engine
+    // are excluded. Do not retain the large preview bitmap in the key/snapshot.
+    const recipe={...item};
+    for(const key of ['previewDataUrl','previewQualityVersion','localId','label','quantity','compositionGroupId'])delete recipe[key];
+    const key=JSON.stringify(recipe,(_key,value)=>{if(typeof value==='number'&&!Number.isFinite(value))throw new Error('A receita da personalização contém uma medida inválida.');return value;}),generation=productionAccountGeneration,epoch=letteringLayoutCacheEpoch;
+    let loading=letteringLayoutCache.get(key);
+    if(loading){letteringLayoutCache.delete(key);letteringLayoutCache.set(key,loading);}
+    else{
+      const snapshot=structuredClone(recipe),check=()=>{if(generation!==productionAccountGeneration||epoch!==letteringLayoutCacheEpoch)throw new DOMException('A conta ou a receita da personalização mudou. Reabra o filme.','AbortError')};
+      loading=(async()=>{check();const legacy=await prepareLegacyLetteringLayout(snapshot);check();const layout=await refineLetteringLayout(snapshot,legacy,{drawLine:drawPreparedLetteringLine,sanitizeSvg,hasGlyph:(family,char)=>fontCoverageByFamily.get(family)?.hasGlyph(char)===true});check();return layout;})();
+      letteringLayoutCache.set(key,loading);
+      if(letteringLayoutCache.size>32)letteringLayoutCache.delete(letteringLayoutCache.keys().next().value);
+    }
+    try{const layout=await loading;if(generation!==productionAccountGeneration||epoch!==letteringLayoutCacheEpoch)throw new DOMException('A conta mudou durante a preparação. Reabra o filme.','AbortError');return layout;}
+    catch(error){if(letteringLayoutCache.get(key)===loading)letteringLayoutCache.delete(key);throw error;}
   }
 
   async function upgradeCurrentLettering(current=()=>true){

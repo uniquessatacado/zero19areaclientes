@@ -2,6 +2,8 @@ import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core
 import {openFilmAssetPicker} from './film-picker.js?v=2.17.5';
 import {mountFilmPreview} from './film-preview.js?v=2.17.5';
 import {removeFilmEntry} from './film-edit-core.js?v=2.17.9';
+import {createFilmMaskCache} from './film-mask-cache.js?v=2.17.10';
+import {listFilmJobs,getFilmJob} from './film-job-list.js?v=2.17.10';
 import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.5';
 import {exportCanvasWithSpot,spotCanvasGeometry,throwIfSpotCancelled} from './film-spot-export.js?v=2.17.9';
 import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.5';
@@ -696,7 +698,8 @@ export function createProductionModule(ctx){
   function schemaMissing(error){console.error(error);const schemaError=['42P01','42703','PGRST202','PGRST205'].includes(error?.code);app.innerHTML=ctx.shell(`<main class="container"><div class="empty"><b>${schemaError?'Estrutura de produção indisponível':'Não foi possível carregar esta tela'}</b><p>${h(error.message||'Confira a conexão e tente novamente.')}</p><button class="btn primary" id="retryProductionView">Tentar novamente</button></div></main>`,{back:true});ctx.bindCommon();app.querySelector('#retryProductionView').onclick=()=>safe(()=>location.hash.includes('/times')?renderTeams():renderFilm())}
 
   async function allProductionRows(table,columns='*',configure=query=>query,key='id'){
-    const rows=[];for(let start=0;start<100000;start+=500){const query=configure(supabase.from(table).select(columns).eq('owner_id',owner()));const result=await query.order(key).range(start,start+499);if(result.error)throw result.error;rows.push(...(result.data||[]));if((result.data||[]).length<500)return rows}throw new Error('Biblioteca muito grande para carregar de uma vez. Refine os registros.');
+    try{const rows=[];for(let start=0;start<100000;start+=500){const query=configure(supabase.from(table).select(columns).eq('owner_id',owner()));const result=await query.order(key).range(start,start+499);if(result.error)throw result.error;rows.push(...(result.data||[]));if((result.data||[]).length<500)return rows}throw new Error('Biblioteca muito grande para carregar de uma vez. Refine os registros.');}
+    catch(error){const contextual=new Error('Não foi possível carregar '+table.replace(/^z19p_/,'')+': '+(error?.message||'confira a conexão e tente novamente.'));contextual.code=error?.code;throw contextual;}
   }
   async function productionByIds(table,key,ids){const rows=[];for(let start=0;start<ids.length;start+=150)rows.push(...await allProductionRows(table,'*',query=>query.in(key,ids.slice(start,start+150))));return rows}
   let filmDraftOwner=null,filmDraftUser=null,filmDraftStore=null,filmDraftTimer=null,filmDraftLoaded=false,filmDraftSavedAt=null,filmDraftWarning='',filmDraftNote='',filmDraftDirty=false,filmDraftRestoring=null,filmCalculationGeneration=0,filmDraftSaving=false,filmDraftChange=0,filmDraftConflict=false,filmDraftLegacy=null,filmDraftLegacyActive=false,filmDraftWrite=null;
@@ -707,6 +710,7 @@ export function createProductionModule(ctx){
     queueRows=[];queueSnapshot=null;launcherScope='all';lastFilm=null;filmItems=[];filmSettings=freshFilmSettings();filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
     if(typeof document!=='undefined'){for(const face of document.fonts||[])if(fontCoverageByFamily.has(face.family))document.fonts.delete(face);document.querySelector('[data-film-draft-confirm]')?.remove();}
     fontCache.clear();fontCoverageByFamily.clear();
+    if(typeof clearLetteringLayoutCache==='function')clearLetteringLayoutCache();
   }
   function filmDraftBanner(){
     const page=app.querySelector('.film-page');if(!page)return;
@@ -802,25 +806,75 @@ export function createProductionModule(ctx){
     await restoreFilmDraft();
     if(!renderCurrent())return false;
     filmCostPanel?.destroy();filmCostPanel=null;
-    const [profilesResult,mediaResult,setsResult,jobsResult]=await Promise.all([allProductionRows('z19p_asset_print_profiles','*',q=>q.eq('ready_for_print',true),'asset_id').then(data=>({data})).catch(error=>({error})),ensureMediaProfiles().then(data=>({data})).catch(error=>({error})),allProductionRows('z19p_customization_sets','*',q=>q.eq('status','ready')).then(data=>({data})).catch(error=>({error})),supabase.from('z19p_print_jobs').select('*').order('updated_at',{ascending:false}).limit(12)]);
+    const [profilesResult,mediaResult,setsResult]=await Promise.all([allProductionRows('z19p_asset_print_profiles','*',q=>q.eq('ready_for_print',true),'asset_id').then(data=>({data})).catch(error=>({error})),ensureMediaProfiles().then(data=>({data})).catch(error=>({error})),allProductionRows('z19p_customization_sets','*',q=>q.eq('status','ready')).then(data=>({data})).catch(error=>({error}))]);
     if(!renderCurrent())return false;
-    for(const result of [profilesResult,mediaResult,setsResult,jobsResult])if(result.error)return schemaMissing(result.error);
+    for(const result of [profilesResult,mediaResult,setsResult])if(result.error)return schemaMissing(result.error);
     const profiles=profilesResult.data||[],media=mediaResult.data||[],readySets=setsResult.data||[],assetIds=profiles.map(p=>p.asset_id),setIds=readySets.map(set=>set.id);let assets,sources,glyphs,palettes;try{[assets,sources,glyphs,palettes]=await Promise.all([productionByIds('z19p_assets','id',assetIds),productionByIds('z19p_customization_sources','set_id',setIds),productionByIds('z19p_customization_glyphs','set_id',setIds),productionByIds('z19p_customization_palettes','set_id',setIds)])}catch(error){return renderCurrent()?schemaMissing(error):false}if(!renderCurrent())return false;const assetMap=new Map(assets.map(a=>[a.id,a]));
     const kitIds=[...new Set(readySets.map(set=>set.kit_id))];let readyKits,readyTeams;try{readyKits=await productionByIds('z19p_team_kits','id',kitIds);readyTeams=await productionByIds('z19p_teams','id',[...new Set(readyKits.map(kit=>kit.team_id))])}catch(error){return renderCurrent()?schemaMissing(error):false}if(!renderCurrent())return false;const readyKitMap=new Map(readyKits.map(kit=>[kit.id,kit])),readyTeamMap=new Map(readyTeams.map(team=>[team.id,team]));
     for(const set of readySets){const kit=readyKitMap.get(set.kit_id),team=readyTeamMap.get(kit?.team_id),setSources=(sources||[]).filter(source=>source.set_id===set.id);set._team=team;set._kit=kit;set._kind=customizationKind(set);set._sources=setSources;set._source=setSources.filter(source=>['ttf','otf'].includes(source.source_type)&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._vectorSource=setSources.filter(source=>source.source_type==='svg'&&source.is_working_source).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0))[0]||null;set._glyphs=(glyphs||[]).filter(glyph=>glyph.set_id===set.id);set._palette=(palettes||[]).filter(color=>color.set_id===set.id);set._path=[team?.name,kit?.season,kit?.name,SET_KIND_LABEL[set._kind],customizationName(set)].filter(Boolean).join(' → ')}
     if(!renderCurrent())return false;
     if(filmDraftLoaded||filmItems.length){const reconciled=resolveFilmDraftMedia(filmSettings,lastFilm,media);filmSettings=reconciled.settings;lastFilm=reconciled.layout;if(reconciled.changed){filmDraftDirty=true;filmDraftNote=reconciled.warning;}}
-    const jobs=jobsResult.data||[];
-    app.innerHTML=ctx.shell(`<main class="container film-page"><section class="simple-hero"><div><div class="eyebrow">DTF 300 DPI</div><h1>Montar filme</h1><p>Misture artes e personalizações oficiais; escolha organização normal ou aproveitamento máximo.</p></div></section>${jobs.length?`<details class="saved-film-jobs"><summary>Jobs salvos (${jobs.length})</summary><div>${jobs.map(job=>`<button class="saved-film-job" data-job="${job.id}"><b>${h(job.name)}${job.settings_snapshot?.commit_state==='pending'?' · salvamento incompleto':''}</b><span>${Number(job.film_width_cm)} cm × ${Number(job.calculated_length_cm||0).toFixed(1)} cm • ${new Date(job.updated_at).toLocaleString('pt-BR')}</span></button>`).join('')}</div></details>`:''}<section class="film-controls"><div class="field"><label>Filme</label><select id="filmMedia">${media.map(m=>`<option value="${m.id}" data-width="${m.usable_width_cm}" data-segment="${m.max_segment_cm}">${h(m.name)}</option>`).join('')}</select></div><div class="field"><label>Modo</label><select id="filmMode"><option value="normal">Normal — corte fácil</option><option value="maximum">Aproveitamento máximo</option></select></div><div class="field"><label>Gap (mm)</label><input id="filmGap" inputmode="decimal" value="3"></div><button class="btn" id="addFilmAsset">＋ Arte de empresa</button><button class="btn" id="addFilmTeam" ${readySets.length?'':'disabled'}>＋ Personalização de time</button><button class="btn primary" id="calculateFilm">Calcular filme</button></section><section class="film-workspace"><aside><h2>Itens</h2><div id="filmItems">${filmItemsHTML()}</div></aside><div><div id="filmMetrics" class="film-metrics"></div><div class="film-preview-shell"><div id="filmPreview" class="film-preview"><div class="empty">Adicione itens e calcule o encaixe.</div></div></div><div class="film-export-actions"><button class="btn primary" id="exportFilm" disabled>Exportar PNG 300 DPI</button><button class="btn" id="saveFilm" disabled>Salvar job</button></div></div></section></main>`,{back:true});
+    // Saved job payloads are loaded only when opened, never before the editor.
+    app.innerHTML=ctx.shell(`<main class="container film-page"><section class="simple-hero"><div><div class="eyebrow">DTF 300 DPI</div><h1>Montar filme</h1><p>Misture artes e personalizações oficiais; escolha organização normal ou aproveitamento máximo.</p></div></section><section data-film-jobs aria-live="polite"><small>Carregando jobs salvos…</small></section><section class="film-controls"><div class="field"><label>Filme</label><select id="filmMedia">${media.map(m=>`<option value="${m.id}" data-width="${m.usable_width_cm}" data-segment="${m.max_segment_cm}">${h(m.name)}</option>`).join('')}</select></div><div class="field"><label>Modo</label><select id="filmMode"><option value="normal">Normal — corte fácil</option><option value="maximum">Aproveitamento máximo</option></select></div><div class="field"><label>Gap (mm)</label><input id="filmGap" inputmode="decimal" value="3"></div><button class="btn" id="addFilmAsset">＋ Arte de empresa</button><button class="btn" id="addFilmTeam" ${readySets.length?'':'disabled'}>＋ Personalização de time</button><button class="btn primary" id="calculateFilm">Calcular filme</button></section><section class="film-workspace"><aside><h2>Itens</h2><div id="filmItems">${filmItemsHTML()}</div></aside><div><div id="filmMetrics" class="film-metrics"></div><div class="film-preview-shell"><div id="filmPreview" class="film-preview"><div class="empty">Adicione itens e calcule o encaixe.</div></div></div><div class="film-export-actions"><button class="btn primary" id="exportFilm" disabled>Exportar PNG 300 DPI</button><button class="btn" id="saveFilm" disabled>Salvar job</button></div></div></section></main>`,{back:true});
     app.querySelector('#filmGap').closest('.field').insertAdjacentHTML('afterend','<label class="film-free-rotation"><span><input id="filmFreeRotation" type="checkbox"> Otimizar com rotação livre</span><small>Busca adicional a cada 30° · sem mudar as medidas</small></label>');const freeControl=app.querySelector('#filmFreeRotation');freeControl.checked=Boolean(filmSettings.freeRotation);
-    const refreshItems=async()=>{filmCalculationGeneration++;filmPreviewGeneration++;filmCostPanel?.invalidate?.();lastFilm=null;filmDraftNote='';saveFilmDraft(true);const rendered=await renderFilm();if(rendered&&filmItems.length)await calculateFilm(media)};ctx.bindCommon();const mediaControl=app.querySelector('#filmMedia'),modeControl=app.querySelector('#filmMode'),gapControl=app.querySelector('#filmGap');mediaControl.value=media.some(m=>m.id===filmSettings.mediaId)?filmSettings.mediaId:media[0]?.id||'';modeControl.value=filmSettings.mode;gapControl.value=String(filmSettings.gapMm).replace('.',',');const invalidate=()=>{filmCostPanel?.invalidate?.();filmCalculationGeneration++;filmPreviewGeneration++;filmSettings={...filmSettings,mediaId:mediaControl.value,mode:modeControl.value,gapMm:Number(gapControl.value.replace(',','.')),freeRotation:freeControl.checked};lastFilm=null;filmCostPanel?.refresh?.();filmDraftNote='';saveFilmDraft();app.querySelector('#filmPreview').innerHTML='<div class="empty">Configuração alterada. Calcule o filme novamente.</div>';app.querySelector('#filmMetrics').innerHTML='';app.querySelector('#filmInspector')?.remove();app.querySelector('#exportFilm').disabled=true;app.querySelector('#saveFilm').disabled=true};mediaControl.onchange=modeControl.onchange=invalidate;gapControl.oninput=invalidate;freeControl.onchange=invalidate;app.querySelector('#addFilmAsset').onclick=()=>safe(()=>pickFilmAsset(profiles,assetMap,refreshItems));app.querySelector('#addFilmTeam').onclick=()=>safe(()=>pickFilmTeam(readySets,refreshItems));app.querySelector('#calculateFilm').onclick=()=>calculateFilm(media);app.querySelector('#exportFilm').onclick=()=>safe(()=>exportFilm(media,assetMap));app.querySelector('#saveFilm').onclick=()=>saveFilmJob(media);app.querySelectorAll('.film-item-qty').forEach(input=>input.onchange=async()=>{const item=filmItems.find(i=>i.localId===input.dataset.id),quantity=Number(input.value);if(!Number.isInteger(quantity)||quantity<1||quantity>999){input.value=item.quantity;return ctx.toast('Quantidade deve ser inteira, de 1 a 999.','err')}item.quantity=quantity;await refreshItems()});app.querySelectorAll('.edit-film-item').forEach(b=>b.onclick=()=>editFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems));app.querySelectorAll('.remove-film-item').forEach(b=>b.onclick=()=>removeCurrentFilmEntry(b.dataset.id,media));app.querySelectorAll('[data-job]').forEach(button=>button.onclick=()=>safe(async()=>{if(await openFilmJob(jobs.find(job=>job.id===button.dataset.job),media))saveFilmDraft(true)}));if(lastFilm){drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false}
-    filmDraftBanner();if(filmDraftDirty)saveFilmDraft();return true;
+    const page=app.querySelector('.film-page'),pageCurrent=()=>page.isConnected&&page===app.querySelector('.film-page')&&renderAccountGeneration===productionAccountGeneration&&renderAccount===String(owner()||'')&&(typeof location==='undefined'||renderRoute===location.hash);
+    const bindItems=()=>{
+      app.querySelectorAll('.film-item-qty').forEach(input=>input.onchange=async()=>{if(!pageCurrent())return;const item=filmItems.find(i=>i.localId===input.dataset.id),quantity=Number(input.value);if(!item)return;if(!Number.isInteger(quantity)||quantity<1||quantity>999){input.value=item.quantity;return ctx.toast('Quantidade deve ser inteira, de 1 a 999.','err')}item.quantity=quantity;await refreshItems()});
+      app.querySelectorAll('.edit-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())editFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
+      app.querySelectorAll('.remove-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())removeCurrentFilmEntry(b.dataset.id,media)});
+    };
+    const refreshItems=async()=>{if(!pageCurrent())return;filmCalculationGeneration++;filmPreviewGeneration++;filmCostPanel?.invalidate?.();
+      lastFilm=null;filmDraftNote='Itens adicionados/atualizados. Preparando imagens e calculando o encaixe…';
+      app.querySelector('#filmItems').innerHTML=filmItemsHTML();bindItems();
+      app.querySelector('#filmMetrics').textContent=filmDraftNote;app.querySelector('#filmInspector')?.remove();
+      app.querySelector('#exportFilm').disabled=true;app.querySelector('#saveFilm').disabled=true;
+      if(typeof mountFilmTools==='function')mountFilmTools(media);
+      saveFilmDraft();
+      // Return to the picker immediately. Never reload catalogs or wait for
+      // originals/alpha masks here; a later edit invalidates this scheduled run.
+      const scheduled=filmCalculationGeneration;
+      setTimeout(()=>{if(pageCurrent()&&scheduled===filmCalculationGeneration&&filmItems.length)void calculateFilm(media)},0);
+    };
+    ctx.bindCommon();const mediaControl=app.querySelector('#filmMedia'),modeControl=app.querySelector('#filmMode'),gapControl=app.querySelector('#filmGap');mediaControl.value=media.some(m=>m.id===filmSettings.mediaId)?filmSettings.mediaId:media[0]?.id||'';modeControl.value=filmSettings.mode;gapControl.value=String(filmSettings.gapMm).replace('.',',');const invalidate=()=>{filmCostPanel?.invalidate?.();filmCalculationGeneration++;filmPreviewGeneration++;filmSettings={...filmSettings,mediaId:mediaControl.value,mode:modeControl.value,gapMm:Number(gapControl.value.replace(',','.')),freeRotation:freeControl.checked};lastFilm=null;filmCostPanel?.refresh?.();filmDraftNote='';saveFilmDraft();app.querySelector('#filmPreview').innerHTML='<div class="empty">Configuração alterada. Calcule o filme novamente.</div>';app.querySelector('#filmMetrics').innerHTML='';app.querySelector('#filmInspector')?.remove();app.querySelector('#exportFilm').disabled=true;app.querySelector('#saveFilm').disabled=true};mediaControl.onchange=modeControl.onchange=invalidate;gapControl.oninput=invalidate;freeControl.onchange=invalidate;app.querySelector('#addFilmAsset').onclick=()=>safe(()=>pickFilmAsset(profiles,assetMap,refreshItems));app.querySelector('#addFilmTeam').onclick=()=>safe(()=>pickFilmTeam(readySets,refreshItems));app.querySelector('#calculateFilm').onclick=()=>calculateFilm(media);app.querySelector('#exportFilm').onclick=()=>safe(()=>exportFilm(media,assetMap));app.querySelector('#saveFilm').onclick=()=>saveFilmJob(media);bindItems();bindFilmJobs(media);if(lastFilm){drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false}
+    void refreshFilmJobs(media);filmDraftBanner();if(filmDraftDirty)saveFilmDraft();return true;
+  }
+  async function refreshFilmJobs(media){
+    const slot=app.querySelector('[data-film-jobs]');if(!slot)return;
+    const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
+    const current=()=>slot.isConnected&&slot===app.querySelector('[data-film-jobs]')&&generation===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||location.hash===route);
+    slot.innerHTML='<small>Carregando jobs salvos…</small>';
+    try{
+      const jobs=await listFilmJobs(supabase,account);if(!current())return;
+      slot.innerHTML=jobs.length?`<details class="saved-film-jobs"><summary>Jobs salvos (${jobs.length})</summary><div>${jobs.map(job=>`<button class="saved-film-job" data-job="${h(job.id)}"><b>${h(job.name)}${job.commit_state==='pending'?' · salvamento incompleto':''}</b><span>${Number(job.film_width_cm)} cm × ${Number(job.calculated_length_cm||0).toFixed(1)} cm • ${new Date(job.updated_at).toLocaleString('pt-BR')}</span></button>`).join('')}</div></details>`:'';
+      bindFilmJobs(media);
+    }catch(error){
+      if(!current())return;
+      slot.innerHTML='<div data-film-jobs-error role="status"><p>'+h(error.message||'Não foi possível consultar os jobs salvos.')+' Sua montagem continua disponível.</p><button class="btn small">Tentar novamente</button></div>';
+      slot.querySelector('button').onclick=()=>refreshFilmJobs(media);
+    }
+  }
+  function bindFilmJobs(media){
+    app.querySelectorAll('[data-job]').forEach(button=>button.onclick=()=>safe(async()=>{
+      if(button.disabled||filmJobOpening||filmJobSaving)return;
+      const generation=productionAccountGeneration,account=String(owner()||''),change=filmDraftChange,route=typeof location==='undefined'?'':location.hash;
+      button.disabled=true;
+      try{
+        const job=await getFilmJob(supabase,account,button.dataset.job);
+        if(!button.isConnected||generation!==productionAccountGeneration||account!==String(owner()||'')||(typeof location!=='undefined'&&location.hash!==route))return;
+        if(change!==filmDraftChange)throw new Error('A montagem mudou durante a consulta. Ela foi preservada; tente abrir o job novamente.');
+        if(!job)throw new Error('Este job não está mais disponível para sua conta. Atualize a lista.');
+        if(await openFilmJob(job,media))saveFilmDraft(true);
+      }finally{if(button.isConnected)button.disabled=false;}
+    }));
   }
   function filmItemsHTML(){return filmItems.length?filmItems.map(i=>`<article class="film-item editable-film-item"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}</small></div><button class="btn ghost small remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" max="999" value="${i.quantity}"></label><button class="btn small edit-film-item" data-id="${i.localId}">Alterar tamanho</button></div></article>`).join(''):'<div class="empty mini">Nenhum item.</div>'}
   function editFilmItem(item,done){
+    if(!item)return;
+    const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
+    const current=()=>generation===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||route===location.hash)&&filmItems.includes(item);
     const modal=document.createElement('div');modal.className='modal-backdrop';const ratio=item.widthCm/item.heightCm;
     modal.innerHTML=`<form class="modal compact" role="dialog" aria-modal="true" aria-label="Editar item do filme"><div class="modal-head"><h2>Editar item</h2><button type="button" class="btn small close">×</button></div><p>${h(item.label)}</p><div class="form-grid"><label class="field">Largura (cm)<input name="width" inputmode="decimal" value="${String(item.widthCm).replace('.',',')}"></label><label class="field">Altura (cm)<input name="height" inputmode="decimal" value="${String(item.heightCm).replace('.',',')}"></label><label class="field full">Quantidade<input name="quantity" type="number" inputmode="numeric" min="1" max="999" value="${item.quantity}"></label></div><p class="hint">Proporção preservada. A alteração vale somente para este filme e recalcula o encaixe.</p><div class="modal-footer"><button type="button" class="btn close">Cancelar</button><button class="btn primary">Aplicar e recalcular</button></div></form>`;
-    document.body.append(modal);const form=modal.querySelector('form'),parse=v=>Number(String(v).replace(',','.'));modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());form.elements.width.oninput=()=>{const w=parse(form.elements.width.value);if(w>0)form.elements.height.value=String(Number((w/ratio).toFixed(4))).replace('.',',')};form.elements.height.oninput=()=>{const h=parse(form.elements.height.value);if(h>0)form.elements.width.value=String(Number((h*ratio).toFixed(4))).replace('.',',')};form.onsubmit=async e=>{e.preventDefault();const w=parse(form.elements.width.value),q=Number(form.elements.quantity.value);if(!(w>0&&w<=1000&&Number.isInteger(q)&&q>0&&q<=999))return ctx.toast('Informe medidas positivas e quantidade inteira de 1 a 999.','err');if(item.type==='team_customization'){const factor=w/item.widthCm;for(const key of ['nameHeightCm','numberHeightCm','gapCm','nameTrackingCm','digitSpacingCm'])if(Number.isFinite(item[key]))item[key]*=factor}item.widthCm=w;item.heightCm=w/ratio;item.quantity=q;item.sizeOverride=true;modal.remove();await done()};form.elements.width.focus();
+    document.body.append(modal);const form=modal.querySelector('form'),parse=v=>Number(String(v).replace(',','.'));modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());form.elements.width.oninput=()=>{const w=parse(form.elements.width.value);if(w>0)form.elements.height.value=String(Number((w/ratio).toFixed(4))).replace('.',',')};form.elements.height.oninput=()=>{const h=parse(form.elements.height.value);if(h>0)form.elements.width.value=String(Number((h*ratio).toFixed(4))).replace('.',',')};form.onsubmit=async e=>{e.preventDefault();if(!current()){modal.remove();return}const w=parse(form.elements.width.value),q=Number(form.elements.quantity.value);if(!(w>0&&w<=1000&&Number.isInteger(q)&&q>0&&q<=999))return ctx.toast('Informe medidas positivas e quantidade inteira de 1 a 999.','err');if(item.type==='team_customization'){const factor=w/item.widthCm;for(const key of ['nameHeightCm','numberHeightCm','gapCm','nameTrackingCm','digitSpacingCm'])if(Number.isFinite(item[key]))item[key]*=factor}item.widthCm=w;item.heightCm=w/ratio;item.quantity=q;item.sizeOverride=true;modal.remove();await done()};form.elements.width.focus();
   }
   async function pickFilmAsset(profiles,assetMap,done){
     const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
@@ -841,42 +895,52 @@ export function createProductionModule(ctx){
     }
     const item=await openCustomizationComposer(otherSets);if(!item||!current())return;filmItems.push({...item,localId:crypto.randomUUID()});await done?.();
   }
-  const filmMaskCache=new Map();
+  const filmMaskCache=createFilmMaskCache({prepare:prepareFilmMask});
   async function maskForItem(item){
     if(item.halftone||item.allowInternalNesting===false)return null;
     const source=item.type==='asset'&&item.path?ctx.publicUrl(item.path):item.type==='team_customization'&&item.previewDataUrl?item.previewDataUrl:null;
     if(!source)return null;
-    const cacheKey=item.type==='asset'?'asset:'+item.path:'team:'+(item.localId||item.label||item.sourceId);
-    if(filmMaskCache.has(cacheKey))return filmMaskCache.get(cacheKey);
-    const accountGeneration=productionAccountGeneration;
+    try{return await filmMaskCache.get(source)}catch(error){if(error?.name==='AbortError')throw error;console.warn('mask',error);return null}
+  }
+  async function prepareFilmMask(source,{signal}){
+    const check=()=>{if(signal.aborted)throw signal.reason||new DOMException('Preparação cancelada.','AbortError')};
+    let canvas;check();
     try{
-      const image=new Image();if(!source.startsWith('data:'))image.crossOrigin='anonymous';image.src=source;await image.decode();
+      const image=new Image();if(!source.startsWith('data:'))image.crossOrigin='anonymous';
+      await new Promise((resolve,reject)=>{
+        let timer;
+        const finish=error=>{clearTimeout(timer);signal.removeEventListener('abort',abort);error?reject(error):resolve()};
+        const abort=()=>{image.src='';finish(signal.reason||new DOMException('Preparação cancelada.','AbortError'))};
+        signal.addEventListener('abort',abort,{once:true});
+        timer=setTimeout(()=>{image.src='';finish(new Error('A imagem demorou para carregar; o encaixe usará o retângulo seguro.'))},30000);
+        image.src=source;image.decode().then(()=>finish(),finish);
+      });check();
       const iw=image.naturalWidth,ih=image.naturalHeight,w=Math.min(180,iw),height=Math.max(1,Math.ceil(w*ih/iw));
-      if(iw*ih>68e6||height>2000)return null;
-      const canvas=document.createElement('canvas');canvas.width=iw;canvas.height=Math.min(64,ih);const g=canvas.getContext('2d',{willReadFrequently:true}),data=new Uint8Array(w*height);
-      for(let row=0;row<ih;row+=64){const rows=Math.min(64,ih-row);g.clearRect(0,0,iw,64);g.drawImage(image,0,row,iw,rows,0,0,iw,rows);const rgba=g.getImageData(0,0,iw,rows).data;
+      if(!iw||!ih||iw*ih>68e6||height>2000)return null;
+      canvas=document.createElement('canvas');canvas.width=iw;canvas.height=Math.min(64,ih);const g=canvas.getContext('2d',{willReadFrequently:true}),data=new Uint8Array(w*height);
+      for(let row=0;row<ih;row+=64){check();const rows=Math.min(64,ih-row);g.clearRect(0,0,iw,64);g.drawImage(image,0,row,iw,rows,0,0,iw,rows);const rgba=g.getImageData(0,0,iw,rows).data;
         for(let y=0;y<rows;y++){const my=Math.min(height-1,Math.floor((row+y)*height/ih));for(let x=0;x<iw;x++)if(rgba[(y*iw+x)*4+3]>0)data[my*w+Math.min(w-1,Math.floor(x*w/iw))]=1}
         if(row%1024===0)await new Promise(resolve=>setTimeout(resolve,0));
       }
-      canvas.width=1;canvas.height=1;if(accountGeneration!==productionAccountGeneration)return null;
-      const result={w,h:height,data};if(filmMaskCache.size>=60)filmMaskCache.delete(filmMaskCache.keys().next().value);filmMaskCache.set(cacheKey,result);return result;
-    }catch(error){console.warn('mask',error);return null}
+      check();return {w,h:height,data};
+    }finally{if(canvas)canvas.width=canvas.height=1;}
   }
-  async function filmNestingItems(){const items=[];for(const item of filmItems)items.push({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation&&(item.rotationPolicy||'none')!=='none'?'free':item.rotationPolicy||'none',mask:await maskForItem(item)});return items}
+  async function filmNestingItems(){return Promise.all(filmItems.map(async item=>({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation&&(item.rotationPolicy||'none')!=='none'?'free':item.rotationPolicy||'none',mask:await maskForItem(item)})))}
   async function calculateFilm(media){
     if(!filmItems.length)return ctx.toast('Adicione ao menos um item.','err');
     const button=app.querySelector('#calculateFilm');if(!button)return;
-    const generation=++filmCalculationGeneration,account=String(owner()||''),oldLabel=button.textContent,current=()=>generation===filmCalculationGeneration&&account===String(owner()||'')&&button===app.querySelector('#calculateFilm');button.disabled=true;button.textContent='Calculando…';
+    const generation=++filmCalculationGeneration,account=String(owner()||''),accountGeneration=productionAccountGeneration,route=typeof location==='undefined'?'':location.hash,current=()=>generation===filmCalculationGeneration&&accountGeneration===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||route===location.hash)&&button===app.querySelector('#calculateFilm');button.dataset.calculation=String(generation);button.disabled=true;button.textContent='Preparando imagens…';
     try{
       const profile=media.find(m=>m.id===app.querySelector('#filmMedia').value),mode=app.querySelector('#filmMode').value,rawGap=app.querySelector('#filmGap').value.trim(),gap=Number(rawGap.replace(',','.'));
       if(!profile)throw new Error('Escolha um perfil de filme válido.');if(!rawGap||!Number.isFinite(gap)||gap<0||gap>50)throw new Error('Informe uma distância de 0 a 50 mm entre as artes.');
       filmSettings={...filmSettings,mediaId:profile.id,mode,gapMm:gap};
       const items=await filmNestingItems();if(!current())return;
+      button.textContent='Calculando encaixe…';
       const result=await runNesting(items,{filmWidthMm:Number(profile.usable_width_cm)*10,mode,gapMm:gap,cellMm:2,freeRotation:filmSettings.freeRotation,angleStep:filmSettings.angleStep,lockedPlacements:lastFilm?.placements.filter(p=>p.locked)||[],baselinePlacements:lastFilm?.placements||[]});if(!current())return;
       const previewsReady=await regenerateFilmDraftPreviews();if(!current())return;if(!previewsReady){lastFilm=null;throw new Error(filmDraftNote);}
       lastFilm=result;filmDraftNote='';saveFilmDraft(true);if(result.rotationSearchWarning)ctx.toast(result.rotationSearchWarning,'warn');if(result.nestingSearchWarning)ctx.toast(result.nestingSearchWarning,'warn');
       drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false;
-    }catch(error){if(current()){console.error(error);ctx.toast(error.message||String(error),'err')}}finally{if(button.isConnected&&button===app.querySelector('#calculateFilm')){button.disabled=false;button.textContent=oldLabel}}
+    }catch(error){if(current()){console.error(error);filmDraftNote='Itens preservados. Não foi possível concluir o encaixe: '+(error.message||String(error));filmDraftBanner();const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.textContent=filmDraftNote;ctx.toast(error.message||String(error),'err')}}finally{if(button.isConnected&&button===app.querySelector('#calculateFilm')&&button.dataset.calculation===String(generation)){button.disabled=false;button.textContent='Calcular filme'}}
   }
   function removeCurrentFilmEntry(id,media,copy){
     const result=removeFilmEntry(filmItems,lastFilm,{id,copy});if(!result.changed)return false;
@@ -953,7 +1017,7 @@ export function createProductionModule(ctx){
     const close=()=>{if(busy||closed)return;closed=true;modal.remove();for(const url of urls)URL.revokeObjectURL(url);previousFocus?.focus?.();document.removeEventListener('keydown',onKey);window.removeEventListener('z19:account-changing',accountChanging)};
     const accountChanging=()=>{spotController?.abort();busy=false;close()};window.addEventListener('z19:account-changing',accountChanging);
     const onKey=event=>{if(event.key==='Escape')close();if(event.key==='Tab'){const controls=[...modal.querySelectorAll('button:not(:disabled):not([hidden]),input:not(:disabled),a[href]')].filter(node=>node.getClientRects().length),first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
-    const spotHint=document.createElement('p');spotHint.className='film-export-hint';spotHint.textContent='TIFF preparado para fluxo CMYK + branco Spot. 300 DPI + Cor Spot 1, em um único arquivo. Primeira utilização: conferir no RIP antes de produzir.';modal.querySelector('[data-film-export-error]').before(spotHint);
+    const spotHint=document.createElement('p');spotHint.className='film-export-hint';spotHint.textContent='TIFF CMYK + Cor Spot 1, 300 DPI, em um único arquivo. O branco segue somente a transparência das artes. No Photoshop, o composto pode aparecer com fundo branco porque este TIFF não contém camadas editáveis; confira o canal Spot. Primeira utilização: conferir no RIP antes de produzir.';modal.querySelector('[data-film-export-error]').before(spotHint);
     const spotStatus=document.createElement('div');spotStatus.hidden=true;spotStatus.dataset.spotStatus='';spotStatus.innerHTML='<p role="status" aria-live="polite" data-spot-stage></p><progress style="width:100%" aria-label="Progresso do TIFF"></progress><button class="btn small" data-cancel-spot-export>Cancelar TIFF</button>';modal.querySelector('[data-film-export-results]').before(spotStatus);
     const spotButton=document.createElement('button');spotButton.className='btn';spotButton.dataset.generateSpotExport='';spotButton.textContent='Baixar com Spot';modal.querySelector('[data-generate-film-export]').before(spotButton);modal.querySelector('.modal-footer').style.flexWrap='wrap';
     const recordExportOnce=()=>{
@@ -1054,40 +1118,49 @@ export function createProductionModule(ctx){
     return {items,layout};
   }
 
-  function reviewLegacyFilmLettering(items){
+  function reviewLegacyFilmLettering(items,isCurrent=()=>true){
     const legacy=items.filter(item=>item.type==='team_customization'&&!item.vectorSource&&(item.nameTrackingCm==null&&item.letterTrackingCm==null||item.digitSpacingCm==null));
     if(!legacy.length)return Promise.resolve(false);
     return new Promise(resolve=>{
       const modal=document.createElement('div');modal.className='modal-backdrop';
+      let finished=false;
+      const finish=value=>{if(finished)return;finished=true;if(typeof window!=='undefined'){window.removeEventListener('z19:account-changing',cancel);window.removeEventListener('hashchange',cancel)}modal.remove();resolve(value)};
+      const cancel=()=>finish(null);
+      if(typeof window!=='undefined'){window.addEventListener('z19:account-changing',cancel,{once:true});window.addEventListener('hashchange',cancel,{once:true})}
       const fields=legacy.map((item,index)=>'<section style="margin:18px 0"><b>'+h(item.label||[item.name,item.number].filter(Boolean).join(' '))+'</b><div class="form-grid"><div class="field"><label>Espaço entre letras (cm)</label><input inputmode="decimal" name="name-'+index+'" value="'+h(item.nameTrackingCm??item.letterTrackingCm??(item.fontSource?0:.15))+'"></div><div class="field"><label>Espaço entre números (cm)</label><input inputmode="decimal" name="number-'+index+'" value="'+h(item.digitSpacingCm??(item.fontSource?0:.2))+'"></div></div></section>').join('');
       modal.innerHTML='<div class="modal wide"><div class="modal-head"><div><div class="eyebrow">Revisão de job antigo</div><h2>Confira o espaço entre os caracteres</h2></div><button class="btn ghost small" data-cancel aria-label="Fechar">×</button></div><p>Este job não registrou todos os espaçamentos. Revise as sugestões abaixo; as medidas serão recalculadas e será necessário calcular o filme novamente antes de exportar. O job original continua preservado.</p><form>'+fields+'<div class="modal-footer"><button class="btn" type="button" data-cancel>Cancelar</button><button class="btn primary" type="submit">Revisar e abrir montagem</button></div></form></div>';
-      document.body.appendChild(modal);modal.querySelectorAll('[data-cancel]').forEach(button=>button.onclick=()=>{modal.remove();resolve(null)});
+      document.body.appendChild(modal);modal.querySelectorAll('[data-cancel]').forEach(button=>button.onclick=cancel);
       modal.querySelector('form').onsubmit=async event=>{
-        event.preventDefault();const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
+        event.preventDefault();if(finished||!isCurrent())return finish(null);const button=event.currentTarget.querySelector('[type="submit"]');button.disabled=true;
         try{
           const replacements=[];
           for(const [index,item] of legacy.entries()){
             const parse=name=>{const value=modal.querySelector('[name="'+name+'"]').value.trim(),number=Number(value.replace(',','.'));if(!value||!Number.isFinite(number)||number<0)throw new Error('Informe espaçamentos de zero ou maiores.');return number};
             const reviewed={...item,nameTrackingCm:parse('name-'+index),digitSpacingCm:parse('number-'+index)},layout=await prepareLetteringLayout(reviewed);
+            if(finished||!isCurrent())return finish(null);
             replacements.push({...reviewed,widthCm:layout.widthCm,heightCm:layout.heightCm,legacySpacingReviewed:true});
           }
           for(const item of replacements)Object.assign(items.find(old=>old.localId===item.localId),item);
-          modal.remove();resolve(true);
-        }catch(error){ctx.toast(error.message||'Não foi possível revisar a personalização.','err');button.disabled=false}
+          finish(true);
+        }catch(error){if(finished||!isCurrent())return finish(null);ctx.toast(error.message||'Não foi possível revisar a personalização.','err');button.disabled=false}
       };
     });
   }
 
   async function openFilmJob(job,media){
     if(filmJobOpening||filmJobSaving)return false;filmJobOpening=true;
+    const generation=productionAccountGeneration,account=String(owner()||''),change=filmDraftChange,route=typeof location==='undefined'?'':location.hash;
+    const current=(checkEdits=true)=>generation===productionAccountGeneration&&account===String(owner()||'')&&(!checkEdits||change===filmDraftChange)&&(typeof location==='undefined'||route===location.hash);
     try{
       const snapshot=job?.settings_snapshot||{},restored=checkedFilmSnapshot(snapshot);
       const matching=media.find(profile=>profile.id===job.media_profile_id&&Math.abs(Number(profile.usable_width_cm)*10-restored.layout.filmWidthMm)<.001)||media.find(profile=>Math.abs(Number(profile.usable_width_cm)*10-restored.layout.filmWidthMm)<.001);
       if(!matching)throw new Error('O perfil de filme de '+(restored.layout.filmWidthMm/10)+' cm não está disponível. Cadastre essa largura para reabrir as posições originais.');
-      const revised=await reviewLegacyFilmLettering(restored.items);if(revised===null)return false;
+      const revised=await reviewLegacyFilmLettering(restored.items,()=>current());if(revised===null)return false;
+      if(!current())return false;
       filmItems=restored.items;lastFilm=revised?null:restored.layout;
       filmSettings={mediaId:matching.id,mode:restored.layout.mode,gapMm:Number(restored.layout.gapMm),freeRotation:Boolean(restored.layout.freeRotation),angleStep:restored.layout.angleStep||30};
-      await renderFilm();
+      const rendered=await renderFilm();
+      if(!rendered||!current(false))return false;
       const mediaInput=app.querySelector('#filmMedia');if(mediaInput)mediaInput.value=matching.id;
       if(app.querySelector('#filmMode'))app.querySelector('#filmMode').value=restored.layout.mode;
       if(app.querySelector('#filmGap'))app.querySelector('#filmGap').value=String(restored.layout.gapMm);

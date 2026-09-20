@@ -1,6 +1,6 @@
 // Display-only helpers. Never use a thumbnail as production/export input.
 export function assetPreviewPath(asset) {
-  return asset?.thumbnail_path || asset?.processed_path || asset?.original_path || '';
+  return asset?.thumbnail_path || asset?.metadata?.thumbnail_path || asset?.processed_path || asset?.original_path || '';
 }
 
 // Parse into inert template content, then move matching image nodes before the

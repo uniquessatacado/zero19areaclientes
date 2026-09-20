@@ -4,7 +4,7 @@ const source=await fs.readFile(new URL('../production-v217.js',import.meta.url),
 assert.ok(start>0&&end>start);assert.ok(!draftCode.includes('.setItem('));assert.match(source,/const invalidate=\(\)=>\{filmCostPanel\?\.invalidate\?\.\(\);/);
 // Refresh now invalidates outstanding calculation/preview work before the cost
 // panel. Keep all three guards mandatory: do not merely loosen the old anchor.
-assert.match(source,/const refreshItems=async\(\)=>\{filmCalculationGeneration\+\+;filmPreviewGeneration\+\+;filmCostPanel\?\.invalidate\?\.\(\);/);
+assert.match(source,/const refreshItems=async\(\)=>\{if\(!pageCurrent\(\)\)return;filmCalculationGeneration\+\+;filmPreviewGeneration\+\+;filmCostPanel\?\.invalidate\?\.\(\);/);
 const settings={mediaId:'m58',mode:'maximum',gapMm:3,freeRotation:true,angleStep:30},item=q=>({localId:'a',type:'asset',sourceId:'a',label:'Arte',widthCm:10,heightCm:5,quantity:q,rotationPolicy:'free'}),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let tests=0;async function test(label,run){await run();tests++;console.log('PASS '+label)}
 function harness({legacy=null,failure=null}={}){

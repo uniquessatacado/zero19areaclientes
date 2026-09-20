@@ -48,6 +48,8 @@ function fixture({libraries=libraryRows,failTable=null,count=1,pause}={}){
   assert.equal(folders.length,1,'new folder set does not duplicate ready-art template');
 }
 assert.equal(assetPreviewPath({thumbnail_path:'thumb',processed_path:'processed',original_path:'original'}),'thumb');
+assert.equal(assetPreviewPath({metadata:{thumbnail_path:'metadata-thumb'},processed_path:'processed',original_path:'original'}),'metadata-thumb');
+assert.equal(assetPreviewPath({thumbnail_path:'thumb',metadata:{thumbnail_path:'metadata-thumb'},processed_path:'processed'}),'thumb');
 assert.equal(assetPreviewPath({processed_path:'processed',original_path:'original'}),'processed');
 assert.equal(assetPreviewPath({original_path:'original'}),'original');
 assert.equal(assetPreviewPath(null),'');
