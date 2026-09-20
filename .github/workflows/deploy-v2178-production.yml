@@ -60,3 +60,5 @@ jobs:
           done
           echo "::error::Canonical domain did not reach v2.17.8"
           exit 22
+
+# manual production redeploy trigger: 2026-09-20
