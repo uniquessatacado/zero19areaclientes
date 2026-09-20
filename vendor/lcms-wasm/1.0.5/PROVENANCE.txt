@@ -1,0 +1,23 @@
+lcms-wasm 1.0.5, unmodified dist/lcms.js and dist/lcms.wasm.
+Package: https://registry.npmjs.org/lcms-wasm/-/lcms-wasm-1.0.5.tgz
+Source: https://github.com/mattdesl/lcms-wasm
+Package license: MIT (LICENSE.txt).
+LittleCMS engine: 2.16, MIT (LITTLECMS-LICENSE.txt).
+Upstream engine header: https://github.com/mm2/Little-CMS/blob/c2a5401/include/lcms2.h
+
+npm package integrity:
+sha512-bQpBF4BvoHY//Gq7k67VD9l+BEk6dmaROAB+ci83ZajOurOUPAcwfi3z5VzzAf27qccIE867kYc+jk6/wPelcA==
+SHA-256 lcms.js:
+1a5c8f81186211856ba7c5d6841e35fe3fa901b857a247f72318e1652c5e1cec
+SHA-256 lcms.wasm:
+dbcbee3fb3a49459a60bb6b29d6ab25fe7c219b0cc0c2b9579c0cc78f7390ddd
+
+Compiled for browser/module worker/Node; memory growth enabled; no pthreads.
+No eval or new Function in the vendored runtime. Loaded only for TIFF conversion.
+No npm install, CDN, server processing or remote image upload at runtime.
+
+The three user reference pairs were tested locally (15,122,338 pixels).
+RGB->CMYK with original ICC profiles, relative colorimetric and flags 8448
+(BLACKPOINTCOMPENSATION | NOOPTIMIZE) matched the diagnostic Pillow/
+LittleCMS 2.18 output byte-for-byte. This is not proof of universal equality
+with Adobe ACE or of physical printing fidelity.

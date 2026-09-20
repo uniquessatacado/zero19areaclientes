@@ -1,3 +1,5 @@
+import {assetPreviewPath,replacePreviewMarkup} from './asset-preview.js?v=2.17.9';
+
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
 const normalize = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim();
 const decimal = value => Number(String(value ?? '').trim().replace(',', '.'));
@@ -78,17 +80,22 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   const dialog = root.querySelector('.film-picker');
   const find = selector => root.querySelector(selector);
   const report = message => { find('.fp-status').textContent = message; };
-  const imageURL = entry => { try { return publicUrl(entry.asset.thumbnail_path || entry.path) || ''; } catch { return ''; } };
+  const imageURL = entry => { try { return publicUrl(assetPreviewPath(entry.asset) || entry.path) || ''; } catch { return ''; } };
   const visibleEntries = () => catalogue.filter(entry => (activeCompany === 'all' || entry.workspaceId === activeCompany) && (!artQuery || entry.search.includes(artQuery)));
   const defaults = entry => ({widthCm:entry.widthCm, heightCm:entry.heightCm, quantity:1});
   const focusAction = (action,id) => [...root.querySelectorAll('[data-action]')].find(button => button.dataset.action === action && (!id || button.dataset.id === id))?.focus({preventScroll:true});
+  const lifetime = new AbortController();
+  const accountChanged = () => { selected.clear();close(true); };
+  window.addEventListener('z19:account-changing',accountChanged);
 
-  function close() {
-    if (closed || busy) return;
+  function close(force = false) {
+    if (closed || (busy&&!force)) return;
     closed = true;
+    lifetime.abort();
+    window.removeEventListener('z19:account-changing',accountChanged);
     root.remove();
     document.body.style.overflow = oldBodyOverflow;
-    if (returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
+    if (!force&&returnFocus?.isConnected) returnFocus.focus({preventScroll:true});
   }
   function refreshAsset(asset, profile) {
     if (closed || !asset?.id) return null;
@@ -162,7 +169,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     find('[data-company-title]').textContent = activeCompany === 'all' ? 'Todas as empresas' : companies.get(activeCompany)?.name || 'Biblioteca de artes';
     find('[data-catalogue-count]').textContent = `${visible.length} ${visible.length===1?'arte disponível':'artes disponíveis'}${artQuery?' nesta busca':''}`;
     find('[data-action="select-visible"]').disabled = !visible.length || busy;
-    find('.fp-art-grid').innerHTML = visible.length ? visible.map(cardHTML).join('') : `<div class="fp-empty">${icons.image}<h4>${artQuery?'Nenhuma arte encontrada':'Nenhuma arte liberada ainda'}</h4><p>${artQuery?'Tente outro nome de arte, pasta ou projeto.':'Para aparecer aqui, a arte precisa estar pronta para impressão e ter largura e altura cadastradas.'}</p>${artQuery?'<button class="fp-button" data-action="clear-search">Limpar busca</button>':''}</div>`;
+    replacePreviewMarkup(find('.fp-art-grid'), visible.length ? visible.map(cardHTML).join('') : `<div class="fp-empty">${icons.image}<h4>${artQuery?'Nenhuma arte encontrada':'Nenhuma arte liberada ainda'}</h4><p>${artQuery?'Tente outro nome de arte, pasta ou projeto.':'Para aparecer aqui, a arte precisa estar pronta para impressão e ter largura e altura cadastradas.'}</p>${artQuery?'<button class="fp-button" data-action="clear-search">Limpar busca</button>':''}</div>`);
     watchImages(find('.fp-art-grid'));
   }
   function renderSelection() {
@@ -173,10 +180,10 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     summary.querySelector('small').textContent = rows.length ? `${totalQuantity} ${totalQuantity===1?'impressão':'impressões'} · toque para revisar` : 'Escolha uma ou várias empresas.';
     summary.setAttribute('aria-expanded',String(trayOpen));
     find('.fp-selection-tray').hidden = !trayOpen;
-    find('.fp-selection-list').innerHTML = rows.length ? rows.map(([id,item]) => {
+    replacePreviewMarkup(find('.fp-selection-list'), rows.length ? rows.map(([id,item]) => {
       const entry = entries.get(id);
       return `<article class="fp-selection-item">${imageHTML(entry,true)}<div class="fp-selected-copy"><b>${escapeHTML(entry.asset.name || 'Arte sem nome')}</b><small>${escapeHTML(entry.companyName)}</small><button class="fp-text-button" data-action="cart-size" data-id="${escapeHTML(id)}">${formatCm(item.widthCm)} × ${formatCm(item.heightCm)} cm <span aria-hidden="true">✎</span></button></div><label class="fp-quantity">Cópias<input data-input="quantity" data-id="${escapeHTML(id)}" type="number" inputmode="numeric" min="1" max="999" step="1" value="${quantityOf(item.quantity)}" aria-label="Quantidade de ${escapeHTML(entry.asset.name || 'arte')}"></label><button class="fp-icon-button" data-action="remove" data-id="${escapeHTML(id)}" aria-label="Remover ${escapeHTML(entry.asset.name || 'arte')}">×</button></article>`;
-    }).join('') : '<p class="fp-empty-selection">Selecione as miniaturas para montar seu filme.</p>';
+    }).join('') : '<p class="fp-empty-selection">Selecione as miniaturas para montar seu filme.</p>');
     const submit = find('[data-action="submit"]');
     submit.disabled = busy || !rows.length;
     submit.innerHTML = busy ? 'Adicionando…' : `Adicionar${rows.length?` ${rows.length}`:''} ao filme <span aria-hidden="true">↗</span>`;
@@ -205,7 +212,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     return {widthCm:width,heightCm:width/entry.aspect};
   }
   root.addEventListener('input',event=>{
-    if (busy) return;
+    if (closed || busy) return;
     const input=event.target;
     if (input.dataset.input==='company-search') { companyQuery=normalize(input.value); renderCompanies(); }
     if (input.dataset.input==='art-search') { artQuery=normalize(input.value); sizeEditing=null; renderGrid(); }
@@ -217,7 +224,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     }
   });
   root.addEventListener('change',event=>{
-    if (busy || event.target.dataset.input!=='quantity') return;
+    if (closed || busy || event.target.dataset.input!=='quantity') return;
     const id=event.target.dataset.id,entry=entries.get(id);if(!entry)return;const item=selected.get(id)||defaults(entry);selected.set(id,item);
     if (!item) return;
     item.quantity=quantityOf(event.target.value);
@@ -225,6 +232,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     [...root.querySelectorAll('[data-input="quantity"]')].find(input=>input.dataset.id===id)?.focus({preventScroll:true});
   });
   root.addEventListener('submit',event=>{
+    if(closed)return;
     const form=event.target.closest('[data-size-form]');
     if (!form) return;
     event.preventDefault();
@@ -240,6 +248,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     } catch(error) { form.querySelector('.fp-size-error').textContent=error.message; }
   });
   root.addEventListener('click',async event=>{
+    if(closed)return;
     if (event.target===root) { close(); return; }
     const button=event.target.closest('[data-action]');
     if (!button || busy) return;
@@ -257,8 +266,8 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     if (action==='restore-size' && entry) { const form=button.closest('form');form.elements.width.value=formatInput(entry.widthCm);form.elements.height.value=formatInput(entry.heightCm);form.querySelector('.fp-size-error').textContent='';return; }
     if ((action==='garment'||action==='mockup'||action==='edit') && entry) {
       const callback=action==='garment'?onGarment:action==='mockup'?onMockup:onEdit;
-      try { await callback?.(entry.asset,entry.profile); }
-      catch(error) { report(error.message||'Não foi possível abrir a arte.');toast?.(error.message||'Não foi possível abrir a arte.','err'); }
+      try { if(closed)return;await callback?.(entry.asset,entry.profile,{signal:lifetime.signal});if(closed)return; }
+      catch(error) { if(closed)return;report(error.message||'Não foi possível abrir a arte.');toast?.(error.message||'Não foi possível abrir a arte.','err'); }
       return;
     }
     if (action==='submit' && selected.size) {
@@ -268,15 +277,19 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
         busy=true;
         dialog.setAttribute('aria-busy','true');
         renderSelection();
-        await onAdd(items);
+        if(closed||lifetime.signal.aborted)return;
+        await onAdd(items,{signal:lifetime.signal});
+        if(closed||lifetime.signal.aborted)return;
         busy=false;
         close();
       } catch(error) {
+        if(closed)return;
         busy=false;dialog.removeAttribute('aria-busy');renderSelection();report(error.message||'Não foi possível adicionar as artes. Sua seleção foi mantida.');toast?.(error.message||'Não foi possível adicionar as artes.','err');
       }
     }
   });
   root.addEventListener('keydown',event=>{
+    if(closed)return;
     if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(sizeEditing){sizeEditing=null;renderGrid();}else close();return;}
     if(event.key!=='Tab')return;
     const focusable=[...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), [tabindex="0"]')].filter(element=>element.getClientRects().length);

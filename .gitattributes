@@ -1,0 +1,3 @@
+# Keep the audited upstream runtime byte-for-byte on Windows and Linux.
+vendor/lcms-wasm/1.0.5/* -text
+assets/print/*.icc -text

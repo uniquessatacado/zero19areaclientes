@@ -1,0 +1,18 @@
+019 print recipe: user-confirmed Photoshop working profiles.
+These are ICC profile bytes only, not the Photoshop preferences/CSF file.
+Do not replace with a generic SWOP profile having a similar name.
+
+sRGB-IEC61966-2.1.icc
+Description: sRGB IEC61966-2.1
+Length: 3144 bytes
+SHA-256: 2b3aa1645779a9e634744faf9b01e9102b0c9b88fd6deced7934df86b949af7e
+
+swop-custom-019.icc
+Description: SWOP (Brilhante), 20%, GCR, Média
+Length: 724164 bytes
+SHA-256: 45d7d7ca4ee66545884c007d90e0efa96ab87c0ddbcb1aa1ee2095cc95c29fae
+
+The profile's original embedded copyright and other tags are unchanged.
+Source pixels are the existing browser sRGB film canvas, not a new image render.
+Destination profile is used for conversion only; the reference TIFFs were
+intentionally untagged, so the TIFF writer does not embed it automatically.

@@ -1,7 +1,10 @@
 import fs from 'node:fs/promises';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {createCloudFilmDraftStore} from '../film-cloud-draft.js';
 const source=await fs.readFile(new URL('../production-v217.js',import.meta.url),'utf8'),start=source.indexOf('  let filmDraftOwner='),end=source.indexOf('  async function renderFilm(){',start),draftCode=source.slice(start,end);
-assert.ok(start>0&&end>start);assert.ok(!draftCode.includes('.setItem('));assert.ok(source.includes('const invalidate=()=>{filmCostPanel?.invalidate?.();'));assert.ok(source.includes('const refreshItems=async()=>{filmCostPanel?.invalidate?.();'));
+assert.ok(start>0&&end>start);assert.ok(!draftCode.includes('.setItem('));assert.match(source,/const invalidate=\(\)=>\{filmCostPanel\?\.invalidate\?\.\(\);/);
+// Refresh now invalidates outstanding calculation/preview work before the cost
+// panel. Keep all three guards mandatory: do not merely loosen the old anchor.
+assert.match(source,/const refreshItems=async\(\)=>\{filmCalculationGeneration\+\+;filmPreviewGeneration\+\+;filmCostPanel\?\.invalidate\?\.\(\);/);
 const settings={mediaId:'m58',mode:'maximum',gapMm:3,freeRotation:true,angleStep:30},item=q=>({localId:'a',type:'asset',sourceId:'a',label:'Arte',widthCm:10,heightCm:5,quantity:q,rotationPolicy:'free'}),pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let tests=0;async function test(label,run){await run();tests++;console.log('PASS '+label)}
 function harness({legacy=null,failure=null}={}){

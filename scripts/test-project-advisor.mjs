@@ -79,4 +79,7 @@ const codes=result=>result.issues.map(issue=>issue.code);let count=0;
  const input=base();input.quotes[0].delivery_date='2026-09-24';const result=evaluate(input),issue=result.issues.find(issue=>issue.code==='DELIVERY_QUOTE_MISMATCH');assert.ok(issue);assert.deepEqual(issue.evidence.map(e=>e.value),['2026-09-25','2026-09-24']);assert.equal(issue.recommendedAction.type,'open_quote_pdf');assert.equal(issue.recommendedAction.quoteId,'q2');assert.equal(input.quotes[0].payment_status,'paid');count++;
  input.quotes[0].delivery_date=null;assert.ok(!codes(evaluate(input)).includes('DELIVERY_QUOTE_MISMATCH'));input.quotes[0].delivery_date='2026-09-24';input.quotes[0].payment_status='unpaid';assert.ok(!codes(evaluate(input)).includes('DELIVERY_QUOTE_MISMATCH'));count++;
 }
+{
+ const result=evaluate(base());assert.equal(result.nextAction.type,'open_film');assert.match(result.summary,/TIFF com Spot.*RIP antes de produzir/);count++;
+}
 console.log(`Project advisor: ${count} scenarios passed. Pure local evaluation, verified evidence, unknown-data guards, current-project isolation and safe UI markup.`);

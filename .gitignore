@@ -1,5 +1,6 @@
 # Generated local QA renders and simulated documents (not application source).
 /tmp/
+/dist/
 .vercel/
 .env
 .env.*

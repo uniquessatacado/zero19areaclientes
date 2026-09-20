@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-const source=await fs.readFile(new URL('../app.js',import.meta.url),'utf8'),start=source.indexOf('let logoutInProgress=false;'),end=source.indexOf('\n\n',source.indexOf('\n}',start)),code=source.slice(start,end);
+const source=(await fs.readFile(new URL('../app.js',import.meta.url),'utf8')).replaceAll('\r\n','\n'),start=source.indexOf('let logoutInProgress=false;'),end=source.indexOf('\n\n',source.indexOf('\n}',start)),code=source.slice(start,end);
 assert.ok(start>0&&end>start);assert.equal((source.match(/addEventListener\('click',signOutWithDraftGuard\)/g)||[]).length,2);
 let tests=0;async function test(name,run){await run();tests++;console.log('PASS '+name)}
 function fixture({pending=true,saved=true,confirmation=false,flush,signOut}={}){

@@ -211,7 +211,7 @@ function calculateLayout(expanded,settings){
   const bw=Math.ceil(width/cell),bh=Math.ceil(maxLength/cell),gapCells=Math.ceil(gap/cell);
   if(bw*bh>64e6)throw new Error('O filme excede o limite seguro de cálculo. Reduza o comprimento ou aumente a célula de cálculo.');
   const useBoard=maximum||lockedPlacements.length>0,board=useBoard?new Uint8Array(bw*bh):null,placements=[],prepared=new Map(),searchPrepared=new Map(),lockedKeys=new Set();
-  let usedRows=0,shelfX=0,shelfY=0,shelfH=0,lengthMm=0,occupiedCells=0,angleChecks=0;
+  let usedRows=0,shelfX=0,shelfY=0,shelfH=0,lengthMm=0,occupiedCells=0,angleChecks=0,positionChecks=0;
   if(lockedPlacements.length){
     const itemByKey=new Map(expanded.map(item=>[placementKey(item.id,item.copy),item]));
     for(const proposed of lockedPlacements){
@@ -234,6 +234,7 @@ function calculateLayout(expanded,settings){
       const lastY=Math.min(bh-1,usedRows+gapCells);
       outer:for(let y=0;y<=lastY;y++){
         for(let x=0;x<bw;x++)for(const option of options){
+          if(++positionChecks>2e6)throw new Error('A busca de contornos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(x*cell+option.widthMm>width+EPSILON||y*cell+option.heightMm>maxLength+EPSILON)continue;
           if(searchAngles&&++angleChecks>2e6)throw new Error('A busca de ângulos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(!collides(board,bw,bh,option.raw,x,y)){
@@ -265,6 +266,89 @@ function calculateLayout(expanded,settings){
   return layoutResult(placements,settings,occupiedCells);
 }
 
+// Rectangular candidates complement, rather than replace, alpha-aware nesting.
+// MaxRects reserves the full enclosing box, so a candidate cannot exploit an
+// unsafe halftone hole. A final mask-aware validation remains authoritative.
+// Its grid includes one trailing clearance so film edges do not require a gap.
+function rectangleCandidates(expanded,settings,locked){
+  const {width,maxLength,cell,gap}=settings,bw=Math.ceil(width/cell),bh=Math.ceil(maxLength/cell),clearance=Math.ceil(gap/cell),canonical=new Map(expanded.map((item,index)=>[placementKey(item.id,item.copy),index]));
+  const lockedKeys=new Set(locked.map(entry=>entry.key)),unlocked=expanded.filter(item=>!lockedKeys.has(placementKey(item.id,item.copy)));
+  const choices=new Map();
+  for(const item of unlocked){
+    if(choices.has(item.originalIndex))continue;
+    const angles=['90','free'].includes(item.rotationPolicy)?[0,90]:[0];
+    choices.set(item.originalIndex,angles.map(rotation=>({...rotatedBoundsMm(item.widthMm,item.heightMm,rotation),rotation})).filter(option=>option.widthMm<=width+EPSILON&&option.heightMm<=maxLength+EPSILON).map(option=>({...option,w:Math.ceil(option.widthMm/cell)+clearance,h:Math.ceil(option.heightMm/cell)+clearance})));
+  }
+  const tie=(a,b)=>canonical.get(placementKey(a.id,a.copy))-canonical.get(placementKey(b.id,b.copy));
+  const orders=[
+    unlocked,
+    [...unlocked].sort((a,b)=>Math.max(b.widthMm,b.heightMm)-Math.max(a.widthMm,a.heightMm)||tie(a,b)),
+    [...unlocked].sort((a,b)=>b.widthMm-a.widthMm||b.heightMm-a.heightMm||tie(a,b)),
+    [...unlocked].sort((a,b)=>b.heightMm-a.heightMm||b.widthMm-a.widthMm||tie(a,b)),
+    [...unlocked].sort((a,b)=>Math.min(b.widthMm,b.heightMm)-Math.min(a.widthMm,a.heightMm)||tie(a,b)),
+  ];
+  const uniqueOrders=[],seen=new Set();
+  for(const order of orders){const signature=order.map(item=>canonical.get(placementKey(item.id,item.copy))).join(',');if(!seen.has(signature)){seen.add(signature);uniqueOrders.push(order);}}
+  // Count work, not elapsed time: repeatable layouts across fast/slow devices.
+  let work=0,limited=false;const budget=3e6,results=[];
+  const spend=()=>{if(++work>budget)throw new Error('rectangle-search-budget');};
+  const contains=(a,b)=>b.x>=a.x&&b.y>=a.y&&b.x+b.w<=a.x+a.w&&b.y+b.h<=a.y+a.h;
+  function reserve(free,occupied){
+    const split=[];
+    for(const rect of free){
+      spend();
+      if(occupied.x>=rect.x+rect.w||occupied.x+occupied.w<=rect.x||occupied.y>=rect.y+rect.h||occupied.y+occupied.h<=rect.y){split.push(rect);continue;}
+      if(occupied.x>rect.x)split.push({...rect,w:occupied.x-rect.x});
+      if(occupied.x+occupied.w<rect.x+rect.w)split.push({...rect,x:occupied.x+occupied.w,w:rect.x+rect.w-occupied.x-occupied.w});
+      if(occupied.y>rect.y)split.push({...rect,h:occupied.y-rect.y});
+      if(occupied.y+occupied.h<rect.y+rect.h)split.push({...rect,y:occupied.y+occupied.h,h:rect.y+rect.h-occupied.y-occupied.h});
+    }
+    if(split.length>1024)throw new Error('rectangle-search-budget');
+    return split.filter((rect,index)=>!split.some((other,otherIndex)=>{spend();return otherIndex!==index&&contains(other,rect)&&(otherIndex<index||!contains(rect,other));}));
+  }
+  const better=(score,best)=>{if(!best)return true;for(let index=0;index<score.length;index++){if(score[index]!==best[index])return score[index]<best[index];}return false;};
+  search:for(const {order,strategy} of uniqueOrders.flatMap(order=>['bottom','short-side'].map(strategy=>({order,strategy})))){
+    let free=[{x:0,y:0,w:bw+clearance,h:bh+clearance}],placements=locked.map(entry=>({...entry.placement})),lengthMm=placements.reduce((length,p)=>Math.max(length,p.yMm+p.heightMm),0);
+    try{
+      for(const entry of locked)free=reserve(free,{x:entry.x,y:entry.y,w:entry.option.raw.w+clearance,h:entry.option.raw.h+clearance});
+      for(const item of order){
+        let selected=null,score=null;
+        for(const rect of free)for(const option of choices.get(item.originalIndex)){
+          spend();
+          if(option.w>rect.w||option.h>rect.h||rect.x*cell+option.widthMm>width+EPSILON||rect.y*cell+option.heightMm>maxLength+EPSILON)continue;
+          const bottom=Math.max(lengthMm,rect.y*cell+option.heightMm),short=Math.min(rect.w-option.w,rect.h-option.h),long=Math.max(rect.w-option.w,rect.h-option.h);
+          const candidate=strategy==='bottom'?[bottom,rect.y,short,long,rect.x,option.rotation]:[short,long,bottom,rect.y,rect.x,option.rotation];
+          if(better(candidate,score)){score=candidate;selected={x:rect.x,y:rect.y,...option};}
+        }
+        if(!selected)continue search;
+        free=reserve(free,selected);
+        const placement={id:item.id,copy:item.copy,xMm:selected.x*cell,yMm:selected.y*cell,widthMm:selected.widthMm,heightMm:selected.heightMm,sourceWidthMm:item.widthMm,sourceHeightMm:item.heightMm,rotation:selected.rotation,locked:Boolean(item.locked),label:item.label||''};
+        placements.push(placement);lengthMm=Math.max(lengthMm,placement.yMm+placement.heightMm);
+      }
+      placements.sort((a,b)=>canonical.get(placementKey(a.id,a.copy))-canonical.get(placementKey(b.id,b.copy)));
+      results.push({placements,lengthMm});
+    }catch(error){if(error.message==='rectangle-search-budget'){limited=true;break search;}throw error;}
+  }
+  return {results,limited};
+}
+
+function resolveLockedPlacements(expanded,settings){
+  const {width,cell,maxLength,gap,lockedPlacements}=settings,bw=Math.ceil(width/cell),itemByKey=new Map(expanded.map(item=>[placementKey(item.id,item.copy),item])),prepared=new Map(),seen=new Set();
+  if(bw*Math.ceil(maxLength/cell)>64e6)throw new Error('O filme excede o limite seguro de cálculo. Reduza o comprimento ou aumente a célula de cálculo.');
+  const resolved=lockedPlacements.map(proposed=>{
+    const entry=resolvePlacement({...proposed,locked:true},itemByKey,prepared,settings);
+    if(seen.has(entry.key))throw new Error('Uma mesma cópia foi travada mais de uma vez.');
+    seen.add(entry.key);return entry;
+  });
+  if(!resolved.length)return resolved;
+  const bh=Math.max(...resolved.map(entry=>entry.y+entry.option.raw.h)),board=new Uint8Array(bw*bh),gapCells=Math.ceil(gap/cell);
+  for(const entry of resolved){
+    if(collides(board,bw,bh,entry.option.raw,entry.x,entry.y))throw new Error(`A posição travada de ${entry.item.label||entry.item.id} colide com outra arte ou com a distância mínima.`);
+    stampWithGap(board,bw,bh,entry.option.raw,entry.x,entry.y,gapCells);
+  }
+  return resolved;
+}
+
 export function nestItems(items,options={}){
   const normalized=calculationSettings(options),{width,gap,cell,maxLength,mode,freeRotation,angleStep}=normalized,lockedPlacements=options.lockedPlacements||[];
   if(!Array.isArray(lockedPlacements))throw new Error('Lista de posições travadas inválida.');
@@ -272,6 +356,21 @@ export function nestItems(items,options={}){
   if(!expanded.length&&lockedPlacements.length)throw new Error('Há posições travadas de itens que não existem mais no filme.');
   if(!expanded.length)return layoutResult([],{...normalized,maximum:mode==='maximum'},0);
   const settings={...normalized,lockedPlacements};
+  // Validate locks independently, before any candidate fallback can hide an
+  // invalid/stale lock. Explicit no-rotation policies are never widened here.
+  const locks=resolveLockedPlacements(expanded,{...settings,maximum:mode==='maximum',maskBudget:{cells:0}});
+  let winner=null;
+  if(options.baselinePlacements!=null){
+    try{
+      const baseline=validateFilmPlacements(items,options.baselinePlacements,options),byKey=new Map(baseline.placements.map(p=>[placementKey(p.id,p.copy),p]));
+      const respectsLocks=locks.every(entry=>{const p=byKey.get(entry.key);return p&&p.xMm===entry.placement.xMm&&p.yMm===entry.placement.yMm&&p.rotation===entry.placement.rotation;});
+      if(respectsLocks){const lockedKeys=new Set(locks.map(entry=>entry.key));winner={...baseline,placements:baseline.placements.map(p=>({...p,locked:lockedKeys.has(placementKey(p.id,p.copy))}))};}
+    }catch{/* A changed item/gap/mode invalidates the old baseline; recalculate safely. */}
+  }
+  const rectangles=rectangleCandidates(expanded,settings,locks);
+  for(const candidate of rectangles.results)if(!winner||candidate.lengthMm<winner.lengthMm-EPSILON){
+    try{winner=validateFilmPlacements(items,candidate.placements,options)}catch{/* Conservative candidate still must pass the canonical collision validator. */}
+  }
   const solve=searchFreeRotation=>{
     const searchSettings={...settings,searchFreeRotation};
     if(mode==='normal')return calculateLayout(expanded,{...searchSettings,maximum:false});
@@ -281,14 +380,25 @@ export function nestItems(items,options={}){
     try{
       const packed=calculateLayout(expanded,{...searchSettings,maximum:true});
       return baseline&&baseline.lengthMm<packed.lengthMm?useBaseline():packed;
-    }catch(error){if(baseline){const result=useBaseline();return searchFreeRotation?{...result,rotationSearchLimited:true,rotationSearchWarning:error.message}:result;}throw error;}
+    }catch(error){if(baseline){const result={...useBaseline(),nestingSearchLimited:true,nestingSearchWarning:error.message};return searchFreeRotation?{...result,rotationSearchLimited:true,rotationSearchWarning:error.message}:result;}throw error;}
   };
+  const solveAll=()=>{
   if(!freeRotation)return solve(false);
   // Extra angles may reorder a greedy layout. Keep the validated orthogonal
   // baseline whenever it uses less film, while preserving arbitrary-angle locks.
   let baseline=null;try{baseline=solve(false)}catch{}
   try{const packed=solve(true);return baseline&&baseline.lengthMm<packed.lengthMm?{...baseline,...(packed.rotationSearchLimited?{rotationSearchLimited:true,rotationSearchWarning:packed.rotationSearchWarning}:{})}:packed;}
   catch(error){if(baseline)return {...baseline,rotationSearchLimited:true,rotationSearchWarning:error.message};throw error;}
+  };
+  try{
+    const legacy=solveAll();
+    if(!winner||legacy.lengthMm<winner.lengthMm-EPSILON)winner=legacy;
+    if(legacy.nestingSearchLimited)winner={...winner,nestingSearchLimited:true,nestingSearchWarning:legacy.nestingSearchWarning};
+    if(legacy.rotationSearchLimited)winner={...winner,rotationSearchLimited:true,rotationSearchWarning:legacy.rotationSearchWarning};
+  }
+  catch(error){if(!winner)throw error;winner={...winner,nestingSearchLimited:true,nestingSearchWarning:error.message};}
+  if(rectangles.limited)winner={...winner,nestingSearchLimited:true,nestingSearchWarning:'A comparação de alternativas atingiu o limite seguro; mantido o melhor encaixe validado.'};
+  return winner;
 }
 
 export function placementsOverlap(a,b,gapMm=0){
