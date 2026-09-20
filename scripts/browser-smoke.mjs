@@ -23,6 +23,7 @@ let socket;
 let nextId = 1;
 const pending = new Map();
 const events = [];
+const runtimeErrors = [];
 
 async function waitForDebugger() {
   for (let attempt = 0; attempt < 80; attempt += 1) {
@@ -75,11 +76,18 @@ try {
       pending.delete(payload.id);
       if (payload.error) item.reject(new Error(payload.error.message));
       else item.resolve(payload.result);
-    } else events.push(payload);
+    } else {events.push(payload);if(payload.method==='Runtime.exceptionThrown')runtimeErrors.push(payload.params.exceptionDetails.exception?.description||payload.params.exceptionDetails.text);}
   });
   socket.addEventListener('close',()=>{for(const item of pending.values())item.reject(new Error('Conexão CDP encerrada.'));pending.clear();});
   await send('Page.enable');
   await send('Runtime.enable');
+  // Optional official short-lived Vercel share URL, never a real app session.
+  const bootstrapUrl=process.env.BROWSER_QA_BOOTSTRAP_URL;
+  if(bootstrapUrl){
+    if(new URL(bootstrapUrl).origin!==new URL(baseUrl).origin)throw new Error('Bootstrap de QA deve pertencer ao deployment testado.');
+    await send('Page.navigate',{url:bootstrapUrl});
+    await delay(2500);
+  }
 
   const pages = [
     ['home', '/', {width: 1280, height: 800, mobile: false}],
@@ -146,10 +154,11 @@ try {
   const expectedOrigin=new URL(baseUrl).origin;
   const failures=report.filter(page=>{
     let actualOrigin='';try{actualOrigin=new URL(page.url).origin}catch{}
-    return page.url.startsWith('chrome-error:')||actualOrigin!==expectedOrigin||page.readyState!=='complete'||page.brokenImages.length>0||page.horizontalOverflow;
+    return page.url.startsWith('chrome-error:')||actualOrigin!==expectedOrigin||page.readyState!=='complete'||page.brokenImages.length>0||page.horizontalOverflow||!page.text||page.text.includes('Carregando sistema')||(page.name.startsWith('home')&&!page.text.includes('Entrar'));
   });
-  console.log(JSON.stringify({ ok: failures.length===0, screenshots, failures:failures.map(page=>page.name), report }, null, 2));
+  console.log(JSON.stringify({ ok: failures.length===0&&runtimeErrors.length===0, screenshots, failures:failures.map(page=>page.name), runtimeErrors, report }, null, 2));
   if(failures.length)throw new Error(`Smoke test falhou em: ${failures.map(page=>page.name).join(', ')}`);
+  if(runtimeErrors.length)throw new Error('Erros JavaScript durante o smoke: '+runtimeErrors.join('; '));
 } finally {
   try { socket?.close(); } catch {}
   child.kill();
