@@ -1,0 +1,14 @@
+.film-order-pending{margin:16px 0;border:1px solid #333138;border-radius:14px;padding:16px;background:#141317;min-width:0}
+.film-order-heading{display:flex;justify-content:space-between;gap:16px;align-items:center}.film-order-heading small{display:block;line-height:1.5;color:#aaa;margin-top:5px}
+.film-order-pending details{margin-top:14px}.film-order-pending summary,.film-advanced summary{cursor:pointer;padding:12px 0;font-weight:600}
+.film-order-list{display:grid;gap:10px;margin-top:10px;max-height:330px;overflow-y:auto;overscroll-behavior:contain}
+.film-order-list article{display:grid;grid-template-columns:minmax(0,1fr) 90px auto;align-items:center;gap:12px;padding:12px;border:1px solid #38363c;border-radius:10px}
+.film-order-list article span,.film-order-list article small{display:block;overflow-wrap:anywhere}.film-order-list article small{color:#aaa;margin-top:4px;line-height:1.5}
+.film-order-list label{font-size:12px}.film-order-list input{display:block;width:100%;margin-top:4px}
+.film-legacy-review{border-top:1px solid #38363c}.film-legacy-review>p{color:#b7b4bd;font-size:13px;line-height:1.6;margin:0 0 12px}
+.film-legacy-list{display:grid;gap:10px;max-height:330px;overflow-y:auto;overscroll-behavior:contain}
+.film-legacy-list article{display:flex;gap:12px;align-items:center;justify-content:space-between;border:1px solid #38363c;border-radius:10px;padding:12px}
+.film-legacy-list article>div{min-width:0}.film-legacy-list b,.film-legacy-list span,.film-legacy-list small{display:block;overflow-wrap:anywhere}.film-legacy-list small{color:#aaa;margin-top:4px;line-height:1.5}.film-legacy-list .btn{flex-shrink:0;min-height:44px}
+.film-advanced{margin:0 0 18px;border-bottom:1px solid #302d33}.film-advanced>.film-controls{background:transparent;padding:8px 0}
+@media(max-width:600px){.film-order-list article{grid-template-columns:minmax(0,1fr) 85px}.film-order-list article>.btn{grid-column:1/-1}.film-order-heading{align-items:flex-start}.film-order-pending{padding:12px}.film-order-heading .btn{flex-shrink:0}}
+@media(max-width:400px){.film-legacy-list article{align-items:stretch;flex-direction:column}}

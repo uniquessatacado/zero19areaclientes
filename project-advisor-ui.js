@@ -26,7 +26,8 @@ export async function fetchProjectAdvisorBundle(supabase,ownerId,{pageSize=500,n
 }
 export function adviceForWorkspace(bundle,workspace,project){
   const index=indexBundle(bundle),projects=index.projects.get(workspace.id)||[],selected=project===undefined?latestAdvisorProject(projects,workspace.id):project,quotes=selected?index.quotes.get(selected.id)||[]:[],assets=selected?index.assets.get(selected.id)||[]:[],responsible=workspace.responsible_user_id||selected?.responsible_user_id;
-  const advice=evaluateProjectAdvice({workspace,project:selected,projects,quotes:[...quotes,...index.legacyQuotes.get(workspace.id)||[]],assets,folders:selected?index.folders.get(selected.id)||[]:[],quoteItems:quotes.flatMap(row=>index.quoteItems.get(row.id)||[]),documents:quotes.flatMap(row=>index.documents.get(row.id)||[]),printProfiles:assets.flatMap(row=>index.printProfiles.get(row.id)||[]),statuses:[...new Set([selected?.status_id,workspace.status_id])].map(id=>index.statuses.get(id)).filter(Boolean),teamProfiles:responsible&&index.teamProfiles.has(responsible)?[index.teamProfiles.get(responsible)]:[],known:bundle.known,queueSnapshot:bundle.queueSnapshot?.error?bundle.queueSnapshot:{rows:index.queueRows.get(workspace.id)||[]}});
+  const companyAssets=(bundle.assets||[]).filter(asset=>asset.workspace_id===workspace.id);
+  const advice=evaluateProjectAdvice({workspace,project:selected,projects,quotes:[...quotes,...index.legacyQuotes.get(workspace.id)||[]],assets:companyAssets,folders:selected?index.folders.get(selected.id)||[]:[],quoteItems:quotes.flatMap(row=>index.quoteItems.get(row.id)||[]),documents:quotes.flatMap(row=>index.documents.get(row.id)||[]),printProfiles:companyAssets.flatMap(row=>index.printProfiles.get(row.id)||[]),statuses:[...new Set([selected?.status_id,workspace.status_id])].map(id=>index.statuses.get(id)).filter(Boolean),teamProfiles:responsible&&index.teamProfiles.has(responsible)?[index.teamProfiles.get(responsible)]:[],known:bundle.known,queueSnapshot:bundle.queueSnapshot?.error?bundle.queueSnapshot:{rows:index.queueRows.get(workspace.id)||[]}});
   for(const name of ['workspaces','projects'])if(bundle.known[name]===false&&!advice.incomplete.includes(name))advice.incomplete.push(name);
   if(advice.incomplete.length)advice.confidence='partial';return advice;
 }
@@ -52,7 +53,7 @@ export function createProjectAdvisorUI(ctx){
     for(const card of app.querySelectorAll('.workspace-card')){
       const id=card.dataset.workspace||card.querySelector('.open-workspace[data-id]')?.dataset.id,workspace=byId.get(id)||visible.find(item=>item.id===id);
       card.querySelectorAll('[data-project-advisor-badge]').forEach(node=>node.remove());if(!id||!isClient(workspace))continue;
-      const advice=adviceForWorkspace(cached,workspace);advices.set(id,advice);if(!advice.applicable)continue;
+      const advice=adviceForWorkspace(cached,workspace);advices.set(id,advice);if(!advice.applicable||advice.closed)continue;
       const button=document.createElement('button');button.type='button';button.className='project-advisor-card-button';button.dataset.projectAdvisorBadge=id;button.innerHTML=renderProjectAdvice(advice,{compact:true});button.title=`Abrir projeto · consulta ${dateLabel(cached.loadedAt)}`;button.setAttribute('aria-label',`${workspace.company_name||'Empresa'}: ${advice.summary}. Abrir projeto.`);button.onclick=event=>{event.stopPropagation();if(owner()!==cached?.ownerId)return toast('A conta mudou. Atualize a página.');ctx.nav(workspacePath(id))};
       const actions=card.querySelector('.card-actions');actions?actions.before(button):card.append(button);
     }

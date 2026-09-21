@@ -1,4 +1,5 @@
 import {QUEUE_STAGES} from './queue-core.js?v=2.17.3';
+import {serviceReadiness} from './service-readiness.js?v=2.17.11';
 
 // Deterministic local guidance, not a language model. Never writes or advances status.
 export const PROJECT_ADVISOR_VERSION=1;
@@ -34,11 +35,12 @@ export function evaluateProjectAdvice(input={}){
   const add=(code,severity,title,detail,facts,recommendedAction)=>{if(!result.issues.some(issue=>issue.code===code))result.issues.push({code,severity,title,detail,evidence:facts,recommendedAction,confidence:'verified',priority:priorities[code]??50})};
   if(project&&((project.workspace_id&&project.workspace_id!==workspace.id)||!own(project))){add('PROJECT_SCOPE_MISMATCH','critical','Projeto fora desta empresa','O projeto recebido não pertence a esta empresa. Reabra o ambiente antes de continuar.',[evidence('project',project,'workspace_id')],action('open_workspace','Reabrir empresa'));incomplete.add('projectScope');return finish()}
   result.projectId=project?.id||null;
-  if(!project){if(projectKnown)add('PROJECT_MISSING','warning','Crie o primeiro projeto','Esta empresa ainda não possui um projeto para separar orçamento, artes e andamento.',[evidence('workspace',workspace,'id')],action('new_project','Criar projeto'));else incomplete.add('projects');return finish()}
+  if(!project){if(projectKnown&&known.statuses&&data.statuses.some(row=>row.id===workspace.status_id&&own(row)&&row.is_finalized)){result.closed=true;result.summary='Cliente finalizado; histórico preservado.';result.nextAction=action('view_history','Ver histórico');return finish()}if(projectKnown)add('PROJECT_MISSING','warning','Crie o primeiro projeto','Esta empresa ainda não possui um projeto para separar orçamento, artes e andamento.',[evidence('workspace',workspace,'id')],action('new_project','Criar projeto'));else incomplete.add('projects');return finish()}
   const scoped=row=>row.project_id===project.id&&(!row.workspace_id||row.workspace_id===workspace.id)&&own(row);
-  const quotes=data.quotes.filter(scoped),assets=data.assets.filter(scoped),arts=assets.filter(row=>row.asset_type==='arte'),folders=data.folders.filter(scoped);
+  const quotes=data.quotes.filter(scoped),linkedIds=new Set(data.quoteItems.filter(item=>quotes.some(q=>q.id===item.quote_id)).flatMap(item=>[item.reference_asset_id,item.final_asset_id]).filter(Boolean));
+  const assets=data.assets.filter(row=>scoped(row)||linkedIds.has(row.id)&&row.workspace_id===workspace.id&&own(row)),arts=assets.filter(row=>row.asset_type==='arte'),folders=data.folders.filter(scoped);
   const quoteIds=new Set(quotes.map(row=>row.id)),assetIds=new Set(arts.map(row=>row.id));
-  const printProfiles=data.printProfiles.filter(row=>assetIds.has(row.asset_id)&&(!row.project_id||row.project_id===project.id)&&own(row)),profiles=new Map(printProfiles.map(row=>[row.asset_id,row]));
+  const printProfiles=data.printProfiles.filter(row=>assetIds.has(row.asset_id)&&(!row.project_id||row.project_id===project.id||linkedIds.has(row.asset_id))&&own(row)),profiles=new Map(printProfiles.map(row=>[row.asset_id,row]));
   const documents=data.documents.filter(row=>quoteIds.has(row.quote_id)&&(!row.project_id||row.project_id===project.id)&&own(row));
   const status=known.statuses?data.statuses.find(row=>row.id===project.status_id&&own(row)):null,workspaceStatus=known.statuses?data.statuses.find(row=>row.id===workspace.status_id&&own(row)):null;
   const stage=status&&has(status,'queue_stage')?status.queue_stage:null,operational=QUEUE_STAGES.includes(stage),paid=quotes.filter(row=>row.payment_status==='paid');result.stage=stage;
@@ -97,6 +99,10 @@ export function evaluateProjectAdvice(input={}){
     const readinessKnown=arts.every(asset=>!profiles.has(asset.id)||has(profiles.get(asset.id),'ready_for_print')&&dimensionsKnown(asset)&&fileKnown(asset));
     if(!readinessKnown)incomplete.add('printProfiles.readiness');
     if(readinessKnown&&arts.length&&!ready.length&&!withoutSize.length&&['ready_production','production'].includes(stage))add('PRINT_READINESS_PENDING','critical','Nenhuma arte liberada para o filme','Há artes no projeto, mas nenhuma combina liberação, medidas válidas e arquivo. Revise os perfis antes de imprimir.',arts.map(asset=>evidence('asset',asset,'id')),action('edit_print_profile','Revisar liberação',{assetId:arts[0].id}));
+  }
+  if(known.quotes&&known.quoteItems&&known.assets&&known.printProfiles)for(const quote of quotes.filter(q=>q.service_type)){
+    const issues=serviceReadiness(quote,{items:data.quoteItems.filter(item=>own(item)),assets,printProfiles});
+    if(issues.length)add('SERVICE_PREPARATION_'+quote.id,['ready_production','production'].includes(stage)?'critical':'info','Preparar o pedido após o orçamento',issues.join(' '),[evidence('quote',quote,'service_type'),evidence('quote',quote,'official_mockup_asset_id')],action('new_quote','Preparar artes e mockup',{quoteId:quote.id}));
   }
   result.counts={quotes:quotes.length,paidQuotes:paid.length,arts:arts.length,readyArts:ready.length};
   if(input.queueSnapshot){if(input.queueSnapshot.error)incomplete.add('queueSnapshot');else{const row=(input.queueSnapshot.rows||[]).find(row=>row.project?.id===project.id&&row.workspace?.id===workspace.id);if(row){result.queuePosition=row.position??null;if(row.stage!==stage)add('QUEUE_STAGE_MISMATCH','warning','Atualize a leitura da fila','O projeto e o retrato carregado da fila mostram etapas diferentes. Atualize a consulta antes de decidir.',[{source:'queue',id:project.id,field:'stage',value:row.stage},evidence('status',status,'queue_stage')],action('open_queue','Reabrir fila',{stage:QUEUE_STAGES.includes(stage)?stage:row.stage}))}}}

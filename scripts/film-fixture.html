@@ -1,4 +1,4 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><base href="/"><title>Montar filme - fixture local isolada</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="production-v217.css"><link rel="stylesheet" href="film-picker.css"><link rel="stylesheet" href="film-preview.css"><link rel="stylesheet" href="ui-polish.css"></head><body><div id="app"></div><script type="module">
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><base href="/"><title>Montar filme - fixture local isolada</title><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="production-v217.css"><link rel="stylesheet" href="film-picker.css"><link rel="stylesheet" href="film-preview.css"><link rel="stylesheet" href="ui-polish.css"><link rel="stylesheet" href="film-production.css"><link rel="stylesheet" href="mobile-stability.css"></head><body><div id="app"></div><script type="module">
 const clone=value=>structuredClone(value),notifications=[],operations=[],downloads=[],urls=new Map(),blobUrls=new Map(),testState={workerCount:0,workerMessages:0,spotWorkers:0,financeOffers:0};
 // Isolated fixture: exercise the browser download fallback, never a real file dialog.
 window.showSaveFilePicker=undefined;
@@ -11,6 +11,7 @@ const NativeWorker=window.Worker;window.Worker=class extends NativeWorker{constr
 // handler. The editor must show added items while this promise is still pending.
 const nativeImageDecode=HTMLImageElement.prototype.decode,imageDecodeWaiters=new Set();
 HTMLImageElement.prototype.decode=function(...args){
+ if(testState.failImageDecodes)return Promise.reject(new Error('Imagem de teste indisponível'));
  if(!testState.holdImageDecodes)return nativeImageDecode.apply(this,args);
  testState.imageDecodeWaiting=(testState.imageDecodeWaiting||0)+1;
  return new Promise(resolve=>imageDecodeWaiters.add(resolve)).then(()=>nativeImageDecode.apply(this,args)).finally(()=>{testState.imageDecodeWaiting--;});
@@ -33,7 +34,22 @@ function query(table){let mode='select',payload=null,filters=[],orders=[],maximu
  if(mode==='upsert'){const key=table==='z19p_asset_print_profiles'?'asset_id':'id';let row=rows.find(row=>row[key]===payload[key]);if(row)Object.assign(row,clone(payload));else{row=clone(payload);rows.push(row)}result=[row]}
  for(const [key,asc] of orders.reverse())result.sort((a,b)=>String(a[key]??'').localeCompare(String(b[key]??''))*(asc?1:-1));result=result.slice(start,Math.min(end+1,start+maximum));return {data:clone(single?result[0]||null:result),error:null};
  }return chain}
-const supabase={from:query,rpc:async()=>({data:[],error:null}),storage:{from(bucket){if(bucket!=='z19p-private')throw Error('Nenhum Storage real é usado nesta fixture');return {createSignedUrl:async path=>{operations.push({table:'fixture-private-source',mode:'read',path});const url=privateFiles.get(path);if(!url)throw Error('Fonte privada simulada indisponível');return {data:{signedUrl:url},error:null}}}}}};
+// Optional released-order fixture. This is an isolated RPC double, not a test
+// of SQL/RLS; real migration tests must verify those independently.
+const orderRows=clone(window.__filmFixtureOrders||[]),allocations=new Map(),exportsRecorded=new Map(),recordCalls=[];
+async function rpc(name,args){
+ if(name==='z19p_pending_film_items')return {data:orderRows.map(row=>{const allocated=[...allocations.values()].filter(entry=>entry.quote_item_id===row.quote_item_id);return {...row,remaining_quantity:row.remaining_quantity-allocated.reduce((sum,entry)=>sum+entry.quantity,0),allocations:allocated.map(entry=>({film_item_id:entry.film_item_id,quantity:entry.quantity}))}}),error:null};
+ if(name!=='z19p_record_film_export')return {data:[],error:null};
+ recordCalls.push(clone(args));
+ if(testState.recordFailure==='before'){testState.recordFailure=null;return {data:null,error:{message:'Falha de confirmação simulada'}};}
+ if(exportsRecorded.has(args.p_export_id))return {data:{export_id:args.p_export_id,replayed:true,added_quantity:0,has_previous_items:true},error:null};
+ let added=0,hasPrevious=false;for(const item of args.p_items){const before=allocations.get(item.film_item_id),delta=Math.max(0,item.quantity-(before?.quantity||0));if(before)hasPrevious=true;added+=delta;if(delta)allocations.set(item.film_item_id,{...clone(item),quantity:item.quantity});}
+ const result={export_id:args.p_export_id,replayed:false,added_quantity:added,has_previous_items:hasPrevious};exportsRecorded.set(args.p_export_id,result);
+ if(testState.recordFailure==='after'){testState.recordFailure=null;return {data:null,error:{message:'Resposta perdida depois da gravação simulada'}};}
+ if(testState.recordGate)await testState.recordGate;
+ return {data:result,error:null};
+}
+const supabase={from:query,rpc,storage:{from(bucket){if(bucket!=='z19p-private')throw Error('Nenhum Storage real é usado nesta fixture');return {createSignedUrl:async path=>{operations.push({table:'fixture-private-source',mode:'read',path});const url=privateFiles.get(path);if(!url)throw Error('Fonte privada simulada indisponível');return {data:{signedUrl:url},error:null}}}}}};
 const escapeHTML=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 try{
  window.fixtureStage='shell';
@@ -46,6 +62,7 @@ try{
  const app=document.querySelector('#app'),production=createProductionModule({supabase,app,shell,escapeHTML,getCostUI:()=>({mountFilmCost:()=>({destroy(){},refresh(){},invalidate(){},getSnapshot:()=>null})}),onFilmExported:()=>{testState.financeOffers++},publicUrl:path=>{if(!urls.has(path))throw Error('Imagem fixture desconhecida: '+path);return urls.get(path)},setPngDpi,accountOwnerId:()=> 'qa-owner',profileName:()=> 'Clóvis Teste',state:()=>({session:{user:{id:'qa-user'}},currentProfile:{role:'admin'},currentProjects:projects,currentWorkspace:null,currentFolders:folders,currentAssets:assets,workspaces,statuses:[],teamProfiles:[]}),bindCommon:()=>{},logEvent:async()=>{},toast:(message,kind)=>notifications.push({message,kind}),nav:()=>{},fmtMoney:number=>'R$ '+Number(number).toFixed(2),quoteTotal:()=>0,quoteItemUnit:()=>0});
  window.fixtureStage='render';await production.renderFilm();
  window.fixture={production,db,profiles,assets,media,downloads,notifications,operations,testState,click:selector=>{const node=document.querySelector(selector);if(!node)throw Error('Seletor ausente: '+selector);node.click()},setInput:(selector,value,type='input')=>{const node=document.querySelector(selector);if(!node)throw Error('Input ausente: '+selector);node.value=value;node.dispatchEvent(new Event(type,{bubbles:true}))},metrics:()=>({overflow:document.documentElement.scrollWidth>innerWidth+1,bottom:getComputedStyle(document.querySelector('.mobile-bottom-nav')).display,broken:[...document.querySelectorAll('img')].filter(image=>image.complete&&!image.naturalWidth).length}),select:index=>{const node=document.querySelectorAll('[data-placement]')[index];node.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}))},snapshot:()=>production.__qa(),exportInfo:async()=>{const entry=downloads.at(-1);if(!entry?.blob)return null;const bytes=new Uint8Array(await entry.blob.arrayBuffer()),view=new DataView(bytes.buffer);let dpi=null;for(let at=8;at<bytes.length;){const size=view.getUint32(at),type=String.fromCharCode(...bytes.slice(at+4,at+8));if(type==='pHYs')dpi={x:view.getUint32(at+8),y:view.getUint32(at+12),unit:bytes[at+16]};at+=size+12}const bitmap=await createImageBitmap(entry.blob),canvas=document.createElement('canvas');canvas.width=bitmap.width;canvas.height=bitmap.height;const g=canvas.getContext('2d');g.drawImage(bitmap,0,0);const result={name:entry.name,width:view.getUint32(16),height:view.getUint32(20),dpi,transparentCorner:g.getImageData(bitmap.width-1,bitmap.height-1,1,1).data[3],bytes:bytes.length};bitmap.close();return result}};window.fixtureReady=true;
+ fixture.orders={rows:orderRows,allocations,exportsRecorded,recordCalls};
  fixture.releaseImageDecodes=()=>{testState.holdImageDecodes=false;const count=imageDecodeWaiters.size;for(const resolve of imageDecodeWaiters)resolve();imageDecodeWaiters.clear();return count;};
  let editorProbe=null;
  fixture.beginEditorProbe=()=>{editorProbe={operations:operations.length,nodes:new Map(['.film-page','#filmItems','#filmPreview','#filmMedia','#filmMode','#filmGap','#calculateFilm'].map(selector=>[selector,document.querySelector(selector)]))};};

@@ -1,11 +1,13 @@
 import {normalizeGarmentScene,GARMENT_SIDES} from './garment-scene.js?v=2.17.3';
+import {GARMENT_COLORS,validGarmentHex} from './garment-colors.js?v=2.17.11';
 export const GARMENT_SHARE_MAX_BYTES=512*1024;
 const uuid='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
 export const isGarmentSharePath=path=>typeof path==='string'&&new RegExp(`^${uuid}/presentations/${uuid}/scene\\.json$`,'i').test(path);
 export const isPublicGarmentArtPath=path=>typeof path==='string'&&path.length<=2048&&new RegExp(`^${uuid}/`,'i').test(path)&&!/[\\%?#:\x00-\x1f\x7f]/.test(path)&&!path.split('/').some(part=>!part||part==='.'||part==='..')&&/\.(png|jpe?g|webp)$/i.test(path);
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 function validScene(scene){
-  if(!object(scene)||!['normal','oversized'].includes(scene.model)||!['black','white','offwhite'].includes(scene.color)||!Array.isArray(scene.layers)||scene.layers.length>40)throw new Error('A montagem 3D está em formato inválido.');
+  const validColor=object(scene)&&(GARMENT_COLORS.some(color=>color.id===scene.color)||(/^custom-[0-9a-f]{6}$/i.test(scene.color||'')&&validGarmentHex(scene.colorHex)&&scene.color.slice(7).toLowerCase()===scene.colorHex.slice(1).toLowerCase()));
+  if(!object(scene)||!['normal','oversized'].includes(scene.model)||!validColor||!Array.isArray(scene.layers)||scene.layers.length>40)throw new Error('A montagem 3D está em formato inválido.');
   if(!object(scene.measurements)||Object.values(scene.measurements).some(value=>!Number.isFinite(value)||value<5||value>150))throw new Error('As medidas da peça são inválidas.');
   for(const key of ['bodyWidth','bodyLength','sleeveWidth','sleeveLength'])if(!Number.isFinite(scene.measurements[key]))throw new Error('Faltam medidas da peça.');
   for(const layer of scene.layers){
@@ -15,7 +17,7 @@ function validScene(scene){
 }
 export function createGarmentSharePayload(input){
   const scene=validScene(normalizeGarmentScene(input));
-  const payload={version:1,kind:'z19p-garment-3d',scene:{title:scene.title,model:scene.model,color:scene.color,measurements:scene.measurements,layers:scene.layers.map((layer,index)=>({id:`print-${index+1}`,name:layer.name,path:layer.path,side:layer.side,width:layer.width,ratio:layer.ratio,x:layer.x,y:layer.y,locked:true}))}};
+  const payload={version:1,kind:'z19p-garment-3d',scene:{title:scene.title,model:scene.model,color:scene.color,colorHex:scene.colorHex,colorName:scene.colorName,measurements:scene.measurements,layers:scene.layers.map((layer,index)=>({id:`print-${index+1}`,name:layer.name,path:layer.path,side:layer.side,width:layer.width,ratio:layer.ratio,x:layer.x,y:layer.y,locked:true}))}};
   if(new TextEncoder().encode(JSON.stringify(payload)).length>GARMENT_SHARE_MAX_BYTES)throw new Error('A apresentação excede o limite de tamanho.');
   return payload;
 }

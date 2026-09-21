@@ -67,7 +67,7 @@ const db=fakeSupabase({z19p_projects:[project('a','early'),project('sales-p','sa
 const module=createProductionModule({app,supabase:db,state:()=>state,accountOwnerId:()=>'account',escapeHTML:value=>String(value)});
 await module.loadQueues();
 module.enhanceDashboardCards();
-assert.match(cards[0].html,/#1 para desenvolver arte/,'cards load from full account data, not the currently open workspace state');
+assert.match(cards[0].html,/#1 para preparar artes/,'cards load from full account data, not the currently open workspace state');
 assert.match(cards[0].html,/>PAGO</);
 assert.match(cards[1].html,/>PENDENTE</);
 assert.equal(cards[0].classList.contains('mine'),true);
@@ -75,6 +75,6 @@ module.enhanceDashboardCards();
 assert.equal(cards[0].count,1,'redrawing cards does not duplicate badges');
 cards=[fakeCard('early')]; // Simulate search / status filter / minute refresh replacing the DOM.
 module.enhanceDashboardCards();
-assert.match(cards[0].html,/#1 para desenvolver arte/,'newly rendered cards regain queue badges');
+assert.match(cards[0].html,/#1 para preparar artes/,'newly rendered cards regain queue badges');
 
 console.log('queue regression tests: payment, project isolation, legacy diagnostics, ordering, pagination and card redraw passed');

@@ -1,0 +1,34 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content"><title>Customer mobile fixture</title>
+<link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/production-v217.css"><link rel="stylesheet" href="/film-picker.css"><link rel="stylesheet" href="/art-studio.css"><link rel="stylesheet" href="/garment-composer.css"><link rel="stylesheet" href="/production-cost-ui.css"><link rel="stylesheet" href="/ui-polish.css"><link rel="stylesheet" href="/mobile-stability.css">
+</head><body><div id="app"></div><div id="toast-root"></div><script type="module">
+import {customerState,customerView} from '/customer-view-core.js';
+import {installMobileViewport} from '/mobile-viewport.js';
+installMobileViewport();
+const escapeHTML=(value='')=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const statuses=[{id:'active',name:'Em atendimento',color:'#888'},{id:'delivered',name:'Entregue',is_finalized:true,color:'#59a881'}];
+const make=(id,extra={})=>({id,owner_id:'account',workspace_type:'client',company_name:id,responsible_user_id:'user',status_id:'active',status_changed_at:new Date().toISOString(),...extra});
+const workspaces=[make('mine',{company_name:'Personalização São João — Empresa com identificação completa',phone:'11999999999'}),make('colleague',{responsible_user_id:'colleague',company_name:'Cliente da equipe'}),make('delivered',{status_id:'delivered',company_name:'Histórico entregue'}),make('foreign',{owner_id:'foreign',company_name:'Não pode aparecer'})];
+const currentProjects=[{id:'p1',owner_id:'account',workspace_id:'mine',sequence_no:1,service_type:'customer_shirt',delivery_date:'2099-10-10'},{id:'p2',owner_id:'account',workspace_id:'delivered',sequence_no:1,finalized_at:'2020-01-01'}];
+const app=document.querySelector('#app'),$=(s,root=document)=>root.querySelector(s),$$=(s,root=document)=>[...root.querySelectorAll(s)];
+let lastAction=null;
+const ctx={customerState,customerView,app,$,$$,escapeHTML,statuses,workspaces,currentProjects,session:{user:{id:'user'}},currentWorkspace:null,
+ accountOwnerId:()=> 'account',accountReadGuard:()=>()=>true,loadTeamContext:async()=>true,ensureDefaults:async()=>{},loadConfig:async()=>{},loadWorkspaces:async()=>{},loadProjects:async()=>{},loadQualityCommentCount:async()=>{},loadCommissionContext:async()=>{},
+ statusById:id=>statuses.find(s=>s.id===id),workspaceStatusAttention:()=>null,workspaceStatusDuration:()=>null,reminderInfo:()=>null,
+ brandLogoHTML:cls=>`<img class="${cls}" src="/zero19-logo.png" alt="Zero 19">`,
+ statusOptions:current=>statuses.map(s=>`<option value="${s.id}" ${s.id===current?'selected':''}>${s.name}</option>`).join(''),
+ statusPill:s=>`<span class="status-pill">${s?.name||'Sem status'}</span>`,
+ sellerBadge:()=>'<div class="seller-lines"><span><i>Criado por</i><b>Responsável original de nome completo</b></span><span><i>Responsável</i><b>Vendedor de nome completo</b></span></div>',workspaceSpecialCallout:()=>'',
+ shell:content=>`<div class="app-shell"><header class="topbar"><button class="nav-menu-trigger" aria-label="Menu">☰</button><div class="brand"><img class="brand-logo-ui" src="/zero19-logo.png" alt="Zero 19"></div><div class="top-actions"><span class="app-version-badge">v2.17.11</span></div></header>${content}<nav class="mobile-bottom-nav">${['Menu','Artes','Clientes','Filme','Mockups','Links'].map(t=>`<button><i>○</i><span>${t}</span></button>`).join('')}</nav></div>`,
+ homeSummaryHTML:()=>'<section class="daily-summary compact-daily-summary"><div class="summary-cards">'+['Em andamento','Atenção','Iniciados hoje','Entregues','Faturamento'].map(t=>`<div><small>${t}</small><b>1</b></div>`).join('')+'</div></section>',
+ myCommissionCardHTML:()=>'',icon:()=>'+',bindCommon:()=>{},nav:path=>lastAction=path,route:()=> '/',openWorkspaceModal:()=>lastAction='new',openWorkspaceActions:()=>{},claimWorkspace:()=>{},updateWorkspaceStatus:async()=>true,productionModule:{enhanceDashboardCards:()=>{}},updateStatusAgeLabels:()=>{}};
+const source=await(await fetch('/app.js')).text();
+const cards=source.slice(source.indexOf('renderWorkspaceCards = function(items){'),source.indexOf('function dateRangePreset('));
+const dashboard=source.slice(source.indexOf('function dashboardClientListsHTML('),source.indexOf('function absoluteAppUrl('));
+const names=Object.keys(ctx);
+const render=new Function(...names,`let renderWorkspaceCards,bindWorkspaceCards,renderDashboard,dashboardAgingTimer;${cards}\n${dashboard}\nreturn renderDashboard;`)(...names.map(k=>ctx[k]));
+await render();
+window.customerFixture={lastAction:()=>lastAction,async openModal(){
+ const wrapper=document.createElement('div');wrapper.className='modal-backdrop';wrapper.innerHTML=`<div class="modal wide"><div class="modal-head"><div><h2>Orçamento / preparação no celular</h2></div><button class="btn close" aria-label="Fechar">×</button></div><form class="form-grid"><div class="field"><label for="mobileName">Nome completo</label><input id="mobileName" value="Empresa com nome completo"></div><div class="field"><label for="mobileQty">Quantidade</label><input id="mobileQty" inputmode="numeric" value="25"></div><div class="field"><label for="mobileSelect">Produto</label><select id="mobileSelect"><option>Produto com um nome bem longo para conferir o tamanho no celular</option></select></div><div class="field full"><label for="mobileNotes">Observações</label><textarea id="mobileNotes"></textarea></div><div class="field"><label for="mobileDate">Prazo</label><input id="mobileDate" type="date" value="2026-09-28"></div></form><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary">Salvar orçamento</button></div></div>`;document.body.appendChild(wrapper);wrapper.querySelectorAll('.close').forEach(b=>b.onclick=()=>wrapper.remove());return true;
+ },openPicker(){const el=document.createElement('div');el.className='film-picker-backdrop';el.innerHTML='<div class="film-picker"><div class="fp-header"><div class="fp-heading"><h2>Escolher arte</h2></div><button class="fp-icon-button">×</button></div><div class="fp-search"><input aria-label="Buscar arte" placeholder="Buscar arte"></div><div class="fp-body"><div class="fp-companies">Empresas</div><div class="fp-results">Suas artes</div></div></div>';document.body.appendChild(el);return true;}};
+window.fixtureReady=true;
+</script></body></html>

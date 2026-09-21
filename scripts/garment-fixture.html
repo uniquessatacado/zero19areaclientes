@@ -3,6 +3,7 @@ import {openGarmentComposer} from '/garment-composer.js';
 import {normalizeGarmentScene,renderGarmentView,renderGarmentPresentation} from '/garment-scene.js';
 import {createProductionCostUI,createDefaultCostState} from '/production-cost-ui.js';
 import {createGarmentCloudStore} from '/garment-cloud-store.js';
+import {GARMENT_COLORS} from '/garment-colors.js';
 const workerState={created:0,terminated:0,active:0,delay:0},OriginalWorker=window.Worker;
 window.Worker=class extends OriginalWorker{constructor(...args){super(...args);workerState.created++;workerState.active++;this.stopped=false;this.timer=null}postMessage(...args){if(workerState.delay)this.timer=setTimeout(()=>{if(!this.stopped)super.postMessage(...args)},workerState.delay);else super.postMessage(...args)}terminate(){if(!this.stopped){this.stopped=true;workerState.terminated++;workerState.active--;clearTimeout(this.timer)}return super.terminate()}};window.workerState=workerState;
 const accountListeners=new Set(),nativeAdd=window.addEventListener.bind(window),nativeRemove=window.removeEventListener.bind(window);window.addEventListener=(type,callback,...rest)=>{if(type==='z19:account-changing')accountListeners.add(callback);return nativeAdd(type,callback,...rest)};window.removeEventListener=(type,callback,...rest)=>{if(type==='z19:account-changing')accountListeners.delete(callback);return nativeRemove(type,callback,...rest)};window.accountListeners=accountListeners;
@@ -16,4 +17,17 @@ const ctx={supabase,publicUrl:path=>{if(!urls.has(path))throw Error('Imagem desc
 const costUI=createProductionCostUI({canView:()=>true,isAdmin:()=>true,publicUrl:ctx.publicUrl,toast:ctx.toast,costStore:{async load(){return {data:createDefaultCostState(),mode:'cloud',cloudAvailable:true,warning:'Fixture simulada de nuvem: sem preços de compra.'}},async save(){throw Error('Este teste não autoriza salvar configurações de custos.')}}});ctx.getCostUI=()=>costUI;
 window.fixture={assets,profiles,operations,downloads,notices,open:()=>openGarmentComposer(ctx,assets[0]),click:selector=>document.querySelector(selector).click(),setInput:(selector,value,event='input')=>{const node=document.querySelector(selector);node.value=value;node.dispatchEvent(new Event(event,{bubbles:true}))},metrics:()=>{const node=document.querySelector('.garment-composer'),r=node.getBoundingClientRect();return {pageOverflow:document.documentElement.scrollWidth>innerWidth+1,dialogOverflow:node.scrollWidth>node.clientWidth+1,offscreen:r.left<-.5||r.right>innerWidth+.5||r.top<-.5||r.bottom>innerHeight+.5}},verifyViews:async()=>{const results=[];for(const model of ['normal','oversized'])for(const color of ['black','white','offwhite']){const normalized=normalizeGarmentScene({...scene,model,color});for(const side of ['front','back','left','right']){const canvas=await renderGarmentView(normalized,side,{width:600,annotations:false,publicUrl:ctx.publicUrl});results.push({model,color,side,width:canvas.width,height:canvas.height});canvas.width=canvas.height=1}}return results},pdf:async()=>downloads.find(x=>x.name.endsWith('.pdf'))?.blob.text(),photoLoaded:async()=>{const photo=document.querySelector('.garment-photo'),url=getComputedStyle(photo).backgroundImage.match(/url\(["']?(.*?)["']?\)/)?.[1],image=new Image();image.src=url;await image.decode();return true}};
 fixture.costUI=costUI;fixture.savedDrafts=[];fixture.openStandalone=draftId=>openGarmentComposer(ctx,null,{draftId,onSaved:record=>fixture.savedDrafts.push(record)});fixture.ctx=ctx;fixture.listDrafts=()=>createGarmentCloudStore(ctx).list();document.querySelector('#open').onclick=fixture.open;window.fixtureReady=true;
+fixture.openColorShare=()=>openGarmentComposer({...ctx,accountOwnerId:()=> '11111111-1111-4111-8111-111111111111'},null,{workspaceId:'company',projectId:'order',initialScene:{color:'custom-33bb66',colorHex:'#33bb66',colorName:'<img src=x onerror=alert(1)>',layers:[]}});
+fixture.verifyColorRendering=async()=>{
+  const checks=[];
+  for(const model of ['normal','oversized']){
+    const reference=normalizeGarmentScene({...scene,model,color:'white'}),base=await renderGarmentView(reference,'front',{width:400,annotations:false,publicUrl:ctx.publicUrl}),g=base.getContext('2d'),corner=[...g.getImageData(2,2,1,1).data],art=[...g.getImageData(200,105,1,1).data],shirt=[...g.getImageData(200,220,1,1).data];
+    for(const color of [...GARMENT_COLORS.filter(c=>!['black','white','offwhite'].includes(c.id)),{id:'custom-33bb66',hex:'#33bb66',name:'Verde do time'}]){
+      const changed=normalizeGarmentScene({...reference,color:color.id,colorHex:color.hex,colorName:color.name}),canvas=await renderGarmentView(changed,'front',{width:400,annotations:false,publicUrl:ctx.publicUrl}),out=canvas.getContext('2d');
+      checks.push({model,color:color.id,cornerSame:JSON.stringify([...out.getImageData(2,2,1,1).data])===JSON.stringify(corner),artSame:JSON.stringify([...out.getImageData(200,105,1,1).data])===JSON.stringify(art),shirtChanged:JSON.stringify([...out.getImageData(200,220,1,1).data])!==JSON.stringify(shirt)});canvas.width=canvas.height=1;
+    }
+    base.width=base.height=1;
+  }
+  return checks;
+};
 </script></body></html>

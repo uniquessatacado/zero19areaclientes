@@ -12,7 +12,7 @@ export function missingQueueStages(statuses=[]){
   return QUEUE_STAGES.filter(stage=>!statuses.some(status=>status.queue_stage===stage&&status.active!==false&&!status.is_finalized));
 }
 
-export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes=[]}={}){
+export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes=[],releaseIssues=[]}={}){
   const statusById=new Map(statuses.map(status=>[status.id,status]));
   const projectsByWorkspace=new Map(),quotesByProject=new Map(),unlinkedQuotesByWorkspace=new Map();
   for(const project of projects){
@@ -32,7 +32,7 @@ export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes
     const legacyQuotes=unlinkedQuotesByWorkspace.get(workspace.id)||[];
     const stage=QUEUE_STAGES.includes(status?.queue_stage)?status.queue_stage:'none';
     const workspaceStage=QUEUE_STAGES.includes(workspaceStatus?.queue_stage)?workspaceStatus.queue_stage:'none';
-    const closed=Boolean(project?.finalized_at||project?.desisted_at||status?.is_finalized||workspaceStatus?.is_finalized);
+    const closed=Boolean(project?project.finalized_at||project.desisted_at||status?.is_finalized:workspaceStatus?.is_finalized);
     const payment=paidQuotes.length?'paid':projectQuotes.length?'pending':legacyQuotes.length?'unlinked':'none';
     const row={project,workspace,status,quote,stage,payment,paidCount:paidQuotes.length,quoteCount:projectQuotes.length,
       deliveryDate:dateValue(project?.delivery_date),responsibleId:workspace.responsible_user_id||project?.responsible_user_id||null,
@@ -47,6 +47,7 @@ export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes
       row.reasons.push(payment==='unlinked'?'O orçamento antigo precisa ser vinculado ao projeto atual.':payment==='none'?'Crie um orçamento para este projeto.':'O orçamento deste projeto ainda está pendente de pagamento.');
     }
     if(!row.deliveryDate)row.reasons.push('Defina a data de entrega do projeto.');
+    const readiness=releaseIssues.find(entry=>entry.project_id===project?.id);if(readiness?.issues?.length)row.reasons.push(...readiness.issues);
     if(row.reasons.length){row.blockedStage=stage!=='none'?stage:workspaceStage;blocked.push(row);continue;}
     rows.push(row);
   }
@@ -76,8 +77,8 @@ export async function fetchQueueRecords(supabase,ownerId,pageSize=500){
     }
   };
   const [projects,quotes]=await Promise.all([
-    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id'),
-    fetchTable('z19p_quotes','id,workspace_id,project_id,title,payment_status,paid_at,delivery_date,created_at,updated_at')
+    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,service_type,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id'),
+    fetchTable('z19p_quotes','id,workspace_id,project_id,title,service_type,payment_status,paid_at,delivery_date,created_at,updated_at')
   ]);
   return {projects,quotes};
 }

@@ -89,5 +89,5 @@ assert.equal(repack.callbacks.onChange(repacked),true);assert.equal(repack.runCa
 const stale=harness(),oldCallbacks=stale.callbacks;stale.api.remove('a');assert.equal(oldCallbacks.onChange(clone(layout)),false);assert.equal(oldCallbacks.onDelete(layout.placements[3]),false);
 assert.equal(mountRealPreview({element:{},layout:null}).getLayout(),null,'null layout never reads filmWidthMm');
 assert.ok(!editCode.includes('calculateFilm('),'removal/preview module cannot automatically calculate the film');
-assert.ok(source.includes("b.onclick=()=>{if(pageCurrent())removeCurrentFilmEntry(b.dataset.id,media)}"),'list X uses guarded immediate local removal, without a calculation or catalog reload');
+assert.ok(source.includes("b.onclick=()=>{if(pageCurrent()){removeCurrentFilmEntry(b.dataset.id,media);drawOrders()}}"),'list X uses guarded immediate local removal and local balance display, without a calculation or catalog reload');
 console.log('Film edit: immediate copy/all removal, physical geometry/locks, export snapshots, empty state and 16 stale callback races OK');
