@@ -1,4 +1,3 @@
-import {numberMode,NUMBER_MODES} from './customization-number-mode.js?v=2.17.13';
 const h=(value='')=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 export const GLYPH_KEYS='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.split('');
 export function normalizeHexColor(value){const raw=String(value||'').trim().toUpperCase();return /^#[0-9A-F]{6}$/.test(raw)?raw:null;}
