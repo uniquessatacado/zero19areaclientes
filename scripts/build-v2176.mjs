@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.11';
-const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21711-'));
+const version='2.17.12';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21712-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
 function copy(a,b){fs.mkdirSync(b,{recursive:true});for(const e of fs.readdirSync(a,{withFileTypes:true})){if(skip.has(e.name)||e.name.startsWith('.env'))continue;const from=path.join(a,e.name),to=path.join(b,e.name);if(e.isDirectory())copy(from,to);else if(e.isFile())fs.copyFileSync(from,to);}}
@@ -68,5 +68,5 @@ const publicEntries=fs.readdirSync(temp,{withFileTypes:true}).filter(e=>!neverPu
 for(const e of publicEntries.sort((a,b)=>Number(a.name==='index.html')-Number(b.name==='index.html'))){const a=path.join(temp,e.name),b=path.join(output,e.name);if(fs.existsSync(b)&&fs.lstatSync(b).isSymbolicLink())throw new Error('Link inseguro na saída: '+e.name);if(e.isDirectory())copy(a,b);else fs.copyFileSync(a,b);}
 const names=new Set(publicEntries.map(e=>e.name));for(const entry of fs.readdirSync(output)){if(names.has(entry))continue;const stale=path.resolve(output,entry);if(path.dirname(stale)!==output)throw new Error('Saída inválida.');fs.rmSync(stale,{recursive:true,force:true});}
 const hashes={};for(const name of ['app.js','index.html','production-v217.js','lettering-layout-v2176.js','film-saved-drafts.js'])hashes[name]=crypto.createHash('sha256').update(fs.readFileSync(path.join(output,name))).digest('hex');
-console.log('V21711_VALIDATION_DIR='+temp);
-console.log('V21711_OUTPUT_HASHES='+JSON.stringify(hashes));
+console.log('V21712_VALIDATION_DIR='+temp);
+console.log('V21712_OUTPUT_HASHES='+JSON.stringify(hashes));

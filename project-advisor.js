@@ -1,5 +1,5 @@
 import {QUEUE_STAGES} from './queue-core.js?v=2.17.3';
-import {serviceReadiness} from './service-readiness.js?v=2.17.11';
+import {serviceReadiness,companyOrderReadiness,isCompanyPortalProject} from './service-readiness.js?v=2.17.12';
 
 // Deterministic local guidance, not a language model. Never writes or advances status.
 export const PROJECT_ADVISOR_VERSION=1;
@@ -22,7 +22,7 @@ export function registerProjectAdvisorRule(rule){
 }
 export function evaluateProjectAdvice(input={}){
   const incomplete=new Set(),known={},workspace=input.workspace?JSON.parse(JSON.stringify(input.workspace)):null;
-  const names=['projects','statuses','quotes','quoteItems','assets','printProfiles','folders','documents','teamProfiles'];
+  const names=['projects','statuses','quotes','quoteItems','assets','printProfiles','folders','documents','teamProfiles','companyOrderItems'];
   const data={};for(const name of names){known[name]=input.known?.[name]!==false&&Array.isArray(input[name]);data[name]=list(input[name]);}
   const result={version:1,workspaceId:workspace?.id||null,projectId:null,stage:null,closed:false,applicable:true,issues:[],summary:'Dados insuficientes para orientar este projeto.',nextAction:null,incomplete:[],confidence:'partial',counts:{quotes:0,paidQuotes:0,arts:0,readyArts:0},queuePosition:null};
   if(!workspace?.id){result.incomplete=['workspace'];return result}
@@ -31,14 +31,17 @@ export function evaluateProjectAdvice(input={}){
   const projects=data.projects.filter(row=>row.workspace_id===workspace.id&&own(row)).sort(latest);
   const supplied=has(input,'project'),project=supplied&&input.project?JSON.parse(JSON.stringify(input.project)):supplied?null:projects[0]||null;
   const projectKnown=input.known?.projects!==false&&(supplied||known.projects);
-  const action=(type,label,details={})=>({type,label,target:type==='open_film'?'/filme':type==='open_queue'?`/fila/${details.stage}`:`/ambiente/${encodeURIComponent(workspace.id)}`,workspaceId:workspace.id,projectId:project?.id||null,...details});
+  const partner=isCompanyPortalProject(project);
+  const action=(type,label,details={})=>({type,label,target:type==='open_film'?'/filme':type==='open_queue'?`/fila/${details.stage}`:partner?`/pedido-empresa/${encodeURIComponent(project.id)}`:`/ambiente/${encodeURIComponent(workspace.id)}`,workspaceId:workspace.id,projectId:project?.id||null,...details});
   const add=(code,severity,title,detail,facts,recommendedAction)=>{if(!result.issues.some(issue=>issue.code===code))result.issues.push({code,severity,title,detail,evidence:facts,recommendedAction,confidence:'verified',priority:priorities[code]??50})};
   if(project&&((project.workspace_id&&project.workspace_id!==workspace.id)||!own(project))){add('PROJECT_SCOPE_MISMATCH','critical','Projeto fora desta empresa','O projeto recebido não pertence a esta empresa. Reabra o ambiente antes de continuar.',[evidence('project',project,'workspace_id')],action('open_workspace','Reabrir empresa'));incomplete.add('projectScope');return finish()}
   result.projectId=project?.id||null;
   if(!project){if(projectKnown&&known.statuses&&data.statuses.some(row=>row.id===workspace.status_id&&own(row)&&row.is_finalized)){result.closed=true;result.summary='Cliente finalizado; histórico preservado.';result.nextAction=action('view_history','Ver histórico');return finish()}if(projectKnown)add('PROJECT_MISSING','warning','Crie o primeiro projeto','Esta empresa ainda não possui um projeto para separar orçamento, artes e andamento.',[evidence('workspace',workspace,'id')],action('new_project','Criar projeto'));else incomplete.add('projects');return finish()}
   const scoped=row=>row.project_id===project.id&&(!row.workspace_id||row.workspace_id===workspace.id)&&own(row);
   const quotes=data.quotes.filter(scoped),linkedIds=new Set(data.quoteItems.filter(item=>quotes.some(q=>q.id===item.quote_id)).flatMap(item=>[item.reference_asset_id,item.final_asset_id]).filter(Boolean));
-  const assets=data.assets.filter(row=>scoped(row)||linkedIds.has(row.id)&&row.workspace_id===workspace.id&&own(row)),arts=assets.filter(row=>row.asset_type==='arte'),folders=data.folders.filter(scoped);
+  const partnerItems=partner?data.companyOrderItems.filter(item=>(item.order_id||item.company_order_id)===project.company_order_id&&own(item)):[],partnerFinals=new Set(partnerItems.map(item=>item.final_asset_id).filter(Boolean));
+  for(const id of partnerFinals)linkedIds.add(id);
+  const assets=data.assets.filter(row=>scoped(row)||linkedIds.has(row.id)&&row.workspace_id===workspace.id&&own(row)),arts=assets.filter(row=>row.asset_type==='arte'&&(!partner||!known.companyOrderItems||partnerFinals.has(row.id))),folders=data.folders.filter(scoped);
   const quoteIds=new Set(quotes.map(row=>row.id)),assetIds=new Set(arts.map(row=>row.id));
   const printProfiles=data.printProfiles.filter(row=>assetIds.has(row.asset_id)&&(!row.project_id||row.project_id===project.id||linkedIds.has(row.asset_id))&&own(row)),profiles=new Map(printProfiles.map(row=>[row.asset_id,row]));
   const documents=data.documents.filter(row=>quoteIds.has(row.quote_id)&&(!row.project_id||row.project_id===project.id)&&own(row));
@@ -46,13 +49,14 @@ export function evaluateProjectAdvice(input={}){
   const stage=status&&has(status,'queue_stage')?status.queue_stage:null,operational=QUEUE_STAGES.includes(stage),paid=quotes.filter(row=>row.payment_status==='paid');result.stage=stage;
   result.closed=Boolean(project.finalized_at||project.desisted_at||status?.is_finalized);
   if(result.closed){if(project.finalized_at&&project.desisted_at)add('CLOSED_STATE_CONFLICT','warning','Confira o encerramento','O mesmo projeto registra finalização e desistência. Revise o histórico sem criar uma nova produção.',[evidence('project',project,'finalized_at'),evidence('project',project,'desisted_at')],action('view_history','Ver histórico'));result.summary=project.desisted_at?'Projeto encerrado por desistência.':'Projeto finalizado; histórico preservado.';result.nextAction=action('view_history','Ver histórico');result.confidence='complete';return finish()}
-  for(const name of ['statuses','quotes','assets','printProfiles'])if(!known[name])incomplete.add(name);
+  for(const name of (partner?['statuses','assets','printProfiles']:['statuses','quotes','assets','printProfiles']))if(!known[name])incomplete.add(name);
+  if(partner&&!known.companyOrderItems)incomplete.add('companyOrderItems');
   if(quotes.length){for(const name of ['quoteItems','documents'])if(!known[name])incomplete.add(name)}
   if(arts.some(asset=>asset.folder_id)&&!known.folders)incomplete.add('folders');
   if(has(project,'status_id')&&known.statuses&&!status)add('STATUS_MISSING','warning','Defina o status do projeto','Não há um status válido associado ao projeto atual.',[evidence('project',project,'status_id')],action('review_status','Revisar status'));
   if(status&&stage===null)incomplete.add('statuses.queue_stage');
   if(status?.active===false)add('STATUS_INACTIVE','warning','Status desativado','O projeto continua associado a um status que foi desativado.',[evidence('status',status,'active')],action('review_status','Escolher status ativo'));
-  if(status&&workspaceStatus&&status.id!==workspaceStatus.id)add('STATUS_MISMATCH',workspaceStatus.is_finalized?'critical':'warning','Empresa e projeto em etapas diferentes','As filas usam o status do projeto atual. Revise o andamento para manter o card e a produção coerentes.',[evidence('project',project,'status_id'),evidence('workspace',workspace,'status_id')],action('review_status','Conferir andamento'));
+  if(!partner&&status&&workspaceStatus&&status.id!==workspaceStatus.id)add('STATUS_MISMATCH',workspaceStatus.is_finalized?'critical':'warning','Empresa e projeto em etapas diferentes','As filas usam o status do projeto atual. Revise o andamento para manter o card e a produção coerentes.',[evidence('project',project,'status_id'),evidence('workspace',workspace,'status_id')],action('review_status','Conferir andamento'));
   if(!has(project,'status_id'))incomplete.add('project.status_id');
 
   const responsible=workspace.responsible_user_id||project.responsible_user_id;
@@ -65,14 +69,14 @@ export function evaluateProjectAdvice(input={}){
   const delivery=dateOnly(project.delivery_date);
   if(!has(project,'delivery_date'))incomplete.add('project.delivery_date');
   else if(project.delivery_date&&!delivery)add('DELIVERY_INVALID','warning','Data de entrega inválida','A data registrada não é um dia válido. Confira o calendário do pedido.',[evidence('project',project,'delivery_date')],action('set_delivery','Corrigir entrega'));
-  else if(!delivery&&(operational||paid.length))add('DELIVERY_MISSING',operational?'critical':'warning','Defina a data de entrega','A fila operacional exige a data do projeto, além de um orçamento pago.',[evidence('project',project,'delivery_date')],action('set_delivery','Escolher entrega'));
+  else if(!partner&&!delivery&&(operational||paid.length))add('DELIVERY_MISSING',operational?'critical':'warning','Defina a data de entrega','A fila operacional exige a data do projeto, além de um orçamento pago.',[evidence('project',project,'delivery_date')],action('set_delivery','Escolher entrega'));
   const differentQuoteDates=delivery?paid.filter(quote=>dateOnly(quote.delivery_date)&&quote.delivery_date!==delivery):[];
   if(known.quotes&&differentQuoteDates.length)add('DELIVERY_QUOTE_MISMATCH','warning','Projeto e orçamento com prazos diferentes','A data usada na fila difere da registrada em orçamento pago. Confira o prazo combinado antes de enviar o PDF ao cliente. Gerar um PDF não altera automaticamente essas datas nem o pagamento.',[evidence('project',project,'delivery_date'),...differentQuoteDates.map(quote=>evidence('quote',quote,'delivery_date'))],action('open_quote_pdf','Revisar orçamento e prazo',{quoteId:differentQuoteDates[0].id}));
   if(delivery&&today){const delta=Math.round((Date.parse(delivery+'T12:00:00Z')-Date.parse(today+'T12:00:00Z'))/86400000);if(delta<0)add('DELIVERY_OVERDUE','critical',`Entrega vencida há ${-delta} dia(s)`,'O projeto ainda está aberto e a data combinada já passou. Confira a produção e combine o próximo passo com o cliente.',[evidence('project',project,'delivery_date')],action('open_workspace','Revisar pedido atrasado'));else if(delta<=1)add('DELIVERY_SOON','warning',delta===0?'Entrega prevista para hoje':'Entrega prevista para amanhã','Confira as artes, a fila e o andamento antes do prazo.',[evidence('project',project,'delivery_date')],action('open_workspace','Conferir entrega'))}
   const reminder=stamp(project.reminder_at);if(reminder!==null&&Number.isFinite(now.getTime())&&reminder<=now.getTime())add('RETURN_DUE','warning','Retorno programado chegou','Este projeto possui um retorno agendado já vencido. Confira se o atendimento foi realizado.',[evidence('project',project,'reminder_at')],action('open_workspace','Retomar atendimento'));
 
-  const paymentKnown=known.quotes&&quotes.every(quote=>['paid','unpaid','pending'].includes(quote.payment_status));
-  if(known.quotes){if(!quotes.length)add('QUOTE_MISSING',operational?'critical':'warning','Monte o orçamento deste projeto','Nenhum orçamento foi encontrado vinculado ao projeto atual. Orçamentos de projetos anteriores não liberam esta produção.',[evidence('project',project,'id')],action('new_quote','Criar orçamento'));
+  const paymentKnown=partner||known.quotes&&quotes.every(quote=>['paid','unpaid','pending'].includes(quote.payment_status));
+  if(known.quotes&&!partner){if(!quotes.length)add('QUOTE_MISSING',operational?'critical':'warning','Monte o orçamento deste projeto','Nenhum orçamento foi encontrado vinculado ao projeto atual. Orçamentos de projetos anteriores não liberam esta produção.',[evidence('project',project,'id')],action('new_quote','Criar orçamento'));
     else if(!paymentKnown)incomplete.add('quotes.payment_status');
     else if(!paid.length)add('PAYMENT_PENDING',operational?'critical':'warning',operational?'Produção sem pagamento confirmado':'Pagamento ainda não confirmado','Nenhum orçamento do projeto está marcado como pago. Confira o recebimento; esta orientação não marca pagamentos automaticamente.',quotes.map(quote=>evidence('quote',quote,'payment_status')),action('review_payment','Conferir pagamento',{quoteId:quotes[0].id}));
     else if(quotes.some(quote=>quote.payment_status!=='paid'))add('ADDITIONAL_QUOTE_PENDING','info','Há outro orçamento pendente','Existe orçamento pago que atende à regra da fila, mas também há orçamento pendente no mesmo projeto. Confirme quais itens fazem parte desta produção.',quotes.filter(quote=>quote.payment_status!=='paid').map(quote=>evidence('quote',quote,'payment_status')),action('review_payment','Conferir os orçamentos'));
@@ -86,7 +90,7 @@ export function evaluateProjectAdvice(input={}){
   if(known.assets&&assets.some(asset=>!has(asset,'asset_type')))incomplete.add('assets.asset_type');
   else if(known.assets&&!arts.length&&(operational||paid.length))add('ARTWORK_MISSING',stage==='ready_production'||stage==='production'?'critical':'warning','Adicione as artes deste projeto','O pedido tem atividade de produção, mas não há artes vinculadas ao projeto atual.',[evidence('project',project,'id')],action('upload_art','Adicionar arte'));
   if(known.assets&&known.printProfiles){
-    const intended=arts.filter(asset=>profiles.get(asset.id)?.ready_for_print===true||asset.metadata?.print_ready_intent===true||known.folders&&inReadyFolder(asset));
+    const intended=arts.filter(asset=>profiles.get(asset.id)?.ready_for_print===true||asset.metadata?.print_ready_intent===true||partner||known.folders&&inReadyFolder(asset));
     const dimensionsKnown=asset=>!profiles.has(asset.id)||has(profiles.get(asset.id),'default_width_cm')&&has(profiles.get(asset.id),'default_height_cm');
     const fileKnown=asset=>Boolean(asset.processed_path||asset.original_path)||has(asset,'processed_path')&&has(asset,'original_path');
     if(intended.some(asset=>!dimensionsKnown(asset)))incomplete.add('printProfiles.dimensions');
@@ -104,12 +108,16 @@ export function evaluateProjectAdvice(input={}){
     const issues=serviceReadiness(quote,{items:data.quoteItems.filter(item=>own(item)),assets,printProfiles});
     if(issues.length)add('SERVICE_PREPARATION_'+quote.id,['ready_production','production'].includes(stage)?'critical':'info','Preparar o pedido após o orçamento',issues.join(' '),[evidence('quote',quote,'service_type'),evidence('quote',quote,'official_mockup_asset_id')],action('new_quote','Preparar artes e mockup',{quoteId:quote.id}));
   }
+  if(partner&&known.companyOrderItems&&known.assets&&known.printProfiles){
+    const issues=companyOrderReadiness(project,{items:partnerItems,assets,printProfiles});
+    if(issues.length)add('COMPANY_ORDER_PREPARATION',['ready_production','production'].includes(stage)?'critical':'warning','Confira as artes enviadas pela empresa',issues.join(' '),[evidence('project',project,'company_order_id')],action('open_workspace','Preparar este pedido'));
+  }
   result.counts={quotes:quotes.length,paidQuotes:paid.length,arts:arts.length,readyArts:ready.length};
   if(input.queueSnapshot){if(input.queueSnapshot.error)incomplete.add('queueSnapshot');else{const row=(input.queueSnapshot.rows||[]).find(row=>row.project?.id===project.id&&row.workspace?.id===workspace.id);if(row){result.queuePosition=row.position??null;if(row.stage!==stage)add('QUEUE_STAGE_MISMATCH','warning','Atualize a leitura da fila','O projeto e o retrato carregado da fila mostram etapas diferentes. Atualize a consulta antes de decidir.',[{source:'queue',id:project.id,field:'stage',value:row.stage},evidence('status',status,'queue_stage')],action('open_queue','Reabrir fila',{stage:QUEUE_STAGES.includes(stage)?stage:row.stage}))}}}
   const context={workspace,project,status,stage,closed:result.closed,quotes,assets:arts,printProfiles,folders,documents,quoteItems:data.quoteItems.filter(row=>quoteIds.has(row.quote_id)&&own(row)),teamProfiles:data.teamProfiles.filter(own),known:{...known},today,counts:{...result.counts},action};
   for(const rule of extensions.values()){if(rule.requires.some(name=>!known[name])){incomplete.add('rule:'+rule.id);continue}try{const items=rule.run(context)||[];if(!Array.isArray(items))throw new Error('A regra precisa ser síncrona e retornar uma lista.');for(const issue of items){if(!issue||typeof issue.code!=='string'||!rank.hasOwnProperty(issue.severity)||!Array.isArray(issue.evidence)||!issue.evidence.length)throw new Error('Regra sem evidência válida.');add(issue.code,issue.severity,String(issue.title||''),String(issue.detail||''),issue.evidence,issue.recommendedAction||action('open_workspace','Revisar pedido'))}}catch{incomplete.add('rule:'+rule.id)}}
-  const canGuide=known.statuses&&paymentKnown&&known.assets&&known.printProfiles&&has(project,'delivery_date')&&!['project.status_id','statuses.queue_stage','printProfiles.dimensions','printProfiles.readiness','assets.file_path','assets.asset_type'].some(field=>incomplete.has(field));
-  if(canGuide&&paid.length&&delivery&&ready.length&&!result.issues.some(issue=>issue.severity==='critical')){result.nextAction=stage==='production'?action('review_status','Conferir estampa e entrega'):stage==='ready_production'?action('open_film','Montar filme'):action('review_status','Revisar liberação para produção',{stage:'ready_production'});result.summary=stage==='production'?'Pedido em produção: confira a estampa e a entrega.':stage==='ready_production'?'Pagamento, prazo e arte liberada conferidos. Monte o filme. Ao usar TIFF com Spot, confira o primeiro arquivo no RIP antes de produzir.':'Há arte liberada, pagamento e entrega. Revise a passagem para produção.'}
+  const canGuide=known.statuses&&paymentKnown&&known.assets&&known.printProfiles&&(!partner||known.companyOrderItems)&&has(project,'delivery_date')&&!['project.status_id','statuses.queue_stage','printProfiles.dimensions','printProfiles.readiness','assets.file_path','assets.asset_type'].some(field=>incomplete.has(field));
+  if(canGuide&&(partner||paid.length&&delivery)&&ready.length&&!result.issues.some(issue=>issue.severity==='critical')){result.nextAction=stage==='production'?action('review_status','Conferir estampa e entrega'):stage==='ready_production'?action('open_film','Montar filme'):action('review_status','Revisar liberação para produção',{stage:'ready_production'});result.summary=partner?(stage==='production'?'Pedido da empresa em produção: confira a estampa e a entrega.':stage==='ready_production'?'Artes liberadas para montar o filme.':'Confira as artes e a liberação do pedido da empresa.'):stage==='production'?'Pedido em produção: confira a estampa e a entrega.':stage==='ready_production'?'Pagamento, prazo e arte liberada conferidos. Monte o filme. Ao usar TIFF com Spot, confira o primeiro arquivo no RIP antes de produzir.':'Há arte liberada, pagamento e entrega. Revise a passagem para produção.'}
   return finish();
 
   function finish(){

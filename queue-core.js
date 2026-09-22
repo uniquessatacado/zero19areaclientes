@@ -1,4 +1,5 @@
 // One read model for the home cards and operational queues. No writes or inferred payments.
+import {isCompanyPortalProject} from './service-readiness.js?v=2.17.12';
 export const QUEUE_STAGES=['art_work','ready_production','production'];
 
 const timestamp=value=>{const time=Date.parse(value||'');return Number.isFinite(time)?time:Number.MAX_SAFE_INTEGER;};
@@ -24,7 +25,11 @@ export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes
   }
   const cards=[],rows=[],blocked=[];
   for(const workspace of workspaces.filter(isClient)){
-    const project=(projectsByWorkspace.get(workspace.id)||[]).sort(latestProject)[0]||null;
+    const sorted=(projectsByWorkspace.get(workspace.id)||[]).sort(latestProject),latest=sorted[0]||null;
+    // Every partner order remains independently actionable, including older open orders.
+    const relevant=[latest,...sorted.filter(project=>project!==latest&&isCompanyPortalProject(project))];
+    for(const project of relevant){
+    const partner=isCompanyPortalProject(project);
     const workspaceStatus=statusById.get(workspace.status_id),status=project?statusById.get(project.status_id):workspaceStatus;
     const projectQuotes=project?(quotesByProject.get(project.id)||[]).filter(quote=>!quote.workspace_id||quote.workspace_id===workspace.id):[];
     const paidQuotes=projectQuotes.filter(quote=>quote.payment_status==='paid').sort(paidFirst);
@@ -33,27 +38,28 @@ export function buildQueueSnapshot({projects=[],workspaces=[],statuses=[],quotes
     const stage=QUEUE_STAGES.includes(status?.queue_stage)?status.queue_stage:'none';
     const workspaceStage=QUEUE_STAGES.includes(workspaceStatus?.queue_stage)?workspaceStatus.queue_stage:'none';
     const closed=Boolean(project?project.finalized_at||project.desisted_at||status?.is_finalized:workspaceStatus?.is_finalized);
-    const payment=paidQuotes.length?'paid':projectQuotes.length?'pending':legacyQuotes.length?'unlinked':'none';
+    const payment=partner?'partner':paidQuotes.length?'paid':projectQuotes.length?'pending':legacyQuotes.length?'unlinked':'none';
     const row={project,workspace,status,quote,stage,payment,paidCount:paidQuotes.length,quoteCount:projectQuotes.length,
       deliveryDate:dateValue(project?.delivery_date),responsibleId:workspace.responsible_user_id||project?.responsible_user_id||null,
       position:null,reasons:[],closed};
-    cards.push(row);
+    if(project===latest)cards.push(row);
     if(closed)continue;
-    const operational=stage!=='none'||workspaceStage!=='none';
+    const operational=stage!=='none'||!partner&&workspaceStage!=='none';
     if(!operational)continue;
     if(!project)row.reasons.push('Esta empresa ainda não possui projeto vinculado.');
-    if(stage==='none'&&workspaceStage!=='none')row.reasons.push('O status do projeto precisa ser atualizado para esta etapa.');
-    if(!paidQuotes.length){
+    if(!partner&&stage==='none'&&workspaceStage!=='none')row.reasons.push('O status do projeto precisa ser atualizado para esta etapa.');
+    if(!partner&&!paidQuotes.length){
       row.reasons.push(payment==='unlinked'?'O orçamento antigo precisa ser vinculado ao projeto atual.':payment==='none'?'Crie um orçamento para este projeto.':'O orçamento deste projeto ainda está pendente de pagamento.');
     }
-    if(!row.deliveryDate)row.reasons.push('Defina a data de entrega do projeto.');
+    if(!partner&&!row.deliveryDate)row.reasons.push('Defina a data de entrega do projeto.');
     const readiness=releaseIssues.find(entry=>entry.project_id===project?.id);if(readiness?.issues?.length)row.reasons.push(...readiness.issues);
     if(row.reasons.length){row.blockedStage=stage!=='none'?stage:workspaceStage;blocked.push(row);continue;}
     rows.push(row);
+    }
   }
-  rows.sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate)
+  rows.sort((a,b)=>(a.deliveryDate||'9999-12-31').localeCompare(b.deliveryDate||'9999-12-31')
     ||timestamp(a.project.status_entered_at||a.project.started_at)-timestamp(b.project.status_entered_at||b.project.started_at)
-    ||timestamp(a.quote.paid_at)-timestamp(b.quote.paid_at)
+    ||timestamp(a.quote?.paid_at)-timestamp(b.quote?.paid_at)
     ||timestamp(a.project.created_at||a.project.started_at)-timestamp(b.project.created_at||b.project.started_at)
     ||String(a.project.id).localeCompare(String(b.project.id)));
   const positions=new Map();
@@ -77,7 +83,7 @@ export async function fetchQueueRecords(supabase,ownerId,pageSize=500){
     }
   };
   const [projects,quotes]=await Promise.all([
-    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,service_type,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id'),
+    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,service_type,source_kind,company_order_id,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id'),
     fetchTable('z19p_quotes','id,workspace_id,project_id,title,service_type,payment_status,paid_at,delivery_date,created_at,updated_at')
   ]);
   return {projects,quotes};

@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import {readPortalToken,portalAssetUrl,escapePortalHTML,validatePortalOrder,validatePortalFile,normalizePortalRead,buildPortalSubmission,mergePortalOrders,isPortalDuplicateUpload,PORTAL_LIMITS} from '../company-portal-core.js';
+const token='11111111-1111-4111-8111-111111111111',product='22222222-2222-4222-8222-222222222222';
+for(const suffix of [`#/${token}`,`#token=${token}`,`?token=${token}`])assert.equal(readPortalToken('https://example.test/empresa.html'+suffix),token);
+for(const suffix of ['#/<script>','#/%EF','?token=abc','#/../'+token])assert.equal(readPortalToken('https://example.test/'+suffix),null);
+assert.equal(escapePortalHTML('<img src="x" onerror=\'evil\'>'),'&lt;img src=&quot;x&quot; onerror=&#39;evil&#39;&gt;');
+for(const path of ['../private','https://attacker.test/file','/outside','a\\b','a/../b','a//b','a\nb']){
+  const url=portalAssetUrl(path,'https://account.supabase.co');
+  assert.ok(!url||url.startsWith('https://account.supabase.co/storage/v1/object/public/z19p-assets/'),path);
+}
+assert.equal(portalAssetUrl('a b/art#1.png','https://account.supabase.co'),'https://account.supabase.co/storage/v1/object/public/z19p-assets/a%20b/art%231.png');
+assert.equal(portalAssetUrl('file.png','javascript:alert(1)'), '');
+const file={type:'image/png',size:1500,name:'Arte original.png'},base={color:'Preta',art_name:'Minha arte',width_cm:20,height_cm:10,processed_id:'55555555-5555-4555-8555-555555555555',processed:{processedBlob:{size:800,type:'image/png'},width:60,height:30}},items=[{...base,id:token,product_id:product,size:'M',quantity:2,file},{...base,id:'33333333-3333-4333-8333-333333333333',product_id:product,size:'M',quantity:3,file:{...file,name:'Segunda arte.png'}}],draft={title:'Lote <A>',notes:'Manter originais',items},products=[{id:product}];
+assert.equal(validatePortalOrder(draft,products),'','same product/size may carry different artwork');
+for(const quantity of ['',0,-1,1.5,1001,'abc'])assert.match(validatePortalOrder({...draft,items:[{...items[0],quantity}]},products),/quantidade/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],product_id:token}]},products),/catálogo/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],file:null}]},products),/arte/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],size:'unknown'}]},products),/tamanho/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],color:''}]},products),/cor da peça/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],art_name:''}]},products),/nome para a arte/);
+assert.match(validatePortalOrder({...draft,items:[{...items[0],width_cm:0}]},products),/largura/);
+const catalog=[{id:token,name:'Arte salva',width:60,height:30,width_cm:20,height_cm:10}];
+assert.equal(validatePortalOrder({...draft,items:[{...items[0],art_mode:'catalog',reference_asset_id:token,file:null,processed:null}]},products,undefined,catalog),'','catalog artwork avoids another upload');
+assert.match(validatePortalOrder({...draft,items:[{...items[0],art_mode:'catalog',reference_asset_id:token,file:null}]},products),/arte já salva/);
+assert.match(validatePortalOrder({...draft,items:Array.from({length:6},()=>({...items[0],quantity:1000}))},products),/5.000/);
+assert.match(validatePortalFile({...file,size:PORTAL_LIMITS.maxFileBytes+1}),/25 MB/);
+assert.match(validatePortalFile({...file,type:'image/svg+xml'}),/PNG/);
+const payload=buildPortalSubmission(draft);assert.equal(payload.items[0].upload_id,token);assert.equal(payload.items[0].processed_upload_id,base.processed_id);assert.equal(payload.items[0].color,'Preta');assert.equal(payload.items[0].width_cm,20);assert.equal(payload.items[1].size,'M');assert.ok(!JSON.stringify(payload).includes('file'));
+for(const invalid of [null,{}, {company:{company_name:'Company'},products:[],orders:null},{company:{company_name:'Company'},products:[],orders:[{id:'x'}]}])assert.throws(()=>normalizePortalRead(invalid));
+const data=normalizePortalRead({company:{company_name:'Company'},products:[],orders:[{id:'a',items:[],status:{name:'Custom <status>',color:'red;transform:scale(10)',stage:'production',finalized:false}}]});assert.equal(data.orders[0].status.name,'Custom <status>');assert.equal(data.orders[0].status.color,'#ff803f');
+assert.deepEqual(mergePortalOrders([{id:'a',created_at:'2026-09-20',old:true}],[{id:'a',created_at:'2026-09-20',old:false},{id:'b',created_at:'2026-09-21'}]).map(row=>row.id),['b','a']);
+assert.equal(isPortalDuplicateUpload({message:'The resource already exists'}),true);assert.equal(isPortalDuplicateUpload({message:'Not authorized',statusCode:'400'}),false);
+console.log('Company portal: capability URL, escaping, file/product/quantity validation, duplicate sizes, strict reads and idempotent payload checks passed.');

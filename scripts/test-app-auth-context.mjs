@@ -38,4 +38,13 @@ await test('public client route never requires internal team lookup',async()=>{c
 await test('valid film, teams and queues load team context before module route',async()=>{for(const [route,key] of [['/filme','film'],['/times','teamsView'],['/fila/production','queue']]){const {context:c,counts}=fixture();c.currentRoute=route;await c.renderCurrentRoute();assert.equal(counts.profiles,1);assert.equal(counts.config,1);assert.equal(counts[key],1)}});
 await test('unauthenticated production URL returns to legacy auth route',async()=>{const {context:c,counts}=fixture();c.session=null;await c.renderCurrentRoute();assert.equal(counts.legacy,1);assert.equal(counts.film,0);assert.equal(counts.profiles,0)});
 await test('studio route requires the current active profile and respects password reset',async()=>{const {context:c,counts}=fixture();c.currentRoute='/studio';await c.renderCurrentRoute();assert.equal(counts.studio,1);assert.equal(counts.profiles,1);assert.equal(counts.config,0);c.location.search='?reset_password=1';await c.renderCurrentRoute();assert.equal(counts.studio,1);assert.equal(counts.legacy,1);c.location.search='';c.profileResponse=async()=>({data:null,error:null});await assert.rejects(()=>c.renderCurrentRoute(),/confirmar o perfil/);assert.equal(counts.studio,1)});
+await test('partner management and exact order routes require active account and respect password reset',async()=>{
+  for(const current of ['/empresas-parceiras','/pedido-empresa/order-id']){
+    const {context:c,counts}=fixture(),calls=[];c.currentRoute=current;c.companyPortalAdmin={render:()=>calls.push('list')};c.companyOrderOperations={renderPartnerOrder:id=>calls.push(id)};
+    await c.renderCurrentRoute();assert.deepEqual(calls,[current==='/empresas-parceiras'?'list':'order-id']);assert.equal(counts.profiles,1);
+    c.location.search='?reset_password=1';await c.renderCurrentRoute();assert.equal(calls.length,1);assert.equal(counts.legacy,1);
+    c.location.search='';c.profileResponse=async()=>({data:null,error:null});await assert.rejects(()=>c.renderCurrentRoute(),/confirmar o perfil/);assert.equal(calls.length,1);
+    c.session=null;await c.renderCurrentRoute();assert.equal(calls.length,1);assert.equal(counts.legacy,2);
+  }
+});
 console.log(`App account/route guards: ${checks} tests passed; extracted real helpers, no boot or remote calls.`);

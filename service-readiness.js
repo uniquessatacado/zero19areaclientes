@@ -1,6 +1,22 @@
 import {validateServiceDraft,QUOTE_SERVICES} from './quote-service-core.js?v=2.17.11';
 const positive=value=>Number.isFinite(Number(value))&&Number(value)>0;
 const coordinate=value=>value!==null&&value!==undefined&&String(value).trim()!==''&&Number.isFinite(Number(value));
+export const isCompanyPortalProject=project=>project?.source_kind==='company_portal'&&Boolean(project.company_order_id);
+// Partner requests have their own commercial authorization; never fabricate a quote or payment.
+export function companyOrderReadiness(project,{items=[],assets=[],printProfiles=[],prepared=true}={}){
+  if(!isCompanyPortalProject(project))return ['O pedido não possui vínculo válido com a empresa parceira.'];
+  const rows=items.filter(item=>(item.company_order_id||item.order_id)===project.company_order_id&&(!item.project_id||item.project_id===project.id));
+  const issues=[];
+  if(!rows.length)issues.push('Confira os produtos, tamanhos e artes enviados pela empresa.');
+  if(rows.some(item=>!Number.isInteger(Number(item.quantity))||Number(item.quantity)<1||!String(item.size||'').trim()||!item.product_id))issues.push('Confira o produto, tamanho e quantidade de cada item do pedido.');
+  if(!prepared)return issues;
+  for(const item of rows){
+    const asset=assets.find(row=>row.id===(item.final_asset_id||item.asset_id)&&row.workspace_id===project.workspace_id&&(!project.owner_id||!row.owner_id||row.owner_id===project.owner_id));
+    const profile=printProfiles.find(row=>row.asset_id===asset?.id&&(!project.owner_id||!row.owner_id||row.owner_id===project.owner_id));
+    if(!asset||asset.asset_type!=='arte'||!(asset.processed_path||asset.original_path)||!profile?.ready_for_print||!positive(profile.default_width_cm)||!positive(profile.default_height_cm))issues.push('Prepare a arte de cada produto e tamanho, com medidas válidas e liberação para impressão.');
+  }
+  return [...new Set(issues)];
+}
 // Pure read model shared by cards/queues/advisor. Server enforces independently.
 export function serviceReadiness(quote,{items=[],assets=[],printProfiles=[],prepared=true}={}){
   if(!quote?.service_type)return [];

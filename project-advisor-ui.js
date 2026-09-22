@@ -1,13 +1,14 @@
-import {evaluateProjectAdvice,renderProjectAdvice} from './project-advisor.js?v=2.17.3';
-import {buildQueueSnapshot} from './queue-core.js?v=2.17.3';
+import {evaluateProjectAdvice,renderProjectAdvice} from './project-advisor.js?v=2.17.12';
+import {buildQueueSnapshot} from './queue-core.js?v=2.17.12';
 
 const escape=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const datasets={
   workspaces:['z19p_workspaces','owner_id','id','Empresas'],projects:['z19p_projects','owner_id','id','Projetos'],statuses:['z19p_statuses','owner_id','id','Status'],
   quotes:['z19p_quotes','owner_id','id','Orçamentos'],quoteItems:['z19p_quote_items','owner_id','id','Itens dos orçamentos'],assets:['z19p_assets','owner_id','id','Artes'],
-  printProfiles:['z19p_asset_print_profiles','owner_id','asset_id','Medidas e liberação'],folders:['z19p_folders','owner_id','id','Pastas'],documents:['z19p_quote_documents','owner_id','id','PDFs'],teamProfiles:['z19p_profiles','account_owner_id','id','Equipe']
+  printProfiles:['z19p_asset_print_profiles','owner_id','asset_id','Medidas e liberação'],folders:['z19p_folders','owner_id','id','Pastas'],documents:['z19p_quote_documents','owner_id','id','PDFs'],teamProfiles:['z19p_profiles','account_owner_id','id','Equipe'],companyOrderItems:['z19p_company_order_items','owner_id','id','Itens de empresas parceiras']
 };
 const time=value=>Date.parse(value||'')||0;
+const bundlePartnerProject=(bundle,id)=>(bundle.projects||[]).some(project=>project.id===id&&project.source_kind==='company_portal'&&project.company_order_id);
 const adviceIndexes=new WeakMap();
 const grouped=(rows,key)=>{const map=new Map();for(const row of rows||[]){const list=map.get(row[key])||[];list.push(row);map.set(row[key],list)}return map};
 function indexBundle(bundle){
@@ -27,7 +28,7 @@ export async function fetchProjectAdvisorBundle(supabase,ownerId,{pageSize=500,n
 export function adviceForWorkspace(bundle,workspace,project){
   const index=indexBundle(bundle),projects=index.projects.get(workspace.id)||[],selected=project===undefined?latestAdvisorProject(projects,workspace.id):project,quotes=selected?index.quotes.get(selected.id)||[]:[],assets=selected?index.assets.get(selected.id)||[]:[],responsible=workspace.responsible_user_id||selected?.responsible_user_id;
   const companyAssets=(bundle.assets||[]).filter(asset=>asset.workspace_id===workspace.id);
-  const advice=evaluateProjectAdvice({workspace,project:selected,projects,quotes:[...quotes,...index.legacyQuotes.get(workspace.id)||[]],assets:companyAssets,folders:selected?index.folders.get(selected.id)||[]:[],quoteItems:quotes.flatMap(row=>index.quoteItems.get(row.id)||[]),documents:quotes.flatMap(row=>index.documents.get(row.id)||[]),printProfiles:companyAssets.flatMap(row=>index.printProfiles.get(row.id)||[]),statuses:[...new Set([selected?.status_id,workspace.status_id])].map(id=>index.statuses.get(id)).filter(Boolean),teamProfiles:responsible&&index.teamProfiles.has(responsible)?[index.teamProfiles.get(responsible)]:[],known:bundle.known,queueSnapshot:bundle.queueSnapshot?.error?bundle.queueSnapshot:{rows:index.queueRows.get(workspace.id)||[]}});
+  const advice=evaluateProjectAdvice({workspace,project:selected,projects,companyOrderItems:(bundle.companyOrderItems||[]).filter(item=>item.order_id===selected?.company_order_id),quotes:[...quotes,...index.legacyQuotes.get(workspace.id)||[]],assets:companyAssets,folders:selected?index.folders.get(selected.id)||[]:[],quoteItems:quotes.flatMap(row=>index.quoteItems.get(row.id)||[]),documents:quotes.flatMap(row=>index.documents.get(row.id)||[]),printProfiles:companyAssets.flatMap(row=>index.printProfiles.get(row.id)||[]),statuses:[...new Set([selected?.status_id,workspace.status_id])].map(id=>index.statuses.get(id)).filter(Boolean),teamProfiles:responsible&&index.teamProfiles.has(responsible)?[index.teamProfiles.get(responsible)]:[],known:bundle.known,queueSnapshot:bundle.queueSnapshot?.error?bundle.queueSnapshot:{rows:index.queueRows.get(workspace.id)||[]}});
   for(const name of ['workspaces','projects'])if(bundle.known[name]===false&&!advice.incomplete.includes(name))advice.incomplete.push(name);
   if(advice.incomplete.length)advice.confidence='partial';return advice;
 }
@@ -54,7 +55,7 @@ export function createProjectAdvisorUI(ctx){
       const id=card.dataset.workspace||card.querySelector('.open-workspace[data-id]')?.dataset.id,workspace=byId.get(id)||visible.find(item=>item.id===id);
       card.querySelectorAll('[data-project-advisor-badge]').forEach(node=>node.remove());if(!id||!isClient(workspace))continue;
       const advice=adviceForWorkspace(cached,workspace);advices.set(id,advice);if(!advice.applicable||advice.closed)continue;
-      const button=document.createElement('button');button.type='button';button.className='project-advisor-card-button';button.dataset.projectAdvisorBadge=id;button.innerHTML=renderProjectAdvice(advice,{compact:true});button.title=`Abrir projeto · consulta ${dateLabel(cached.loadedAt)}`;button.setAttribute('aria-label',`${workspace.company_name||'Empresa'}: ${advice.summary}. Abrir projeto.`);button.onclick=event=>{event.stopPropagation();if(owner()!==cached?.ownerId)return toast('A conta mudou. Atualize a página.');ctx.nav(workspacePath(id))};
+      const button=document.createElement('button');button.type='button';button.className='project-advisor-card-button';button.dataset.projectAdvisorBadge=id;button.innerHTML=renderProjectAdvice(advice,{compact:true});button.title=`Abrir projeto · consulta ${dateLabel(cached.loadedAt)}`;button.setAttribute('aria-label',`${workspace.company_name||'Empresa'}: ${advice.summary}. Abrir projeto.`);button.onclick=event=>{event.stopPropagation();if(owner()!==cached?.ownerId)return toast('A conta mudou. Atualize a página.');ctx.nav(advice.nextAction?.target?.startsWith('/pedido-empresa/')?advice.nextAction.target:advice.projectId&&bundlePartnerProject(cached,advice.projectId)?`/pedido-empresa/${encodeURIComponent(advice.projectId)}`:workspacePath(id))};
       const actions=card.querySelector('.card-actions');actions?actions.before(button):card.append(button);
     }
   }
@@ -72,6 +73,7 @@ export function createProjectAdvisorUI(ctx){
   async function perform(action,expected){
     let {snapshot,project,workspace}=guard(expected);
     if(action.workspaceId!==expected.workspaceId||(action.projectId||null)!==expected.projectId)throw new Error('A sugestão não pertence ao projeto ativo. Atualize a leitura.');
+    if(project?.source_kind==='company_portal'&&project.company_order_id&&!['open_film','open_queue'].includes(action.type)){ctx.nav(`/pedido-empresa/${encodeURIComponent(project.id)}`);return;}
     const currentQuote=id=>(snapshot.currentQuotes||[]).find(quote=>quote.id===id&&quote.project_id===expected.projectId&&quote.workspace_id===expected.workspaceId);
     switch(action.type){
       case 'new_quote':if(action.quoteId){if(!currentQuote(action.quoteId))throw new Error('O orçamento não está no projeto ativo.');await invoke(byData('.edit-quote[data-id]',action.quoteId))}else{if(!ctx.openQuote)throw new Error('Cadastro de orçamento não disponível.');await ctx.openQuote()}break;

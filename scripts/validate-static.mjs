@@ -12,6 +12,7 @@ const htmlFiles = [
   'comercial-admin.html',
   'mockup-viewer.html',
   'mockup-3d.html',
+  'empresa.html',
 ];
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'z19-static-check-'));
 const report = [];
@@ -37,6 +38,7 @@ for (const file of htmlFiles) {
 }
 
 const javascriptFiles = ['app.js','asset-studio-actions.js','studio-home.js','studio-art-picker.js','studio-art-preview.js','garment-cloud-store.js','garment-draft.js','garment-3d.js','garment-share.js','garment-presentation.js','mockup-3d.js','film-cloud-draft.js','production-finance.js','production-finance-core.js','production-v217.js','nesting-core.js','nesting-worker.js','queue-core.js','lettering-core.js','film-picker.js','film-preview.js','film-export-core.js','art-studio.js','art-color-core.js','art-color-worker.js','font-cmap.js','project-history.js','customization-preparer.js','garment-scene.js','garment-composer.js','mockup-viewer.js','production-cost-core.js','production-cost-analysis.js','production-cost-worker.js','production-cost-ui.js','cost-store.js','route-viewport.js','film-draft.js','project-advisor.js','project-advisor-ui.js','rip-calibration.js'];
+javascriptFiles.push('company-artwork.js','company-portal.js','company-portal-core.js','company-portal-admin.js','company-order-operations.js');
 for (const file of javascriptFiles) {
   const checked = spawnSync(process.execPath, ['--check', path.join(root, file)], { encoding: 'utf8' });
   if (checked.status !== 0) throw new Error(`${file}: ${checked.stderr || checked.stdout}`);

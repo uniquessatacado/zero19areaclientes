@@ -1,5 +1,12 @@
 # 019 Personalizações — Memória canônica
 
+## v2.17.12 — portal de empresas parceiras (EM IMPLEMENTAÇÃO)
+
+- Pedido de 21/09/2026: página exclusiva sem login/senha para Venduss Atacado, responsável Jean Caui e WhatsApp em branco. Solicitar produção escolhendo produtos cadastrados, tamanhos, quantidades e arte por item; acompanhar todos os pedidos e mudanças de status.
+- Implementação aditiva: portal público por link de capacidade, entrada interna em Empresas parceiras, pedidos reais integrados à preparação/fila/filme. Pedidos de parceiro não geram pagamento fictício; fluxo comercial existente mantém suas exigências.
+- Ajustes pedidos durante a implementação: produto + cor + tamanho + quantidade; nome da nova arte obrigatório e inicialmente vazio; recorte da prancheta transparente e PNG 300 DPI, preservando original; largura em cm com aviso destacado para medir com régua na camisa e altura proporcional visível/atualizada automaticamente. Acervo reutilizável da empresa sem reenviar o arquivo e medidas preservadas individualmente por pedido.
+- Preservar isolamento de conta/empresa, originais das artes, idempotência de envio/exportação e funcionalidades publicadas da 2.17.11. Publicação, migration e cadastro só serão registrados como concluídos após verificação.
+
 ## v2.17.11 — orçamento, serviços, mobile e produção integrada (PUBLICADA)
 
 - Pedido recebido em 20/09/2026: orçamento antes da preparação/mockup, artes de todo o acervo da empresa com quantidades independentes, quatro serviços (camiseta completa, DTF, camiseta do cliente e reforma), cores reutilizáveis de mockup, mobile estável e cards/filtros operacionais.

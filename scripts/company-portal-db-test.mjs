@@ -1,0 +1,191 @@
+// Isolated PostgreSQL/PGlite integration. No network/customer writes.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import {PGlite} from '../tmp/qa-postgres/node_modules/@electric-sql/pglite/dist/index.js';
+const db=new PGlite(),id=n=>`00000000-0000-4000-a000-${String(n).padStart(12,'0')}`;
+const baseline=await fs.readFile(new URL('./service-db-test.mjs',import.meta.url),'utf8');
+const start=baseline.indexOf('await db.exec(`')+'await db.exec(`'.length;
+const end=baseline.indexOf('`);',start);
+assert.ok(start>10&&end>start,'Existing service QA fixture is available');
+await db.exec(baseline.slice(start,end));
+await db.exec(`
+grant usage on schema auth to anon; grant execute on function auth.uid() to anon;
+alter table z19p_profiles add column role text default 'admin';
+alter table z19p_workspaces alter column id set default gen_random_uuid();
+alter table z19p_workspaces add column client_name text,add column phone text,add column workspace_type text default 'client',add column created_by uuid,add column responsible_user_id uuid;
+alter table z19p_statuses alter column id set default gen_random_uuid();
+alter table z19p_statuses add column name text,add column color text default '#000000';
+create unique index z19p_statuses_one_active_stage on z19p_statuses(owner_id,queue_stage) where queue_stage<>'none' and active;
+alter table z19p_projects add column sequence_no integer default 1,add column notes text,add column created_by uuid,add column created_at timestamptz default now();
+alter table z19p_projects add unique(workspace_id,sequence_no);
+alter table z19p_products add column name text,add column active boolean default true,add column sort_order integer default 0;
+alter table z19p_assets add column folder_id uuid,add column mime_type text,add column size_bytes bigint,add column width integer,add column height integer,add column dpi integer default 300,add column alpha_trimmed boolean default false,add column created_by uuid;
+alter table z19p_asset_print_profiles add column aspect_ratio numeric,add column created_by uuid not null default gen_random_uuid(),add column updated_by uuid not null default gen_random_uuid();
+create table z19p_folders(id uuid primary key default gen_random_uuid(),owner_id uuid,workspace_id uuid,project_id uuid,name text,purpose text,created_by uuid);
+create table z19p_status_history(id uuid primary key default gen_random_uuid(),owner_id uuid,workspace_id uuid,project_id uuid,from_status_id uuid,to_status_id uuid,changed_by uuid);
+alter table z19p_projects add foreign key(workspace_id) references z19p_workspaces(id) on delete cascade;
+alter table z19p_assets add foreign key(workspace_id) references z19p_workspaces(id) on delete cascade;
+alter table z19p_assets add foreign key(project_id) references z19p_projects(id) on delete cascade;
+alter table z19p_folders add foreign key(workspace_id) references z19p_workspaces(id) on delete cascade;
+alter table z19p_folders add foreign key(project_id) references z19p_projects(id) on delete cascade;
+alter table z19p_status_history add foreign key(workspace_id) references z19p_workspaces(id) on delete cascade;
+alter table z19p_status_history add foreign key(project_id) references z19p_projects(id) on delete set null;
+alter table z19p_asset_print_profiles add foreign key(asset_id) references z19p_assets(id) on delete cascade;
+alter table z19p_status_history enable row level security;
+create policy team on z19p_status_history to authenticated using(owner_id=z19p_current_account_owner()) with check(owner_id=z19p_current_account_owner());
+grant select,insert on z19p_status_history to authenticated;
+create schema storage;
+create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb,unique(bucket_id,name));
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon,authenticated;
+grant insert on storage.objects to anon,authenticated;
+create function public.z19p_force_owner_context() returns trigger language plpgsql security definer as $$begin if auth.uid() is not null then new.owner_id:=public.z19p_current_account_owner(); end if; return new; end$$;
+create trigger owner_context before insert or update on z19p_projects for each row execute function z19p_force_owner_context();
+create trigger owner_context before insert or update on z19p_assets for each row execute function z19p_force_owner_context();
+create trigger owner_context before insert or update on z19p_workspaces for each row execute function z19p_force_owner_context();
+`);
+await db.exec(await fs.readFile(new URL('../supabase/migrations/20260921012637_v21711_services_production.sql',import.meta.url),'utf8'));
+await db.exec('create trigger z19p_projects_validate_transition before insert or update of status_id on public.z19p_projects for each row execute function public.z19p_validate_project_transition()');
+await db.exec(await fs.readFile(new URL('./company-portal-migration.sql',import.meta.url),'utf8'));
+const query=(sql,params=[])=>db.query(sql,params),scalar=async(sql,params)=>Object.values((await query(sql,params)).rows[0])[0];
+const asUser=async(n,role='authenticated')=>{await db.exec('reset role');await query("select set_config('test.user',$1,false)",[n?id(n):'']);await db.exec(`set role ${role}`);};
+await db.exec(`insert into auth.users values('${id(1)}'),('${id(2)}'); insert into z19p_profiles(id,account_owner_id,active) values('${id(1)}','${id(1)}',true),('${id(2)}','${id(2)}',true);
+insert into z19p_products(id,owner_id,name) values('${id(11)}','${id(1)}','Camiseta A'),('${id(12)}','${id(2)}','Camiseta B');
+insert into z19p_statuses(id,owner_id,name,queue_stage,is_finalized) values('${id(21)}','${id(1)}','Atendimento','none',false),('${id(22)}','${id(1)}','Pronto','ready_production',false),('${id(23)}','${id(1)}','Produção','production',false),('${id(24)}','${id(1)}','Entregue','none',true),('${id(25)}','${id(1)}','Preparação de artes','art_work',false);`);
+const tests=[];
+async function test(name,fn){try{await fn();tests.push({name,passed:true});console.log('PASS',name);}catch(e){tests.push({name,passed:false,error:e.message});throw new Error(`${name}: ${e.message}`,{cause:e});}}
+const manage=(name)=>scalar('select z19p_company_portal_manage(null,$1,$2,true)',[name,'Contato sintético']);
+const read=t=>scalar('select z19p_company_portal_read($1)',[t]);
+const reserve=(t,n,files)=>scalar('select z19p_company_portal_reserve($1,$2,$3)',[t,id(n),files]);
+const submit=(t,n,payload)=>scalar('select z19p_company_portal_submit($1,$2,$3)',[t,id(n),payload]);
+const detail=pid=>scalar('select z19p_company_order_detail($1)',[pid]);
+let portal,portal2,files,reservation,payload,order,libraryAsset,reused;
+await test('create company without phone and scoped management',async()=>{
+ await asUser(1);portal=await manage('Partner A');assert.equal((await manage('Partner A')).workspace_id,portal.workspace_id);
+ assert.equal(await scalar('select phone from z19p_workspaces where id=$1',[portal.workspace_id]),null);
+ await asUser(2);portal2=await manage('Partner B');assert.equal((await scalar('select z19p_company_portals_list()')).length,1);
+ await assert.rejects(scalar('select z19p_company_portal_manage($1)',[portal.workspace_id]),/não encontrada/i);
+});
+await test('anonymous token read isolates catalog and cannot read tables/manage',async()=>{
+ await asUser(null,'anon');let data=await read(portal.token);assert.deepEqual(data.products.map(x=>x.id),[id(11)]);assert.equal(data.orders.length,0);
+ await assert.rejects(read(id(999)),/Link indisponível/);
+ for(const table of ['z19p_company_portals','z19p_company_orders','z19p_company_order_items','z19p_projects'])await assert.rejects(query(`select * from ${table}`),/permission denied/);
+ await assert.rejects(manage('Exploit'),/permission denied/);
+});
+await test('reserve paired original+processed and reject unreserved/mismatched uploads',async()=>{
+ files=[{client_id:id(101),name:'original.png',mime_type:'image/png',size_bytes:123},{client_id:id(102),name:'prepared.png',mime_type:'image/png',size_bytes:124}];
+ reservation=await reserve(portal.token,100,files);assert.equal(reservation.uploads.length,2);
+ assert.deepEqual((await reserve(portal.token,100,files)).uploads,reservation.uploads);
+ await assert.rejects(reserve(portal.token,100,[...files].reverse()),/alterados/);
+ await assert.rejects(query('insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)',['z19p-assets','unreserved/test.png',{mimetype:'image/png',size:123}]),/row-level security/);
+ const target=reservation.uploads[0];
+ await assert.rejects(query('insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)',['z19p-assets',target.path,{mimetype:'image/png',size:999}]),/row-level security/);
+ for(const upload of reservation.uploads){const file=files.find(x=>x.client_id===upload.client_id);await query('insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)',['z19p-assets',upload.path,{mimetype:file.mime_type,size:file.size_bytes}]);}
+});
+await test('submission validates name, proportions, quantities, product and creates genuine pending project without quote',async()=>{
+ const item={product_id:id(11),size:'M',color:'Preto',quantity:5,art_name:'Arte digitada',width_cm:10,height_cm:20,pixel_width:100,pixel_height:200,upload_id:id(101),processed_upload_id:id(102)};
+ payload={title:'Pedido teste',notes:'Cliente pediu impressão',items:[item]};
+ await assert.rejects(submit(portal.token,100,{...payload,items:[{...item,art_name:''}]}),/nome/);
+ await assert.rejects(submit(portal.token,100,{...payload,items:[{...item,product_id:id(12)}]}),/Produto/);
+ await assert.rejects(submit(portal.token,100,{...payload,items:[{...item,quantity:1.5}]}),/quantidade/);
+ await assert.rejects(submit(portal.token,100,{...payload,items:[{...item,height_cm:19}]}),/proporção/);
+ order=await submit(portal.token,100,payload);assert.equal(order.replayed,false);
+ assert.equal((await submit(portal.token,100,payload)).order_id,order.order_id);
+ await assert.rejects(submit(portal.token,100,{...payload,title:'changed'}),/já foi concluído/);
+ await asUser(1);const d=await detail(order.project_id);assert.equal(d.project.source_kind,'company_portal');assert.equal(d.project.company_order_id,order.order_id);assert.equal(d.items[0].asset.name,'Arte digitada');assert.equal(d.items[0].profile,null);assert.equal(d.items[0].requested_width_cm,10);assert.equal(d.project.delivery_date,null);
+ assert.equal(await scalar('select count(*)::int from z19p_quotes'),0);assert.equal(await scalar('select count(*)::int from z19p_quote_items'),0);
+});
+await test('library reuse snapshots independent dimensions and preserves originals',async()=>{
+ await asUser(null,'anon');const publicData=await read(portal.token);assert.equal(publicData.catalog.length,1);libraryAsset=publicData.catalog[0];
+ await reserve(portal.token,200,[]);
+ reused=await submit(portal.token,200,{title:'Segundo pedido',items:[{product_id:id(11),size:'G',color:'Branco',quantity:2,reference_asset_id:libraryAsset.id,art_name:libraryAsset.name,width_cm:5,height_cm:10}]});
+ assert.notEqual(reused.project_id,order.project_id);
+ assert.equal((await read(portal.token)).catalog.length,1,'clones do not clutter saved catalog');
+ await asUser(1);const one=await detail(order.project_id),two=await detail(reused.project_id);
+ assert.notEqual(one.items[0].asset.id,two.items[0].asset.id);assert.equal(one.items[0].asset.processed_path,two.items[0].asset.processed_path);
+ assert.equal(one.items[0].requested_width_cm,10);assert.equal(two.items[0].requested_width_cm,5);
+});
+await test('forged marker cannot evade regular payment gate, and partner requires prepared profiles',async()=>{
+ await asUser(1);
+ await query('insert into z19p_projects(id,owner_id,workspace_id,sequence_no,title,status_id,delivery_date) values($1,$2,$3,99,$4,$5,$6)',[id(300),id(1),portal.workspace_id,'Regular',id(21),'2026-12-01']);
+ await assert.rejects(scalar('select z19p_transition_project($1,$2)',[id(300),id(22)]),/orçamento/i);
+ await assert.rejects(query('update z19p_projects set status_id=$1 where id=$2',[id(22),id(300)]),/orçamento/i);
+ await assert.rejects(query("update z19p_projects set source_kind='company_portal',company_order_id=$1 where id=$2",[order.order_id,id(300)]),/unique|vínculo|origem/i);
+ await assert.rejects(scalar('select z19p_transition_project($1,$2)',[order.project_id,id(22)]),/Prepare a arte/i);
+ await assert.rejects(query('update z19p_projects set status_id=$1 where id=$2',[id(22),order.project_id]),/Prepare a arte/i);
+ await assert.rejects(query('update z19p_projects set status_id=$1 where id=$2',[id(9999),order.project_id]),/Status/);
+ assert.deepEqual(await scalar('select z19p_pending_film_items()'),[]);
+ const d=await detail(order.project_id);await scalar('select z19p_company_order_prepare($1,$2,null)',[order.project_id,[{id:d.items[0].id,final_asset_id:d.items[0].asset.id}]]);await query('update z19p_asset_print_profiles set ready_for_print=true where asset_id=$1',[d.items[0].asset.id]);
+ await scalar('select z19p_transition_project($1,$2)',[order.project_id,id(22)]);
+ const pending=await scalar('select z19p_pending_film_items()');assert.equal(pending.length,1);assert.equal(pending[0].remaining_quantity,5);assert.equal(pending[0].company_order_item_id,d.items[0].id);
+});
+await test('partner film export partial, replay, finality and over-allocation preserve shared ledger',async()=>{
+ const d=await detail(order.project_id),entry={company_order_item_id:d.items[0].id,quote_item_id:null,film_item_id:id(401),project_id:order.project_id,asset_id:d.items[0].asset.id,quantity:2,width_cm:10,height_cm:20,source_path:d.items[0].asset.processed_path};
+ const record=(n,row)=>scalar('select z19p_record_film_export($1,$2,$3)',[id(n),String(n).padStart(64,'0'),[row]]);
+ assert.equal((await record(400,entry)).added_quantity,2);assert.equal((await record(400,entry)).replayed,true);assert.equal((await record(402,entry)).added_quantity,0);
+ await assert.rejects(record(490,{...entry,source_path:'obsolete.png'}),/mudou/);
+ await query('insert into z19p_quotes(id,owner_id,workspace_id,project_id,title,service_type,schema_version) values($1,$2,$3,$4,$5,$6,2)',[id(480),id(1),portal.workspace_id,order.project_id,'Explicit staff quote','dtf_only']);
+ await query("insert into z19p_quote_items(id,owner_id,quote_id,product_name,quantity,pricing_mode,piece_price,prints,item_kind,reference_asset_id,final_asset_id) values($1,$2,$3,'Print',5,'piece_plus_print',0,'[{\"price\":2}]','art',$4,$4)",[id(481),id(1),id(480),d.items[0].asset.id]);
+ await query("update z19p_quotes set payment_status='paid' where id=$1",[id(480)]);
+ await assert.rejects(record(482,{...entry,company_order_item_id:null,quote_item_id:id(481)}),/Vínculo de filme/);
+ assert.equal((await scalar('select z19p_pending_film_items()')).find(x=>x.company_order_item_id===d.items[0].id).remaining_quantity,3);
+ assert.equal((await detail(order.project_id)).project.status_id,id(23));
+ await assert.rejects(record(403,{...entry,film_item_id:id(404),quantity:4}),/já atendida/i);
+ await assert.rejects(record(405,{...entry,film_item_id:id(406),quantity:1,width_cm:11}),/Medidas/);
+ const other=await detail(reused.project_id);
+ await assert.rejects(scalar('select z19p_company_order_prepare($1,$2,null)',[order.project_id,[{id:d.items[0].id,final_asset_id:other.items[0].asset.id}]]),/já entrou em filme/);
+ assert.equal((await record(407,{...entry,film_item_id:id(408),quantity:3})).added_quantity,3);
+ await scalar('select z19p_transition_project($1,$2)',[order.project_id,id(24)]);
+ assert.equal((await record(400,entry)).replayed,true);
+ await assert.rejects(scalar('select z19p_transition_project($1,$2)',[order.project_id,id(22)]),/encerrado/);
+ assert.notEqual((await detail(reused.project_id)).project.status_id,id(24),'another order unchanged');
+});
+await test('public status follows exact order, no private finance and cross-company catalog reuse denied',async()=>{
+ await asUser(null,'anon');const data=await read(portal.token);assert.equal(data.orders.find(x=>x.id===order.order_id).status.finalized,true);assert.equal(data.summary.total,2);assert.equal(data.summary.completed,1);assert.equal(data.summary.pieces,7);
+ assert.ok(!JSON.stringify(data).includes('submitted_payload'));assert.ok(!JSON.stringify(data).includes('token'));
+ assert.equal((await read(portal2.token)).orders.length,0);
+ await reserve(portal2.token,500,[]);await assert.rejects(submit(portal2.token,500,{items:[{product_id:id(12),size:'M',color:'Preto',quantity:1,art_name:'Foreign',reference_asset_id:libraryAsset.id,width_cm:10,height_cm:20}]}),/nesta empresa/);
+ await asUser(2);await assert.rejects(detail(order.project_id),/não encontrado/);assert.deepEqual(await scalar('select z19p_company_orders_list()'),[]);
+});
+await test('grant audit denies helper bypass and direct operational writes',async()=>{
+ await asUser(1);
+ for(const role of ['anon','authenticated'])for(const fn of ['z19p_private.record_company_film_item(uuid,jsonb)','z19p_private.company_portal(uuid)'])assert.equal(await scalar('select has_function_privilege($1,$2,$3)',[role,fn,'EXECUTE']),false);
+ await assert.rejects(query('select submitted_payload from z19p_company_orders'),/permission denied/);
+ await assert.rejects(query('update z19p_company_order_items set quantity=999'),/permission denied/);
+ await assert.rejects(query('delete from z19p_company_orders'),/permission denied/);
+ await assert.rejects(query("update z19p_projects set source_kind='internal',company_order_id=null where id=$1",[reused.project_id]),/origem/i);
+ await asUser(2);const foreignItem=(await query('select id from z19p_company_order_items')).rows;assert.equal(foreignItem.length,0);
+ await assert.rejects(scalar('select z19p_company_order_prepare($1,$2,null)',[reused.project_id,[]]),/não encontrado/);
+ await assert.rejects(scalar('select z19p_record_film_export($1,$2,$3)',[id(560),'a'.repeat(64),[{company_order_item_id:id(888),project_id:reused.project_id,asset_id:id(889),film_item_id:id(890),quantity:1,width_cm:5,height_cm:10,source_path:'foreign.png'}]]),/não corresponde/);
+ await db.exec('reset role');await query("insert into auth.users values($1),($2)",[id(3),id(4)]);await query('insert into z19p_profiles(id,account_owner_id,active) values($1,$2,true),($3,$2,false)',[id(3),id(1),id(4)]);
+ await asUser(3);assert.equal((await detail(reused.project_id)).project.company_order_id,reused.order_id);
+ await asUser(4);await assert.rejects(detail(reused.project_id),/Entre novamente/);
+});
+await test('missing uploads reject, disabling token also revokes pending upload paths',async()=>{
+ await asUser(null,'anon');const reserved=await reserve(portal.token,570,files);
+ await assert.rejects(submit(portal.token,570,payload),/não terminou/);
+ await asUser(1);await scalar('select z19p_company_portal_manage($1,null,null,false)',[portal.workspace_id]);
+ await asUser(null,'anon');await assert.rejects(read(portal.token),/Link indisponível/);await assert.rejects(submit(portal.token,570,payload),/Link indisponível/);
+ await assert.rejects(query('insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)',['z19p-assets',reserved.uploads[0].path,{mimetype:'image/png',size:123}]),/row-level security/);
+ await asUser(1);await scalar('select z19p_company_portal_manage($1,null,null,true)',[portal.workspace_id]);
+});
+await test('all uploaded expired reservation can finish and unallocated company deletion cascades safely',async()=>{
+ await asUser(null,'anon');const r=await reserve(portal2.token,600,files);
+ for(const upload of r.uploads){const f=files.find(x=>x.client_id===upload.client_id);await query('insert into storage.objects(bucket_id,name,metadata) values($1,$2,$3)',['z19p-assets',upload.path,{mimetype:f.mime_type,size:f.size_bytes}]);}
+ await db.exec('reset role');await query("update z19p_private.company_upload_requests set expires_at=now()-interval '1 hour' where workspace_id=$1 and request_id=$2",[portal2.workspace_id,id(600)]);
+ await asUser(null,'anon');const deletedOrder=await submit(portal2.token,600,{...payload,items:[{...payload.items[0],product_id:id(12)}]});
+ await asUser(2);assert.equal((await detail(deletedOrder.project_id)).order.id,deletedOrder.order_id);
+ await query('delete from z19p_workspaces where id=$1',[portal2.workspace_id]);
+ assert.equal(await scalar('select count(*)::int from z19p_projects where id=$1',[deletedOrder.project_id]),0);
+ await asUser(null,'anon');await assert.rejects(read(portal2.token),/Link indisponível/);
+});
+await test('empty-file library reservations cannot bypass per-company request quota',async()=>{
+ await asUser(1);const quotaPortal=await manage('Quota partner');
+ await asUser(null,'anon');for(let n=0;n<20;n++)await reserve(quotaPortal.token,700+n,[]);
+ await assert.rejects(reserve(quotaPortal.token,720,[]),/Limite de envios/);
+ const q=await reserve(quotaPortal.token,700,[]);assert.equal(q.request_id,id(700),'exact replay remains available after limit');
+ await asUser(1);await query('delete from z19p_workspaces where id=$1',[quotaPortal.workspace_id]);
+});
+console.log(JSON.stringify({passed:tests.length,tests},null,2));
+await db.close();
+
