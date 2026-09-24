@@ -19,7 +19,12 @@ export function preflightSpotExport({width,height,streaming=false,deviceMemory=g
   if(width>32767||height>32767)throw new Error('O TIFF ultrapassa o limite de dimensão do navegador. Divida o job manualmente; o filme não será separado nem terá o DPI reduzido.');
   const canvasBytes=width*height*4,stripBytes=width*Math.min(ROWS,height)*24;
   const gb=Number(deviceMemory)||0;
-  const budget=gb>=8?1500*MB:gb>=4?700*MB:gb>=2?350*MB:gb>0?250*MB:512*MB;
+  // navigator.deviceMemory is privacy-rounded and tops out at coarse buckets.
+  // When File System Access is available we stream every converted strip directly
+  // to disk, so the large TIFF output is never retained as a Blob in memory.
+  // Keep non-streaming/mobile budgets unchanged; only the 4 GB desktop bucket
+  // gets a targeted headroom increase for direct-to-disk jobs such as ~818 MB.
+  const budget=gb>=8?1500*MB:gb>=4?(streaming?950:700)*MB:gb>=2?350*MB:gb>0?250*MB:512*MB;
   // Canvas/backing copies, live source images, WASM and one in-flight strip.
   // Blob fallback also retains the output and allows for a construction copy.
   const estimatedPeak=canvasBytes*2+96*MB+stripBytes+(streaming?0:tiff.totalBytes*2);
