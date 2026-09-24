@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.13';
-const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21713-'));
+const version='2.17.14';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21714-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
 function copy(a,b){fs.mkdirSync(b,{recursive:true});for(const e of fs.readdirSync(a,{withFileTypes:true})){if(skip.has(e.name)||e.name.startsWith('.env'))continue;const from=path.join(a,e.name),to=path.join(b,e.name);if(e.isDirectory())copy(from,to);else if(e.isFile())fs.copyFileSync(from,to);}}
@@ -56,6 +56,8 @@ if(!production.includes("segments=[{start:0,end:layout.lengthMm}]"))throw new Er
 if(!production.includes("previewQualityVersion=3")||!production.includes("previewTargetPx=1600"))throw new Error('Regressão: prévia de alta qualidade ausente.');
 const filmPreview=fs.readFileSync(path.join(temp,'film-preview.js'),'utf8');
 if(!filmPreview.includes("data-delete")||!filmPreview.includes("event.key==='Delete'")||!filmPreview.includes('max="400"'))throw new Error('Regressão: exclusão/zoom do filme ausente.');
+const spotExport=fs.readFileSync(path.join(temp,'film-spot-export.js'),'utf8');
+if(!spotExport.includes("streaming?950:700"))throw new Error('Regressão: orçamento direto-em-disco de 4 GB não foi atualizado.');
 const filmTools=fs.readFileSync(path.join(root,'scripts/film-v2176-functions.txt'),'utf8');
 if(!filmTools.includes('data-clear-film'))throw new Error('Regressão: botão Limpar filme ausente.');
 if(!fs.readFileSync(path.join(temp,'index.html'),'utf8').includes('z19-version" content="'+version+'"'))throw new Error('Versão de saída inválida.');
