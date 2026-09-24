@@ -203,3 +203,37 @@ Estado: candidata v2.17.8; publicar somente depois de build/preview e confirmaç
 - Validação executada: cópia original conferida pelo Git blob SHA `bccc21e7f92405db8508bc0d5acbb5c7e35aa632`; `node --check` no script corrigido passou; teste focal reproduziu ausência da âncora antiga e ocorrência única da nova na linha-fonte consultada.
 - Limite: build completo, testes autenticados e deployment da candidata ainda pendentes. A tentativa de obter o checkout completo neste ambiente falhou na resolução DNS do host do arquivo GitHub. Não apresentar o teste focal como execução de `npm run build`.
 - Prevenção: executar o script de build versionado real; não usar uma transformação manual diferente do repositório como prova de que o build está pronto. Não repetir chamadas de deployment inexistente como se fossem trabalhos em progresso.
+
+
+## v2.17.14 — margem segura para TIFF Spot em gravação direta (24/09/2026)
+
+### Estado anterior confirmado
+- `main` antes desta revisão: `468c0e72f56f439b290beff550d2a278befc5c9b`.
+- Produção canônica consultada antes da alteração: **v2.17.13**, deployment mais recente `dpl_Sxqa2Rs6DLahew983aaHd8PuLwZD` em estado `READY`.
+- O motor TIFF/Spot já existia e já processava CMYK+Spot por faixas de 64 linhas em Worker; em Chrome/Edge com File System Access ele já escrevia cada faixa diretamente no disco, sem manter o TIFF inteiro em Blob.
+
+### Relato e causa
+- Um filme foi bloqueado com a mensagem de estimativa de memória em aproximadamente **818 MB**.
+- Não era limite do Supabase, tamanho final fixo do TIFF nem falta de streaming. A causa era o preflight de `film-spot-export.js`: a classe `navigator.deviceMemory = 4` tinha orçamento de 700 MB mesmo quando a exportação estava em gravação direta em disco.
+- `navigator.deviceMemory` é uma classificação arredondada por privacidade; não representa memória livre em tempo real.
+
+### Correção localizada
+- Nova versão de build: **v2.17.14**.
+- Para classe de 4 GB, **somente quando `streaming=true` / gravação direta em disco**, o orçamento de preflight passa de 700 MB para **950 MB**.
+- O fallback sem gravação direta continua em **700 MB** na classe de 4 GB.
+- Classe de 8 GB ou mais continua em 1500 MB; 2 GB continua em 350 MB; classes menores/indeterminadas permanecem conservadoras.
+- O teto duro de canvas de **900 MB** continua intacto.
+- TIFF sem streaming acima de **192 MB** continua exigindo gravação direta.
+- Limites de dimensão, TIFF clássico, 300 DPI, arquivo único, Worker, strip de 64 linhas, Spot, curva, alpha e cancelamento não foram alterados.
+
+### Regressões adicionadas
+- Caso `6850 × 13000` px, gravação direta e classe 4 GB: pico estimado ~819 MB, agora aceito dentro do orçamento de 950 MB.
+- O mesmo caso sem gravação direta continua bloqueado pela exigência de salvar direto em disco.
+- Caso maior `6850 × 17717` px (aprox. 58 × 150 cm a 300 DPI) continua bloqueado na classe 4 GB, preservando margem de segurança; em classe 8 GB permanece permitido como antes.
+- PNG, nesting, medidas, rotação e demais fluxos não foram modificados.
+
+### Banco e publicação
+- **Nenhuma alteração de banco necessária para esta revisão.**
+- Não aplicar SQL para o limite de memória; ele é lógica do navegador.
+- A publicação deve executar `npm run build` e só seguir para Vercel se todos os testes passarem.
+- Neste ambiente de manutenção, o build completo não pôde ser executado porque o host GitHub não resolveu via DNS no container local. Não declarar a v2.17.14 publicada até o build real e o domínio canônico serem verificados.
