@@ -14,6 +14,11 @@ function canvas(width=2,height=130,{empty=false}={}){
 
 const allowed=preflightSpotExport({width:6850,height:17717,streaming:true,deviceMemory:8});
 assert.equal(allowed.pixelBytes,6850*17717*5);assert.ok(allowed.totalBytes>606e6);
+const directDisk4gb=preflightSpotExport({width:6850,height:13000,streaming:true,deviceMemory:4});
+assert.ok(directDisk4gb.estimatedPeak>800e6&&directDisk4gb.estimatedPeak<900e6,'~818 MB direct-disk job remains inside the targeted 4 GB desktop budget');
+assert.equal(directDisk4gb.budget,950e6);
+assert.throws(()=>preflightSpotExport({width:6850,height:13000,streaming:false,deviceMemory:4}),/gravação direta/);
+assert.throws(()=>preflightSpotExport({width:6850,height:17717,streaming:true,deviceMemory:4}),/memória/,'larger 58x150 cm job is still blocked on the 4 GB class');
 assert.throws(()=>preflightSpotExport({width:6850,height:17717,streaming:false,deviceMemory:8}),/gravação direta/);
 assert.throws(()=>preflightSpotExport({width:6850,height:17717,streaming:true,deviceMemory:2}),/memória/);
 assert.throws(()=>preflightSpotExport({width:20,height:32768,streaming:true,deviceMemory:8}),/dimensão/);
@@ -46,4 +51,4 @@ let job=await exportFixture();assert.equal((await job.result).saved,true);assert
 job=await exportFixture({failWrite:true});await assert.rejects(job.result,/disk full/);assert.equal(job.state.aborted,1);assert.equal(job.state.closed,0);assert.ok(job.instance.terminated);assert.equal(job.source.height,1);
 job=await exportFixture({pickerError:new DOMException('denied','SecurityError')});const blobResult=await job.result;assert.equal(blobResult.saved,false);assert.equal(blobResult.blob.type,'image/tiff');assert.equal(blobResult.blob.size,blobResult.bytes);assert.ok(job.instance.terminated);
 job=await exportFixture({cancelPicker:true});await assert.rejects(job.result,{name:'AbortError'});assert.equal(job.state.writes,0);assert.equal(job.source.width,2,'cancelled picker did not render');
-console.log('Spot export: full 58x150cm preflight, 37.25deg origin, worker timeout/cancel, sequential disk writes, failure abort and Blob fallback OK');
+console.log('Spot export: 4GB direct-disk headroom, full 58x150cm safety gate, 37.25deg origin, worker timeout/cancel, sequential disk writes, failure abort and Blob fallback OK');
