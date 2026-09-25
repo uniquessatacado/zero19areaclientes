@@ -701,16 +701,24 @@ async function processImage(file,{trim,targetMax=0,onStage=()=>{}}={}){
     const scale=targetMax/Math.max(workingWidth,workingHeight),w=Math.max(1,Math.round(workingWidth*scale)),h=Math.max(1,Math.round(workingHeight*scale)),touchDevice=(navigator.maxTouchPoints||0)>1||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||'');
     outputWidth=w;outputHeight=h;onStage(`Ajustando qualidade para ${Math.max(w,h)} px…`);
     out=document.createElement('canvas');out.width=w;out.height=h;
-    if(touchDevice){
-      const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-mobile';
+    const nativeResize=touchDevice||targetMax>=6000||(workingWidth*workingHeight)>12000000;
+    if(nativeResize){
+      const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine=touchDevice?'native-mobile':'native-large';
     }else{
-      try{await pica.resize(source,out,{quality:3,alpha:true,unsharpAmount:50,unsharpRadius:.55,unsharpThreshold:2});engine='pica';}
-      catch(error){console.warn('pica resize fallback',error);const g=out.getContext('2d',{alpha:true});if(!g)throw error;g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-fallback';}
+      try{
+        await Promise.race([
+          pica.resize(source,out,{quality:3,alpha:true,unsharpAmount:50,unsharpRadius:.55,unsharpThreshold:2}),
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Redimensionamento demorou demais.')),15000))
+        ]);
+        engine='pica';
+      }catch(error){
+        console.warn('pica resize fallback',error);const g=out.getContext('2d',{alpha:true});if(!g)throw error;g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-fallback';
+      }
     }
     upscaled=true;
   }
   onStage('Gerando PNG transparente 300 DPI…');
-  const raw=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('O navegador não conseguiu finalizar o PNG. Tente “Original — sem ampliar” para este arquivo.')),'image/png',1));
+  const raw=await new Promise((resolve,reject)=>{let settled=false;const timer=setTimeout(()=>{if(!settled){settled=true;reject(new Error('A geração do PNG demorou demais. Tente novamente ou use “Original — sem ampliar”.'))}},30000);out.toBlob(b=>{if(settled)return;settled=true;clearTimeout(timer);b?resolve(b):reject(new Error('O navegador não conseguiu finalizar o PNG. Tente “Original — sem ampliar” para este arquivo.'))},'image/png',1)});
   const blob=await setPngDpi(raw,300);
   if(out!==source){out.width=out.height=1}source.width=source.height=1;
   return{blob,width:outputWidth,height:outputHeight,sourceWidth,sourceHeight,upscaled,engine};
@@ -1166,19 +1174,52 @@ createFolder = async function(parentId=null){const parent=parentId?currentFolder
 const _baseProcessQueue=processQueue;
 processQueue = async function(m,{mockupMode=false}={}){
   if(!uploadQueue.length)return;
-  const trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m),prog=$('#progress',m),readyAssets=[];btn.disabled=true;prog.classList.remove('hidden');let done=0;
-  for(const q of uploadQueue){
+  if(uploadQueue.some(q=>!String(q.name||'').trim()))return toast('Dê um nome claro para cada arquivo antes de salvar.','err');
+  if(uploadQueue.some(q=>q.type==='arte'&&!q.folderId))return toast('Escolha uma pasta para cada arte antes de salvar.','err');
+  if(!mockupMode&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id))return toast('Este cliente ainda não possui pedido oficial. Libere temporariamente em Configurações ou sincronize o pedido.','err');
+
+  const uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue],trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m),prog=$('#progress',m),status=$('#progressText',m),savedAssets=[];
+  btn.disabled=true;prog.classList.remove('hidden');let done=0;
+  const stage=text=>{if(status?.isConnected)status.textContent=text};
+
+  for(const q of queue){
     try{
-      $('#progressText',m).textContent=`${mockupMode?'Salvando':'Processando'} ${done+1}/${uploadQueue.length}: ${q.name}`;
-      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0),result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget}),assetId=crypto.randomUUID(),base=`${session.user.id}/${currentWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`,project=await getLatestProject(currentWorkspace.id),assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:project?.id||null,folder_id:q.folderId||null,name:q.name.trim()||'Sem nome',asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:qualityTarget>0&&result.upscaled,created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule.folderInReadyTree(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled}};
-      let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
-      const {error}=await supabase.from('z19p_assets').insert(assetRow);if(error)throw error;if(q.type==='arte'&&(q.readyForPrint||productionModule.folderInReadyTree(q.folderId||null)))readyAssets.push(assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/uploadQueue.length*100)}%`;
-    }catch(err){console.error(err);toast(`Erro em ${q.name}: ${err.message||err}`,'err')}
+      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0);
+      stage(`${mockupMode?'Salvando':'Processando'} ${done+1}/${queue.length}: ${q.name}`);
+      const result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
+      const assetId=crypto.randomUUID(),base=`${session.user.id}/${uploadWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`;
+      const officialProject=uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
+      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
+
+      stage(`${done+1}/${queue.length} · Enviando arquivo original…`);
+      let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;
+      stage(`${done+1}/${queue.length} · Enviando PNG final…`);
+      up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
+      stage(`${done+1}/${queue.length} · Salvando no cliente…`);
+      const {data:saved,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;
+      savedAssets.push(saved||assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
+    }catch(err){
+      console.error('upload artwork',err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');
+    }
   }
-  $('#progressText',m).textContent=`Concluído: ${done} de ${uploadQueue.length} arquivo(s).`;toast(`${done} arquivo(s) salvo(s).${readyAssets.length?' Agora informe as medidas das artes prontas.':''}`,'ok');
-  uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));m.remove();
-  const configureReadyAsset=index=>{const asset=readyAssets[index];if(!asset)return renderWorkspace(currentWorkspace.id);productionModule.openPrintProfile(asset,{required:true,render:false,onSaved:()=>configureReadyAsset(index+1),onCancel:()=>configureReadyAsset(index+1)})};
-  readyAssets.length?configureReadyAsset(0):renderWorkspace(currentWorkspace.id);
+
+  if(!done){
+    stage('Não foi possível concluir o arquivo. Nenhuma arte nova foi salva.');
+    btn.disabled=false;return;
+  }
+
+  stage(`Concluído: ${done} de ${queue.length}. Abrindo tamanho e posição…`);
+  uploadQueue.forEach(item=>item.preview&&URL.revokeObjectURL(item.preview));uploadQueue=[];m.remove();
+  try{
+    if(savedAssets.length&&officialOrders&&uploadWorkspace?.workspace_type==='client'){
+      await officialOrders.offerAfterUpload(savedAssets,{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled});
+    }else if(uploadWorkspace?.id){
+      await renderWorkspace(uploadWorkspace.id);
+    }
+  }catch(error){
+    console.error('placement after upload',error);toast((error.message||'Arte salva, mas não foi possível abrir tamanho e posição.')+' A arte continua salva no cliente.','err');
+    if(uploadWorkspace?.id)await renderWorkspace(uploadWorkspace.id);
+  }
 };
 
 const VIDEO_MAX_BYTES=50*1024*1024;
