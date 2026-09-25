@@ -237,3 +237,63 @@ Estado: candidata v2.17.8; publicar somente depois de build/preview e confirmaç
 - Não aplicar SQL para o limite de memória; ele é lógica do navegador.
 - A publicação deve executar `npm run build` e só seguir para Vercel se todos os testes passarem.
 - Neste ambiente de manutenção, o build completo não pôde ser executado porque o host GitHub não resolveu via DNS no container local. Não declarar a v2.17.14 publicada até o build real e o domínio canônico serem verificados.
+
+
+## v2.17.15 — clientes e empresa simplificados + chave do estúdio (24/09/2026)
+
+### Objetivo
+Reduzir a confusão da interface sem apagar código ou dados legados. O fluxo comercial antigo continua preservado para futura integração, porém deixa de aparecer no atendimento normal.
+
+### Cadastro de cliente
+- Formulário reduzido a quatro campos:
+  - **Nome do cliente** obrigatório;
+  - **Nome da empresa** opcional;
+  - **WhatsApp** obrigatório;
+  - **Responsável** obrigatório.
+- `z19p_workspaces.company_name` continua NOT NULL no schema antigo. Quando o cliente não informa empresa, o frontend grava internamente o próprio nome do cliente em `company_name`, sem duplicar visualmente o nome.
+- Novos clientes **não criam projeto, orçamento ou pastas automaticamente**. Os projetos/pedidos serão alimentados pela integração futura com o outro sistema.
+- Campos legados (estado, status, observações) e dados existentes permanecem no banco; esta revisão não os apaga.
+
+### Tela da empresa
+- Topo do cliente: foco em **WhatsApp** e **Subir arte**.
+- Removidos da visualização normal: Orçamento, status manual, área/link do cliente, histórico operacional e sidebar de pastas.
+- As artes continuam preservadas e aparecem em grade única; pastas antigas continuam no banco, apenas não são expostas neste fluxo simplificado.
+- Nova seção **Projetos / Pedidos do cliente** lista os projetos existentes sem controles manuais de status. Se não houver projeto, mostra “Nenhum pedido sincronizado ainda.”
+- Status e histórico serão redefinidos quando a integração com o outro sistema for implementada.
+
+### Montar camiseta / 3D
+- Nova chave por conta: `z19p_public_settings.garment_studio_enabled`.
+- Default: **false**.
+- Configurações passa a expor somente o controle “Montar camiseta e 3D”.
+- Desligado: oculta/bloqueia **Montar camiseta**, **Ver em 3D**, **Link 3D / cliente**, modelo liso e rota do Estúdio.
+- **Ver tamanho na camisa permanece disponível** independentemente da chave.
+- O código dos recursos ocultos não foi removido.
+
+### Provador “Ver tamanho na camisa”
+- Puxador laranja grande foi substituído por um controle pequeno e discreto no canto inferior direito, para não cobrir a estampa.
+- Presets 9, 20 e 28 cm preservados.
+- Novo preset **Costas · 43 cm**, exibido somente quando o lado selecionado é Costas.
+- Medidas reais da estampa, posição, zoom, centralização e salvamento continuam preservados.
+
+### Banco
+Migration preparada em:
+`supabase/migrations/20260925004500_v21715_garment_feature_flag.sql`
+
+SQL aditivo:
+```sql
+alter table public.z19p_public_settings
+  add column if not exists garment_studio_enabled boolean not null default false;
+```
+
+Não aplicar mudança destrutiva. A coluna começa desativada também para registros existentes.
+
+### Não regressão
+- PNG/TIFF Spot, nesting, filme, 300 DPI, Supabase, assets, biblioteca, filas e produção não são alterados por esta revisão.
+- v2.17.14 de memória do TIFF Spot permanece preservada.
+- Orçamento/pastas/histórico não foram apagados do código nem do banco; apenas retirados do fluxo visual normal.
+- Build v2.17.15 inclui gate de sintaxe para `asset-studio-actions.js` e `art-studio.js` e teste `test-v21715-ui.mjs`.
+
+### Estado
+- Base desta revisão: `main` v2.17.14.
+- Produção confirmada antes da alteração: **v2.17.13**.
+- v2.17.15 ainda é candidata. Executar migration, `npm run build`, validar localmente e só então fazer deploy.
