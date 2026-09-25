@@ -26,7 +26,7 @@ const INSTAGRAM_URL='https://www.instagram.com/'+INSTAGRAM_HANDLE;
 function installStyles(){
   if(document.getElementById('zero19PdvSyncStyles'))return;
   const style=document.createElement('style');style.id='zero19PdvSyncStyles';
-  style.textContent='.z19-sync-strip{margin:18px 0 24px;padding:18px;border:1px solid #27272a;border-radius:22px;background:linear-gradient(145deg,#111113,#171719);box-shadow:0 18px 50px rgba(0,0,0,.18)}.z19-sync-head{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.z19-sync-head h2{margin:2px 0 0;font-size:20px}.z19-sync-head p{margin:4px 0 0;color:#a1a1aa;font-size:13px}.z19-sync-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.z19-sync-count{border:1px solid #303036;border-radius:16px;padding:12px;background:#0c0c0e;text-align:left;color:inherit}.z19-sync-count strong{display:block;font-size:24px;line-height:1}.z19-sync-count span{display:block;margin-top:7px;font-size:11px;color:#b8b8c0;line-height:1.25}.z19-sync-count.danger{border-color:#7f1d1d;background:#1c0c0c}.z19-sync-count.warn{border-color:#854d0e;background:#1d1406}.z19-zero19-page{display:grid;gap:18px}.z19-zero19-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}.z19-zero19-summary button{min-height:84px;border:1px solid #303036;border-radius:18px;background:#111113;color:inherit;text-align:left;padding:14px;cursor:pointer}.z19-zero19-summary b{display:block;font-size:26px}.z19-zero19-summary span{font-size:11px;color:#aaa}.z19-zero19-section{display:grid;gap:10px}.z19-zero19-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.z19-zero19-section-head h2{margin:0}.z19-zero19-section-head p{margin:4px 0 0;color:#9f9fa8;font-size:13px}.z19-zero19-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.z19-zero19-card{border:1px solid #2d2d32;border-radius:20px;background:#111113;padding:16px;display:grid;gap:12px}.z19-zero19-card.overdue{border-color:#991b1b;box-shadow:inset 0 0 0 1px rgba(239,68,68,.16)}.z19-zero19-card-head{display:flex;justify-content:space-between;gap:12px}.z19-zero19-card h3{margin:0;font-size:18px}.z19-zero19-card small{color:#a1a1aa}.z19-zero19-order{font-size:12px;color:#fb923c;font-weight:800}.z19-zero19-meta{display:flex;gap:7px;flex-wrap:wrap}.z19-zero19-meta span{border:1px solid #303036;border-radius:999px;padding:5px 9px;font-size:11px;color:#c7c7cc}.z19-zero19-items{display:grid;gap:6px}.z19-zero19-item{padding:9px 10px;border-radius:12px;background:#0a0a0c;font-size:12px;color:#c7c7cc}.z19-zero19-item b{color:#fff}.z19-zero19-card-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-overdue{font-size:11px;font-weight:800;color:#fca5a5}.z19-sync-settings{margin-top:12px}.z19-sync-settings-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.z19-transfer-list{display:grid;gap:9px;max-height:55dvh;overflow:auto}.z19-transfer-row{border:1px solid #333;border-radius:14px;padding:12px;text-align:left;background:#121214;color:inherit;cursor:pointer}.z19-transfer-row b,.z19-transfer-row span,.z19-transfer-row small{display:block}.z19-transfer-row span{margin-top:3px}.z19-transfer-row small{margin-top:5px;color:#aaa}.z19-transfer-button{margin-left:auto}.z19-ready-message{white-space:pre-wrap;background:#0b0b0d;border:1px solid #2d2d32;border-radius:14px;padding:12px;font-size:12px;line-height:1.5;color:#d4d4d8}@media(max-width:780px){.z19-sync-head{align-items:flex-start;flex-direction:column}.z19-sync-counts,.z19-zero19-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.z19-zero19-summary button:last-child,.z19-sync-count:last-child{grid-column:1/-1}.z19-zero19-grid{grid-template-columns:1fr}.z19-zero19-card-actions .btn{flex:1 1 44%;justify-content:center}.z19-sync-settings-row{grid-template-columns:1fr}.z19-sync-settings-row .btn{width:100%;justify-content:center}}';
+  style.textContent='.z19-sync-strip{margin:18px 0 24px;padding:18px;border:1px solid #27272a;border-radius:22px;background:linear-gradient(145deg,#111113,#171719);box-shadow:0 18px 50px rgba(0,0,0,.18)}.z19-order-picker-toolbar{display:grid;grid-template-columns:1fr auto;gap:10px;margin:12px 0}.z19-order-picker-toolbar input{min-width:0}.z19-order-picker-row{display:grid;gap:4px}.z19-order-picker-row b{font-size:14px}.z19-order-picker-row strong{color:#ff8a5b;font-size:12px}.z19-order-picker-row .phone{font-weight:800;color:#d4d4d8}.z19-order-picker-footer{display:flex;justify-content:center;padding-top:10px}'.z19-sync-head{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.z19-sync-head h2{margin:2px 0 0;font-size:20px}.z19-sync-head p{margin:4px 0 0;color:#a1a1aa;font-size:13px}.z19-sync-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.z19-sync-count{border:1px solid #303036;border-radius:16px;padding:12px;background:#0c0c0e;text-align:left;color:inherit}.z19-sync-count strong{display:block;font-size:24px;line-height:1}.z19-sync-count span{display:block;margin-top:7px;font-size:11px;color:#b8b8c0;line-height:1.25}.z19-sync-count.danger{border-color:#7f1d1d;background:#1c0c0c}.z19-sync-count.warn{border-color:#854d0e;background:#1d1406}.z19-zero19-page{display:grid;gap:18px}.z19-zero19-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}.z19-zero19-summary button{min-height:84px;border:1px solid #303036;border-radius:18px;background:#111113;color:inherit;text-align:left;padding:14px;cursor:pointer}.z19-zero19-summary b{display:block;font-size:26px}.z19-zero19-summary span{font-size:11px;color:#aaa}.z19-zero19-section{display:grid;gap:10px}.z19-zero19-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.z19-zero19-section-head h2{margin:0}.z19-zero19-section-head p{margin:4px 0 0;color:#9f9fa8;font-size:13px}.z19-zero19-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.z19-zero19-card{border:1px solid #2d2d32;border-radius:20px;background:#111113;padding:16px;display:grid;gap:12px}.z19-zero19-card.overdue{border-color:#991b1b;box-shadow:inset 0 0 0 1px rgba(239,68,68,.16)}.z19-zero19-card-head{display:flex;justify-content:space-between;gap:12px}.z19-zero19-card h3{margin:0;font-size:18px}.z19-zero19-card small{color:#a1a1aa}.z19-zero19-order{font-size:12px;color:#fb923c;font-weight:800}.z19-zero19-meta{display:flex;gap:7px;flex-wrap:wrap}.z19-zero19-meta span{border:1px solid #303036;border-radius:999px;padding:5px 9px;font-size:11px;color:#c7c7cc}.z19-zero19-items{display:grid;gap:6px}.z19-zero19-item{padding:9px 10px;border-radius:12px;background:#0a0a0c;font-size:12px;color:#c7c7cc}.z19-zero19-item b{color:#fff}.z19-zero19-card-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-overdue{font-size:11px;font-weight:800;color:#fca5a5}.z19-sync-settings{margin-top:12px}.z19-sync-settings-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.z19-transfer-list{display:grid;gap:9px;max-height:55dvh;overflow:auto}.z19-transfer-row{border:1px solid #333;border-radius:14px;padding:12px;text-align:left;background:#121214;color:inherit;cursor:pointer}.z19-transfer-row b,.z19-transfer-row span,.z19-transfer-row small{display:block}.z19-transfer-row span{margin-top:3px}.z19-transfer-row small{margin-top:5px;color:#aaa}.z19-transfer-button{margin-left:auto}.z19-ready-message{white-space:pre-wrap;background:#0b0b0d;border:1px solid #2d2d32;border-radius:14px;padding:12px;font-size:12px;line-height:1.5;color:#d4d4d8}@media(max-width:780px){.z19-sync-head{align-items:flex-start;flex-direction:column}.z19-sync-counts,.z19-zero19-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.z19-zero19-summary button:last-child,.z19-sync-count:last-child{grid-column:1/-1}.z19-zero19-grid{grid-template-columns:1fr}.z19-zero19-card-actions .btn{flex:1 1 44%;justify-content:center}.z19-sync-settings-row{grid-template-columns:1fr}.z19-sync-settings-row .btn{width:100%;justify-content:center}}';
   document.head.appendChild(style);
 }
 function digits(v){return String(v||'').replace(/\D/g,'')}
@@ -40,10 +40,10 @@ function notifyMessage(name){
 function normalizeBusinessTime(source){
   const date=new Date(source);
   while(true){
-    if(date.getDay()===0){date.setDate(date.getDate()+1);date.setHours(9,0,0,0);continue}
+    if(date.getDay()===0){date.setDate(date.getDate()+1);date.setHours(10,0,0,0);continue}
     const minutes=date.getHours()*60+date.getMinutes();
-    if(minutes<540){date.setHours(9,0,0,0);return date}
-    if(minutes>=1080){date.setDate(date.getDate()+1);date.setHours(9,0,0,0);continue}
+    if(minutes<600){date.setHours(10,0,0,0);return date}
+    if(minutes>=1080){date.setDate(date.getDate()+1);date.setHours(10,0,0,0);continue}
     return date;
   }
 }
@@ -53,7 +53,7 @@ function addBusinessMinutes(source,minutes){
     date=normalizeBusinessTime(date);const end=new Date(date);end.setHours(18,0,0,0);
     const available=Math.max(0,(end-date)/60000);
     if(remaining<=available){date=new Date(date.getTime()+remaining*60000);remaining=0;break}
-    remaining-=available;date=new Date(end);date.setDate(date.getDate()+1);date.setHours(9,0,0,0);
+    remaining-=available;date=new Date(end);date.setDate(date.getDate()+1);date.setHours(10,0,0,0);
   }
   return normalizeBusinessTime(date);
 }
@@ -65,9 +65,26 @@ function stageFromProject(project,items){
 export function createZero19PdvSync(ctx){
   installStyles();
   const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,startStandaloneHalftone,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
-  let cache=null,cacheAt=0;
+  let cache=null,cacheAt=0,lastAutoSyncAt=0,autoSyncPromise=null;
+  async function ensureAutomaticSync(force=false){
+    const now=Date.now();
+    if(!force&&now-lastAutoSyncAt<60000)return;
+    if(autoSyncPromise)return autoSyncPromise;
+    autoSyncPromise=(async()=>{
+      try{
+        const {data,error}=await supabase.rpc('z19p_sync_zero19_recent',{p_limit:30});
+        if(error)throw error;
+        lastAutoSyncAt=Date.now();
+        if(Number(data?.synced)||0){cache=null;cacheAt=0}
+      }catch(error){
+        console.warn('zero19 automatic sync',error);
+      }finally{autoSyncPromise=null}
+    })();
+    return autoSyncPromise;
+  }
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
+    await ensureAutomaticSync(false);
     if(!force&&cache&&Date.now()-cacheAt<12000)return cache;
     const [wi,pr,ws,sla]=await Promise.all([
       supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
@@ -134,7 +151,7 @@ export function createZero19PdvSync(ctx){
       const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),overdue=data.summaries.filter(x=>x.overdue).length,risk=data.summaries.filter(x=>x.risk&&!x.overdue).length,hero=app.querySelector('.simple-hero');
       if(!hero)return;
       const section=document.createElement('section');section.className='z19-sync-strip';section.dataset.z19SyncStrip='';
-      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+(risk?'<b>'+risk+' pedido(s) com risco de atraso.</b> ':'')+'Média atual '+Number(data.avgMinutes||30).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min/camisa. Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
+      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+(risk?'<b>'+risk+' pedido(s) com risco de atraso.</b> ':'')+'Média atual '+Number(data.avgMinutes||30).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min/camisa. Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
       hero.insertAdjacentElement('afterend',section);
       bindRoot(section);
     }catch(error){console.warn('zero19 sync dashboard',error)}
@@ -161,19 +178,53 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-wa]').forEach(b=>b.onclick=()=>{const d=digits(b.dataset.z19Wa);if(d)window.open('https://wa.me/'+(d.startsWith('55')?d:'55'+d),'_blank','noopener,noreferrer')});
   }
   async function renderQueue(){
-    const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),saved=sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
-    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
+    const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),hashQuery=(location.hash.split('?')[1]||''),stageParam=new URLSearchParams(hashQuery).get('stage')||'',saved=stageParam||sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
     bindCommon();bindRoot(app);app.querySelectorAll('[data-z19-jump]').forEach(b=>b.onclick=()=>document.getElementById('z19-stage-'+b.dataset.z19Jump)?.scrollIntoView({behavior:'smooth',block:'start'}));
     if(saved)setTimeout(()=>document.getElementById('z19-stage-'+saved)?.scrollIntoView({behavior:'smooth',block:'start'}),50);
   }
   function findWorkItem(data,id){return data.items.find(item=>item.id===id)}
   async function openGlobalUpload(){
-    const data=await load(true),pending=[];
-    for(const summary of data.summaries)for(const item of summary.items)if(item.stage==='awaiting_art')pending.push({summary,item});
-    const modal=document.createElement('div');modal.className='modal-backdrop';
-    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Subir arte</div><h2>Para qual pedido?</h2><p>Escolha uma pendência do PDV ZERO19 ou envie um halftone avulso sem cliente.</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pending.length?pending.map((row,index)=>'<button class="z19-transfer-row" data-global-upload="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>Prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div>'+(data.zero19Library?'<button class="z19-transfer-row" data-standalone-halftone style="width:100%;margin-top:10px"><b>Halftone avulso · sem cliente</b><span>Salvar na Biblioteca ZERO19 e colocar na fila Aguardando Halftone.</span><small>Depois você pode transferir a arte pronta para qualquer cliente/pedido.</small></button>':'')+'<div class="modal-footer"><button class="btn close">Fechar</button></div></div>';
-    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
-    modal.querySelectorAll('[data-global-upload]').forEach(b=>b.onclick=()=>{const row=pending[Number(b.dataset.globalUpload)];modal.remove();startUploadForWorkspace?.(row.summary.workspace.id)});const standalone=modal.querySelector('[data-standalone-halftone]');if(standalone)standalone.onclick=()=>{modal.remove();startStandaloneHalftone?.(data.zero19Library.id)};
+    await ensureAutomaticSync(true);
+    const local=await load(true),modal=document.createElement('div');modal.className='modal-backdrop';
+    let rows=[],offset=0,total=0,query='',busy=false,searchTimer=null;
+    const stageLabel=stage=>STAGE_LABELS[stage]||stage||'Ainda não sincronizado';
+    const orderDate=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):''};
+
+    const choose=async row=>{
+      if(busy)return;busy=true;draw();
+      try{
+        const result=await supabase.rpc('z19p_sync_zero19_order',{p_order_id:row.order_id});
+        if(result.error)throw result.error;
+        invalidate();const data=await load(true),projectId=result.data?.project_id,workspaceId=result.data?.workspace_id,summary=data.summaries.find(item=>item.project.id===projectId),pending=summary?.items.find(item=>item.stage==='awaiting_art')||summary?.items[0]||null;
+        if(!workspaceId)throw new Error('Não encontrei o cliente deste pedido no Personalizações.');
+        modal.remove();
+        startUploadForWorkspace?.(workspaceId,{projectId,workItemId:pending?.id||null,personalizationSaleId:pending?.personalization_sale_id||null,orderId:row.order_id});
+      }catch(error){busy=false;toast(error.message||'Não foi possível abrir este pedido.','err');draw()}
+    };
+
+    const draw=()=>{
+      const list=rows.length?rows.map((row,index)=>'<button class="z19-transfer-row z19-order-picker-row" data-order-index="'+index+'" '+(busy?'disabled':'')+'><strong>Pedido #'+h(row.display_id||String(row.order_id).slice(0,8))+'</strong><b>'+h(row.customer_name||'Cliente')+'</b><span class="phone">'+h(row.whatsapp||'Sem WhatsApp')+'</span><small>'+h(orderDate(row.personalization_created_at||row.created_at))+' · '+h(row.personalization_count||1)+' personalização(ões) · '+h(stageLabel(row.integrated_stage))+'</small></button>').join(''):'<div class="empty mini">'+(query?'Nenhum pedido encontrado para esta busca.':'Nenhum pedido com personalização encontrado.')+'</div>';
+      const canMore=offset+rows.length<total;
+      modal.innerHTML='<div class="modal wide"><div class="modal-head"><div><div class="eyebrow">SUBIR ARTE</div><h2>Escolha o pedido da ZERO19</h2><p>Mostrando os pedidos mais recentes. Busque por nome, número do pedido ou WhatsApp.</p></div><button class="btn ghost small close">×</button></div><div class="z19-order-picker-toolbar"><div class="search">⌕<input data-order-search type="search" value="'+h(query)+'" placeholder="Nome, pedido ou WhatsApp"></div><span class="btn" style="pointer-events:none">'+h(total)+' encontrado(s)</span></div><div class="z19-transfer-list">'+list+'</div>'+(canMore?'<div class="z19-order-picker-footer"><button class="btn" data-order-more '+(busy?'disabled':'')+'>Carregar mais 30</button></div>':'')+(local.zero19Library?'<button class="z19-transfer-row" data-standalone-halftone style="width:100%;margin-top:12px"><b>Halftone avulso · sem cliente</b><span>Salvar direto na Biblioteca ZERO19.</span><small>Pode vincular ao cliente depois.</small></button>':'')+'<div class="modal-footer"><small style="margin-right:auto">A sincronização é automática; não precisa usar botão separado.</small><button class="btn close">Fechar</button></div></div>';
+      modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>!busy&&modal.remove());
+      modal.querySelectorAll('[data-order-index]').forEach(button=>button.onclick=()=>choose(rows[Number(button.dataset.orderIndex)]));
+      const input=modal.querySelector('[data-order-search]');
+      if(input){input.oninput=()=>{query=input.value.trim();clearTimeout(searchTimer);searchTimer=setTimeout(()=>void fetchPage(true),260)};requestAnimationFrame(()=>{if(document.activeElement?.dataset?.orderSearch)input.setSelectionRange(input.value.length,input.value.length)})}
+      modal.querySelector('[data-order-more]')?.addEventListener('click',()=>void fetchPage(false));
+      const standalone=modal.querySelector('[data-standalone-halftone]');if(standalone)standalone.onclick=()=>{modal.remove();startStandaloneHalftone?.(local.zero19Library.id)};
+    };
+
+    const fetchPage=async reset=>{
+      if(busy)return;busy=true;if(reset){offset=0;rows=[]}draw();
+      const {data,error}=await supabase.rpc('z19p_zero19_order_picker',{p_limit:30,p_offset:offset,p_query:query||null});
+      if(error){busy=false;toast(error.message,'err');draw();return}
+      const next=Array.isArray(data?.rows)?data.rows:[];total=Number(data?.total)||0;
+      if(reset)rows=next;else rows=[...rows,...next];
+      offset=rows.length;busy=false;draw();
+    };
+
+    document.body.appendChild(modal);draw();await fetchPage(true);
   }
   async function sourceImageSize(blob){
     if(!String(blob.type||'').startsWith('image/'))return {width:null,height:null};
@@ -293,20 +344,23 @@ export function createZero19PdvSync(ctx){
     if(!confirm('Confirmar que o cliente retirou este pedido?'))return;
     const {error}=await supabase.rpc('z19p_zero19_mark_delivered',{p_project_id:projectId});if(error)return toast(error.message,'err');invalidate();toast('Pedido entregue e sincronizado com a ZERO19.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
   }
-  async function syncRecent(limit){
-    let n=Number(limit);if(![10,20,50,100].includes(n)){
-      const {data}=await supabase.from('z19p_public_settings').select('zero19_sync_recent_limit').eq('owner_id',accountOwnerId()).maybeSingle();n=Number(data?.zero19_sync_recent_limit)||20;
-    }
-    const {data,error}=await supabase.rpc('z19p_sync_zero19_recent',{p_limit:n});if(error)return toast(error.message,'err');invalidate();toast((data?.synced||0)+' pedido(s) antigos sincronizado(s).','ok');if(location.hash.includes('/zero19-fila'))renderQueue();else enhanceDashboard();
+  async function syncRecent(limit=30){
+    const n=Math.max(1,Math.min(100,Number(limit)||30)),{data,error}=await supabase.rpc('z19p_sync_zero19_recent',{p_limit:n});
+    if(error)return toast(error.message,'err');lastAutoSyncAt=Date.now();invalidate();toast((data?.synced||0)+' pedido(s) sincronizado(s).','ok');if(location.hash.includes('/zero19-fila'))renderQueue();else enhanceDashboard();
   }
   async function enhanceSettings(modal){
     if(!modal||modal.querySelector('[data-zero19-sync-settings]'))return;
-    const owner=accountOwnerId(),{data}=await supabase.from('z19p_public_settings').select('zero19_sync_recent_limit').eq('owner_id',owner).maybeSingle(),value=Number(data?.zero19_sync_recent_limit)||20,section=document.createElement('section');
-    section.className='settings-section z19-sync-settings';section.dataset.zero19SyncSettings='';
-    section.innerHTML='<div class="settings-head"><div><b>Sincronização PDV ZERO19</b><small>Pedidos novos entram automaticamente. Este botão busca pedidos antigos que ainda não foram importados.</small></div></div><div class="z19-sync-settings-row"><div class="field"><label>Buscar últimos pedidos não sincronizados</label><select data-z19-sync-limit><option value="10">10 pedidos</option><option value="20">20 pedidos</option><option value="50">50 pedidos</option><option value="100">100 pedidos</option></select></div><button class="btn primary" data-z19-settings-sync>Sincronizar agora</button></div>';
-    const host=modal.querySelector('.clean-settings')||modal.querySelector('.settings-modal');host?.appendChild(section);section.querySelector('[data-z19-sync-limit]').value=String(value);
-    section.querySelector('[data-z19-sync-limit]').onchange=async e=>{const n=Number(e.target.value);const {error}=await supabase.from('z19p_public_settings').update({zero19_sync_recent_limit:n,updated_at:new Date().toISOString()}).eq('owner_id',owner);if(error)toast(error.message,'err')};
-    section.querySelector('[data-z19-settings-sync]').onclick=()=>syncRecent(Number(section.querySelector('[data-z19-sync-limit]').value));
+    const section=document.createElement('section');section.className='settings-section z19-sync-settings';section.dataset.zero19SyncSettings='';
+    section.innerHTML='<div class="settings-head"><div><b>Sincronização PDV ZERO19</b><small>Automática. O sistema verifica pedidos novos em segundo plano e o botão Subir arte abre 30 por vez. A busca encontra pedidos antigos mesmo fora dos 30 carregados.</small></div></div>';
+    const host=modal.querySelector('.clean-settings')||modal.querySelector('.settings-modal');host?.appendChild(section);
+  }
+  async function openWorkspaceStage(workspaceId){
+    const data=await load(true),orders=data.summaries.filter(summary=>summary.workspace?.id===workspaceId).sort((a,b)=>new Date(b.project.source_order_created_at||b.project.created_at||0)-new Date(a.project.source_order_created_at||a.project.created_at||0));
+    if(!orders.length)return toast('Este cliente ainda não possui pedido ZERO19 sincronizado.','err');
+    const modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">AJUSTE MANUAL</div><h2>Atualizar etapa do pedido</h2><p>Use somente para corrigir pedidos antigos ou que já estavam adiantados. O fluxo normal continua automático.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Pedido</label><select data-stage-project>'+orders.map(summary=>'<option value="'+h(summary.project.id)+'">#'+h(orderNo(summary.project))+' · '+h(summary.workspace?.client_name||summary.workspace?.company_name||'Cliente')+' · '+h(STAGE_LABELS[summary.stage]||summary.stage)+'</option>').join('')+'</select></div><div class="field"><label>Enviar para</label><select data-force-stage><option value="awaiting_art">Aguardando subir arte</option><option value="ready_production">Aguardando produção</option><option value="production">Em produção</option><option value="ready_pickup">Finalizado / pronto para retirada</option><option value="delivered">Entregue</option></select></div><div class="hint">A alteração atualiza o pedido integrado. Nenhuma arte ou arquivo é apagado.</div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-force-apply>Atualizar etapa</button></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());
+    modal.querySelector('[data-force-apply]').onclick=async()=>{const button=modal.querySelector('[data-force-apply]');button.disabled=true;const projectId=modal.querySelector('[data-stage-project]').value,stage=modal.querySelector('[data-force-stage]').value,{error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:stage});if(error){button.disabled=false;return toast(error.message,'err')}invalidate();modal.remove();toast('Etapa atualizada.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();else nav('/')};
   }
   async function openTransfer(asset){
     const data=await load(true),pending=data.summaries.filter(s=>['awaiting_art','awaiting_font','ready_production'].includes(s.stage)),modal=document.createElement('div');modal.className='modal-backdrop';
@@ -338,5 +392,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {enhanceDashboard,renderQueue,enhanceSettings,enhanceWorkspace,load,openTransfer,syncRecent,invalidate};
+  return {enhanceDashboard,renderQueue,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync};
 }

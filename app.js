@@ -26,7 +26,7 @@ const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
-const APP_VERSION = '2.17.28';
+const APP_VERSION = '2.17.29';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -1438,7 +1438,7 @@ async function renderCurrentRoute(){
   if(session&&(current==='/times'||current==='/filme'))await loadConfig();
   if(!stillCurrent())return;
   if(session&&current.startsWith('/fila/'))return nav('/filme');
-  if(session&&current==='/zero19-fila')return zero19Sync.renderQueue();
+  if(session&&current.startsWith('/zero19-fila'))return zero19Sync.renderQueue();
   if(session&&current==='/times')return productionModule.renderTeams();
   if(session&&current==='/filme')return productionModule.renderFilm();
   if(session&&current==='/empresas-parceiras')return companyPortalAdmin.render();
