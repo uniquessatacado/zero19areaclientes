@@ -13,7 +13,9 @@ assert.ok(finalProcessStart>=0);
 assert.match(finalProcess,/onStage:text=>stage/);
 assert.match(finalProcess,/offerAfterUpload\(savedAssets,\{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled\}\)/);
 assert.match(finalProcess,/workspace_type==='client'/);
-assert.match(app,/native-large/);
+assert.match(app,/const nativeResize=touchDevice;/);
+assert.ok(!app.includes('native-large'),'desktop Ultra 6000 deve usar Pica, não canvas nativo');
+assert.match(app,/native-mobile/);
 assert.match(app,/A geração do PNG demorou demais/);
 assert.match(app,/clientUploadWithoutOrderEnabled/);
 
