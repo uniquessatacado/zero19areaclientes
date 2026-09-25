@@ -163,6 +163,17 @@ export function createOfficialOrderWorkflow(ctx){
     };
     document.body.appendChild(modal);draw();return modal;
   }
+  async function openPlacementPreview(asset){
+    if(!asset?.id)return false;
+    const {data:placement,error}=await supabase.from('z19p_asset_placements').select('*').eq('owner_id',owner()).eq('asset_id',asset.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    if(error)throw error;if(!placement)return false;
+    let mockup=null;if(placement.mockup_asset_id){const result=await supabase.from('z19p_assets').select('id,name,processed_path,original_path').eq('id',placement.mockup_asset_id).maybeSingle();if(result.error)throw result.error;mockup=result.data}
+    const source=mockup?.processed_path||mockup?.original_path;if(!source)return false;
+    const modal=document.createElement('div');modal.className='official-placement-preview-backdrop';
+    modal.innerHTML='<section class="official-placement-preview-page"><header><div><div class="eyebrow">POSIÇÃO SALVA</div><h2>'+esc(asset.name)+'</h2><p>Visualização do mockup oficial usado para produção.</p></div><button class="btn ghost" data-close>Fechar</button></header><main><img src="'+esc(ctx.publicUrl(source))+'" alt="Mockup '+esc(asset.name)+'"><div class="official-placement-preview-info"><b>'+esc(placement.position_code)+'</b><span>'+esc([placement.garment_category,placement.garment_color_name,placement.garment_size].filter(Boolean).join(' · '))+'</span><strong>'+Number(placement.width_cm).toLocaleString('pt-BR',{maximumFractionDigits:2})+' × '+Number(placement.height_cm).toLocaleString('pt-BR',{maximumFractionDigits:2})+' cm</strong></div></main></section>';
+    modal.querySelector('[data-close]').onclick=()=>modal.remove();modal.onkeydown=e=>{if(e.key==='Escape')modal.remove()};document.body.appendChild(modal);modal.querySelector('[data-close]').focus();return true;
+  }
+
   async function offerAfterUpload(assets,{workspace=state().currentWorkspace,projects=state().currentProjects||[]}={}){
     const arts=(assets||[]).filter(a=>a?.asset_type==='arte');for(const asset of arts){await new Promise(resolve=>{let finished=false;const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop')){clearInterval(watch);if(!finished){finished=true;resolve()}}},180);openPlacementWizard(asset,{workspace,project:projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||projects.find(p=>p.workspace_id===workspace?.id)}).catch(()=>{clearInterval(watch);resolve()})})}
   }
@@ -193,5 +204,5 @@ export function createOfficialOrderWorkflow(ctx){
     const selected=new Set(selectedProjectIds||[]),groups=exportGroups(items).filter(g=>selected.has(g.projectId));if(!groups.length)return {projects:0,placements:0};
     const projectIds=groups.map(g=>g.projectId),placementIds=[...new Set(groups.flatMap(g=>g.placementIds))],{data,error}=await supabase.rpc('z19p_mark_official_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds});if(error)throw error;return data||{projects:0,placements:0};
   }
-  return {loadPositions,openPositionSettings,openPlacementWizard,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
+  return {loadPositions,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
 }
