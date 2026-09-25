@@ -6,7 +6,7 @@ export const filmOrderRowKey=row=>row.kind==='company_order'?`company:${row.comp
 const companyLink=link=>Boolean(link?.companyOrderItemId);
 export async function filmExportIdentity(items,layout,{digest=bytes=>crypto.subtle.digest('SHA-256',bytes)}={}){
   const artifact={version:1,width:layout.filmWidthMm,length:layout.lengthMm,
-    items:items.map(item=>({id:item.localId,type:item.type,sourceId:item.sourceId,path:item.path||null,width:item.widthCm,height:item.heightCm,quantity:item.quantity,orderLink:item.orderLink||null,officialPlacementId:item.officialPlacementId||null,officialProjectId:item.officialProjectId||null,officialOrderRef:item.officialOrderRef||null,
+    items:items.map(item=>({id:item.localId,type:item.type,sourceId:item.sourceId,path:item.path||null,width:item.widthCm,height:item.heightCm,quantity:item.quantity,orderLink:item.orderLink||null,officialPlacementId:item.officialPlacementId||null,officialProjectId:item.officialProjectId||null,officialOrderRef:item.officialOrderRef||null,productionPlacementIds:[...(item.productionPlacementIds||[])].sort(),productionGroupKeys:[...(item.productionGroupKeys||[])].sort(),manualGarmentGroupId:item.manualGarmentGroupId||null,
       recipe:item.type==='team_customization'?Object.fromEntries(Object.entries(item).filter(([key])=>!['previewDataUrl','previewUrl','mask','_mask'].includes(key))):null})).sort((a,b)=>a.id.localeCompare(b.id)),
     placements:layout.placements.map(p=>({id:p.id,copy:p.copy,x:p.xMm,y:p.yMm,width:p.widthMm,height:p.heightMm,angle:p.rotation||0})).sort((a,b)=>a.id.localeCompare(b.id)||(a.copy||0)-(b.copy||0))};
   const hash=await digest(new TextEncoder().encode(JSON.stringify(canonical(artifact))));
