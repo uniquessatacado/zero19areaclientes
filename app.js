@@ -587,7 +587,7 @@ function assetStudioHandlers(beforeOpen=()=>{}){return {
   open3D:asset=>{beforeOpen();if(!garmentStudioEnabled)return;return artStudio.openGarment(asset,{initialAction:'3d'})},
   openPresentation:asset=>{beforeOpen();if(!garmentStudioEnabled)return;return artStudio.openGarment(asset,{initialAction:'share3d'})},
   openBlank:asset=>{beforeOpen();if(!garmentStudioEnabled)return;return artStudio.openGarment(asset,{initialAction:'blank'})},
-  openMockup:asset=>{beforeOpen();return artStudio.openMockup(asset)},
+  openMockup:async asset=>{beforeOpen();if(await officialOrders?.openPlacementPreview?.(asset))return;return artStudio.openMockup(asset)},
   openEditor:asset=>{beforeOpen();return artStudio.openEditor(asset)},
   onError:error=>toast(error.message||'Não foi possível abrir o estúdio.','err')
 }}
@@ -1236,7 +1236,7 @@ productionModule=createProductionModule({
   getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
   isGarmentStudioEnabled:()=>garmentStudioEnabled,
   officialOrders,
-  openArtMockup:(asset,options)=>artStudio.openMockup(asset,options),openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>garmentStudioEnabled?artStudio.openGarment(asset,options):null,
+  openArtMockup:async(asset,options)=>{if(await officialOrders?.openPlacementPreview?.(asset))return;return artStudio.openMockup(asset,options)},openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>garmentStudioEnabled?artStudio.openGarment(asset,options):null,
   openArt3D:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'3d'}):null,openArtPresentation:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'share3d'}):null,openArtBlank:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'blank'}):null,
   prepareDashboard:async()=>{const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
   state:()=>({session,currentProfile,teamProfiles,workspaces,currentProjects,currentWorkspace,currentFolders,currentAssets,currentQuotes,statuses})
