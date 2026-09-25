@@ -21,14 +21,14 @@ assert.ok(!queue.includes("service_type,source_kind,company_order_id"),'queue n√
 assert.match(queue,/official_order_ref,official_order_source,official_order_status/);
 
 assert.match(workflow,/z19p_manual_garments/);
-assert.match(workflow,/chooseManualGarment/);
-assert.match(workflow,/createManualGarment/);
+assert.match(workflow,/chooseManualGroup/);
+assert.match(workflow,/buildManualGroup/);
 assert.match(workflow,/manual_garment_id/);
 assert.match(workflow,/CAMISETA SEM PEDIDO/);
-assert.match(workflow,/Qual camiseta vai receber esta arte/);
-assert.match(workflow,/manualGarment=await chooseManualGarment/);
+assert.match(workflow,/Quais pe√ßas recebem esta estampa/);
+assert.match(workflow,/manualGroup=await chooseManualGroup/);
 assert.match(css,/camiseta manual para cliente sem pedido oficial/);
 assert.match(css,/manual-garment-backdrop/);
 assert.match(css,/manual-stepper/);
 
-console.log('v2.17.20 upload hotfix: active queue fixed, no-order manual shirts, reusable shirt choice and processing timeout passed.');
+console.log('v2.17.20+ upload hotfix: active queue fixed, no-order shirt groups and processing timeout passed.');
