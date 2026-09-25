@@ -8,8 +8,8 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.14';
-const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21714-'));
+const version='2.17.15';
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21715-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
 function copy(a,b){fs.mkdirSync(b,{recursive:true});for(const e of fs.readdirSync(a,{withFileTypes:true})){if(skip.has(e.name)||e.name.startsWith('.env'))continue;const from=path.join(a,e.name),to=path.join(b,e.name);if(e.isDirectory())copy(from,to);else if(e.isFile())fs.copyFileSync(from,to);}}
@@ -48,7 +48,7 @@ for(const name of fs.readdirSync(temp).filter(name=>/\.(js|html)$/.test(name))){
 }
 production=fs.readFileSync(path.join(temp,'production-v217.js'),'utf8');
 const readme=path.join(temp,'README.md');fs.writeFileSync(readme,fs.readFileSync(readme,'utf8')+'\nBuild estático v'+version+': exclusão sem reorganizar, encaixe com comparação de rotação, prévias reutilizadas e TIFF CMYK + Spot local. Primeira impressão deve ser conferida no RIP.\n');
-for(const name of ['app.js','production-v217.js','lettering-layout-v2176.js','film-saved-drafts.js','film-preview.js','customization-preparer.js','nesting-core.js','film-edit-core.js','film-tiff-core.js','film-cmyk-converter.js','film-spot-export.js','film-spot-worker.js','network-read.js','asset-preview.js'])execFileSync(process.execPath,['--check',name],{cwd:temp,stdio:'inherit'});
+for(const name of ['app.js','production-v217.js','lettering-layout-v2176.js','film-saved-drafts.js','film-preview.js','customization-preparer.js','nesting-core.js','film-edit-core.js','film-tiff-core.js','film-cmyk-converter.js','film-spot-export.js','film-spot-worker.js','network-read.js','asset-preview.js','asset-studio-actions.js','art-studio.js'])execFileSync(process.execPath,['--check',name],{cwd:temp,stdio:'inherit'});
 // Every deterministic Node test belongs in the release gate. The optional
 // private-image comparison is run locally, never copied into the public build.
 for(const name of ['validate-static.mjs',...fs.readdirSync(path.join(temp,'scripts')).filter(name=>/^test-.*\.mjs$/.test(name)&&name!=='test-spot-reference.mjs').sort()])execFileSync(process.execPath,['scripts/'+name],{cwd:temp,stdio:'inherit'});
@@ -58,6 +58,10 @@ const filmPreview=fs.readFileSync(path.join(temp,'film-preview.js'),'utf8');
 if(!filmPreview.includes("data-delete")||!filmPreview.includes("event.key==='Delete'")||!filmPreview.includes('max="400"'))throw new Error('Regressão: exclusão/zoom do filme ausente.');
 const spotExport=fs.readFileSync(path.join(temp,'film-spot-export.js'),'utf8');
 if(!spotExport.includes("streaming?950:700"))throw new Error('Regressão: orçamento direto-em-disco de 4 GB não foi atualizado.');
+const appSource=fs.readFileSync(path.join(temp,'app.js'),'utf8'),studioActions=fs.readFileSync(path.join(temp,'asset-studio-actions.js'),'utf8'),artStudio=fs.readFileSync(path.join(temp,'art-studio.js'),'utf8');
+if(!appSource.includes('garment_studio_enabled')||!appSource.includes('Nome do cliente *')||!appSource.includes('Pedidos do cliente'))throw new Error('Regressão: simplificação de clientes v2.17.15 ausente.');
+if(!studioActions.includes('garmentEnabled=handlers.garmentEnabled!==false'))throw new Error('Regressão: chave Montar camiseta/3D não está aplicada às ações.');
+if(!artStudio.includes('data-size="43" data-back-only')||!artStudio.includes('ctx.isGarmentStudioEnabled?.()'))throw new Error('Regressão: provador v2.17.15 incompleto.');
 const filmTools=fs.readFileSync(path.join(root,'scripts/film-v2176-functions.txt'),'utf8');
 if(!filmTools.includes('data-clear-film'))throw new Error('Regressão: botão Limpar filme ausente.');
 if(!fs.readFileSync(path.join(temp,'index.html'),'utf8').includes('z19-version" content="'+version+'"'))throw new Error('Versão de saída inválida.');
