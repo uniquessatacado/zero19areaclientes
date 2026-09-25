@@ -746,7 +746,7 @@ export function createProductionModule(ctx){
   const freshFilmSettings=()=>({mediaId:null,mode:'maximum',gapMm:3,freeRotation:false,angleStep:30,name:'',nameCustom:false});
   function suggestedFilmName(media){
     const profile=media?.find(m=>m.id===filmSettings.mediaId)||media?.find(m=>m.id===app.querySelector('#filmMedia')?.value)||media?.[0],width=Number(profile?.usable_width_cm||0);
-    const clients=[...new Set(filmItems.map(item=>String(item.companyName||item.label?.split(' • ')[0]||'').trim()).filter(Boolean))].slice(0,6);
+    const clients=[...new Set(filmItems.map(item=>String(item.companyName||item.label?.split(' • ')[0]||'').trim()).filter(Boolean))];
     const now=new Date(),date=now.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}).replace('/','-'),time=now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}).replace(':','h');
     return ['Filme '+(width?Number(width.toFixed(2)).toLocaleString('pt-BR')+' cm':'DTF'),clients.length?clients.join(' - '):'Sem cliente',date+' '+time].join(' — ');
   }
@@ -1325,7 +1325,7 @@ export function createProductionModule(ctx){
       if(assetIds.some(id=>!assetProjects.has(id)))throw new Error('Uma das artes foi removida ou não está mais acessível. Revise os itens antes de salvar.');
       for(const item of items)if(item.type==='asset')item.projectId=assetProjects.get(item.sourceId);
       const projectIds=new Set(items.map(item=>item.type==='asset'?item.projectId:null)),projectId=projectIds.size===1&&![...projectIds].includes(null)?[...projectIds][0]:null;
-      const snapshot={snapshot_version:2,renderer_version:'2.17.5',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
+      const snapshot={snapshot_version:2,renderer_version:'2.17.17',commit_state:'pending',efficiency:layout.efficiency,waste:layout.waste,lastFilm:layout,filmItems:items};
       const jobPayload={id:jobId,owner_id:accountId,project_id:projectId,name:String(filmSettings.name||suggestedFilmName(media)).trim(),media_profile_id:profile.id,film_width_cm:layout.filmWidthMm/10,nesting_mode:layout.mode,gap_mm:layout.gapMm,status:'draft',calculated_length_cm:layout.lengthMm/10,settings_snapshot:snapshot,created_by:actorId,updated_by:actorId};
       attempted=true;
       const inserted=await supabase.from('z19p_print_jobs').insert(jobPayload).select('id').single();if(inserted.error)throw inserted.error;if(inserted.data?.id!==jobId)throw new Error('Não foi possível confirmar o registro do job.');
