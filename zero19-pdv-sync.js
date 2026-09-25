@@ -19,6 +19,7 @@ const STAGE_HINTS={
   production:'Pedido marcado no filme e em execução na produção.',
   ready_pickup:'Produção concluída. Avise o cliente e aguarde a retirada.'
 };
+const ZERO19_TENANT_ID='0e885daf-b461-4384-b2c2-8ed2cf33478b';
 const INSTAGRAM_HANDLE='zero19indaiatuba';
 const INSTAGRAM_URL='https://www.instagram.com/'+INSTAGRAM_HANDLE;
 
@@ -36,6 +37,26 @@ function notifyMessage(name){
   const first=String(name||'cliente').trim().split(/\s+/)[0]||'cliente';
   return 'Olá, '+first+'! 😊 Seu produto na ZERO19 está pronto para retirada.\n\nEstamos abertos das 9h às 18h, de segunda a sábado.\n\nSe desejar algum vídeo ou foto do produto, é só solicitar que podemos enviar agora.\n\nUma ajuda que faz muita diferença para a gente: quando pegar seu produto, se puder marcar a @'+INSTAGRAM_HANDLE+' nos Stories e contar como ficou a qualidade, ficamos muito felizes. Seu feedback ajuda a ZERO19 a melhorar cada vez mais o serviço.\n\nSiga a gente no Instagram: '+INSTAGRAM_URL+'\n\nQualquer dúvida, estamos à disposição.';
 }
+function normalizeBusinessTime(source){
+  const date=new Date(source);
+  while(true){
+    if(date.getDay()===0){date.setDate(date.getDate()+1);date.setHours(9,0,0,0);continue}
+    const minutes=date.getHours()*60+date.getMinutes();
+    if(minutes<540){date.setHours(9,0,0,0);return date}
+    if(minutes>=1080){date.setDate(date.getDate()+1);date.setHours(9,0,0,0);continue}
+    return date;
+  }
+}
+function addBusinessMinutes(source,minutes){
+  let date=normalizeBusinessTime(source),remaining=Math.max(0,Number(minutes)||0);
+  while(remaining>.001){
+    date=normalizeBusinessTime(date);const end=new Date(date);end.setHours(18,0,0,0);
+    const available=Math.max(0,(end-date)/60000);
+    if(remaining<=available){date=new Date(date.getTime()+remaining*60000);remaining=0;break}
+    remaining-=available;date=new Date(end);date.setDate(date.getDate()+1);date.setHours(9,0,0,0);
+  }
+  return normalizeBusinessTime(date);
+}
 function stageFromProject(project,items){
   if(project?.official_order_status&&STAGE_LABELS[project.official_order_status])return project.official_order_status;
   for(const stage of STAGE_ORDER)if(items.some(i=>i.stage===stage))return stage;
@@ -48,19 +69,29 @@ export function createZero19PdvSync(ctx){
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
     if(!force&&cache&&Date.now()-cacheAt<12000)return cache;
-    const [wi,pr,ws]=await Promise.all([
+    const [wi,pr,ws,sla]=await Promise.all([
       supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
       supabase.from('z19p_projects').select('*').eq('owner_id',owner).eq('official_order_source','zero19_pdv').order('source_order_created_at',{ascending:false,nullsFirst:false}),
-      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).eq('workspace_type','client').order('created_at',{ascending:false})
+      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).eq('workspace_type','client').order('created_at',{ascending:false}),
+      supabase.rpc('zero19_personalization_ops_snapshot',{p_tenant_id:ZERO19_TENANT_ID})
     ]);
     const err=wi.error||pr.error||ws.error;if(err)throw err;
     const projects=pr.data||[],workspaces=ws.data||[],items=wi.data||[],pm=new Map(projects.map(x=>[x.id,x])),wm=new Map(workspaces.map(x=>[x.id,x])),groups=new Map();
     for(const item of items){if(!groups.has(item.project_id))groups.set(item.project_id,[]);groups.get(item.project_id).push(item)}
-    const summaries=projects.map(project=>{
+    const avgMinutes=Math.max(1,Number(sla?.data?.avg_minutes_per_shirt)||30),summaries=projects.map(project=>{
       const rows=groups.get(project.id)||[],workspace=wm.get(project.workspace_id)||null,stage=stageFromProject(project,rows),qty=rows.reduce((s,x)=>s+Math.max(1,Number(x.quantity)||1),0),promised=project.promised_at||rows.map(x=>x.promised_at).filter(Boolean).sort()[0]||null;
       return {project,workspace,items:rows,stage,qty,promised,overdue:promised&&new Date(promised).getTime()<Date.now()&&!['ready_pickup','delivered','cancelled'].includes(stage)};
-    }).filter(x=>x.items.length);
-    cache={items,projects,workspaces,summaries,pm,wm};cacheAt=Date.now();return cache;
+    }).filter(x=>x.items.length).sort((a,b)=>{
+      const ap=a.promised?new Date(a.promised).getTime():Number.POSITIVE_INFINITY,bp=b.promised?new Date(b.promised).getTime():Number.POSITIVE_INFINITY;
+      if(ap!==bp)return ap-bp;return new Date(a.project.source_order_created_at||a.project.created_at||0)-new Date(b.project.source_order_created_at||b.project.created_at||0);
+    });
+    let cumulative=0;
+    for(const summary of summaries){
+      if(['ready_pickup','delivered','cancelled'].includes(summary.stage))continue;
+      cumulative+=Math.max(1,summary.qty);summary.predicted=addBusinessMinutes(new Date(),cumulative*avgMinutes);
+      summary.risk=Boolean(summary.promised&&summary.predicted.getTime()>new Date(summary.promised).getTime());
+    }
+    cache={items,projects,workspaces,summaries,pm,wm,avgMinutes};cacheAt=Date.now();return cache;
   }
   function invalidate(){cache=null;cacheAt=0}
   function counts(summaries){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;return out}
@@ -82,15 +113,15 @@ export function createZero19PdvSync(ctx){
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
     if(stage==='ready_pickup'){if(phone)actions.push('<button class="btn whatsapp" data-z19-notify="'+h(p.id)+'">Avisar cliente</button>');actions.push('<button class="btn primary" data-z19-delivered="'+h(p.id)+'">Entregue</button>')}
     if(phone)actions.push('<button class="btn ghost" data-z19-wa="'+h(w.phone||'')+'">WhatsApp</button>');
-    return '<article class="z19-zero19-card '+(summary.overdue?'overdue':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div><b>'+h(STAGE_LABELS[stage]||stage)+'</b><small>'+h(summary.qty)+' item(ns)</small></div></div><div class="z19-zero19-meta"><span>Prazo '+h(dt(summary.promised))+'</span>'+(summary.overdue?'<span class="z19-sync-overdue">PRAZO VENCIDO</span>':'')+'<span>'+h(STAGE_HINTS[stage]||'')+'</span></div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
+    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div><b>'+h(STAGE_LABELS[stage]||stage)+'</b><small>'+h(summary.qty)+' item(ns)</small></div></div><div class="z19-zero19-meta"><span>Prazo '+h(dt(summary.promised))+'</span>'+(summary.overdue?'<span class="z19-sync-overdue">PRAZO VENCIDO</span>':summary.risk?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'<span>'+h(STAGE_HINTS[stage]||'')+'</span></div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
   }
   async function enhanceDashboard(){
     try{
       if(!app||app.querySelector('[data-z19-sync-strip]'))return;
-      const data=await load(true),c=counts(data.summaries),overdue=data.summaries.filter(x=>x.overdue).length,hero=app.querySelector('.simple-hero');
+      const data=await load(true),c=counts(data.summaries),overdue=data.summaries.filter(x=>x.overdue).length,risk=data.summaries.filter(x=>x.risk&&!x.overdue).length,hero=app.querySelector('.simple-hero');
       if(!hero)return;
       const section=document.createElement('section');section.className='z19-sync-strip';section.dataset.z19SyncStrip='';
-      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+'Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
+      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+(risk?'<b>'+risk+' pedido(s) com risco de atraso.</b> ':'')+'Média atual '+Number(data.avgMinutes||30).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min/camisa. Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
       hero.insertAdjacentElement('afterend',section);
       bindRoot(section);
     }catch(error){console.warn('zero19 sync dashboard',error)}
