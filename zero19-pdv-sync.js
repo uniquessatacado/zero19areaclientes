@@ -246,12 +246,13 @@ export function createZero19PdvSync(ctx){
     if(item.asset_id)return finishHalftone(item.id);
     if(!item.source_file_path){startUploadForWorkspace?.(summary.workspace.id);return}
     try{
+      const production=item.metadata?.details?.[0]?.production||{};
       const downloaded=await supabase.storage.from('personalization-artwork').download(item.source_file_path);if(downloaded.error)throw downloaded.error;
       const blob=downloaded.data,dims=await sourceImageSize(blob),assetId=crypto.randomUUID(),owner=accountOwnerId(),actor=state().session?.user?.id||owner;
       const ext=(item.source_file_path.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').toLowerCase()||'bin';
       const path=actor+'/'+summary.workspace.id+'/pdv-import/'+assetId+'/original.'+ext;
       const uploaded=await supabase.storage.from(bucket).upload(path,blob,{contentType:blob.type||'application/octet-stream',upsert:false});if(uploaded.error)throw uploaded.error;
-      const row={id:assetId,owner_id:owner,workspace_id:summary.workspace.id,project_id:summary.project.id,folder_id:null,name:item.text_value||'Arte do pedido #'+orderNo(summary.project),asset_type:'arte',original_path:path,processed_path:path,mime_type:blob.type||'application/octet-stream',size_bytes:blob.size,width:dims.width,height:dims.height,dpi:300,alpha_trimmed:false,background_removed:false,maximized:false,metadata:{imported_from_zero19_pdv:true,personalization_sale_id:item.personalization_sale_id,needs_halftone:item.stage==='awaiting_halftone',source_file_path:item.source_file_path},created_by:actor,updated_by:actor};
+      const row={id:assetId,owner_id:owner,workspace_id:summary.workspace.id,project_id:summary.project.id,folder_id:null,name:item.text_value||'Arte do pedido #'+orderNo(summary.project),asset_type:'arte',original_path:path,processed_path:path,mime_type:blob.type||'application/octet-stream',size_bytes:blob.size,width:dims.width,height:dims.height,dpi:300,alpha_trimmed:false,background_removed:false,maximized:false,metadata:{imported_from_zero19_pdv:true,personalization_sale_id:item.personalization_sale_id,needs_halftone:item.stage==='awaiting_halftone'||Boolean(production.needs_halftone),source_file_path:item.source_file_path,pdv_position_code:production.position_code||null,pdv_position_label:production.position_label||null,pdv_width_cm:Number(production.width_cm)||null,pdv_height_cm:Number(production.height_cm)||null,pdv_art_source:production.art_source||null,pdv_existing_workspace_id:production.existing_workspace_id||null},created_by:actor,updated_by:actor};
       const saved=await supabase.from('z19p_assets').insert(row).select('*').single();if(saved.error)throw saved.error;
       const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner);if(linked.error)throw linked.error;
       invalidate();
