@@ -190,3 +190,51 @@ html,body,#app,.app-shell{max-width:100%}.simple-container,.workspace-main,.work
   .library-launcher .zero19-library-card{min-height:82px}
   .library-launcher .zero19-library-card .library-symbol{width:48px;min-width:48px;height:48px}
 }
+
+
+/* v2.17.33 — reparo do upload: compacto, pasta visível e medidas proporcionais */
+.upload-modal{width:min(940px,calc(100vw - 28px))}
+.upload-modal .dropzone.has-files{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;text-align:left;border-radius:13px}
+.upload-modal .dropzone.has-files .dz-icon{display:none}
+.upload-modal .dropzone.has-files h3{margin:0;font-size:13px}
+.upload-modal .dropzone.has-files p{display:none}
+.upload-modal .dropzone.has-files #chooseFiles{margin-top:0!important;flex:0 0 auto}
+.clean-upload.has-ready{
+  grid-template-columns:54px minmax(175px,1.35fr) minmax(105px,.58fr) minmax(180px,1fr) 32px;
+  grid-template-areas:
+    "thumb name type folder remove"
+    "thumb size size ready remove";
+  gap:8px 9px;
+  align-items:start;
+}
+.clean-upload.has-ready .upload-thumb{grid-area:thumb}
+.clean-upload.has-ready .upload-name{grid-area:name}
+.clean-upload.has-ready .upload-type{grid-area:type}
+.clean-upload.has-ready .upload-folder{grid-area:folder}
+.clean-upload.has-ready .upload-physical-size{grid-area:size;min-width:0}
+.clean-upload.has-ready .upload-ready-switch{grid-area:ready;min-height:58px}
+.clean-upload.has-ready .remove-upload{grid-area:remove;align-self:start}
+.upload-physical-size>label{display:block;font-size:10px;color:var(--muted);margin:0 0 4px 2px}
+.upload-size-inputs{display:grid;grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr);gap:6px;align-items:center}
+.upload-size-inputs>span{text-align:center;color:#777;font-size:12px;font-weight:900}
+.upload-physical-size small{display:block;margin-top:4px;color:#9a9aa3;font-size:9px;line-height:1.35}
+.clean-upload .upload-folder select{font-weight:750}
+@media(max-width:800px){
+  .upload-modal{width:100%}
+  .clean-upload.has-ready{
+    grid-template-columns:48px minmax(0,1fr) 32px;
+    grid-template-areas:
+      "thumb name remove"
+      ". type ."
+      ". folder ."
+      ". size ."
+      ". ready .";
+  }
+  .clean-upload.has-ready .upload-ready-switch{min-height:0}
+  .upload-modal .dropzone.has-files{align-items:stretch;flex-direction:column}
+  .upload-modal .dropzone.has-files #chooseFiles{width:100%}
+}
+@media(max-width:520px){
+  .clean-upload.has-ready{grid-template-columns:42px minmax(0,1fr) 30px}
+  .upload-size-inputs{grid-template-columns:1fr 12px 1fr}
+}
