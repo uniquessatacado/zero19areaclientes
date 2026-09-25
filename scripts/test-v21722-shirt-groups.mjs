@@ -16,8 +16,8 @@ const production=fs.readFileSync('production-v217.js','utf8');
 const css=fs.readFileSync('official-order-workflow.css','utf8');
 const storage=fs.readFileSync('storage-upload.js','utf8');
 
-assert.match(app,/Etapa \$\{step\}\/2/);
-assert.match(app,/Total \$\{totalPercent\}%/);
+assert.match(app,/Original \$\{originalPercent\}% · PNG final \$\{processedPercent\}% · Total \$\{totalPercent\}%/);
+assert.match(app,/Promise\.all\(\[/);
 assert.match(app,/uploadFile:\(path,blob,options\)=>storageUploader\.upload/);
 assert.match(storage,/return await standardUpload/);
 assert.match(storage,/fallback:'tus'/);
