@@ -650,11 +650,11 @@ function openUploadModal({presetType='arte',standaloneHalftone=false}={}){
   const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>void addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');void addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#uploadCreateFolder',m)?.addEventListener('click',async()=>{try{const name=prompt('Nome da nova pasta:');if(!name?.trim())return;const projectId=currentWorkspace?.workspace_type==='client'?(currentProjects[0]?.id||null):null,folder={id:crypto.randomUUID(),owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:projectId,parent_id:null,name:name.trim(),sort_order:(currentFolders.length+1)*10,created_by:session.user.id,updated_by:session.user.id};const {error}=await supabase.from('z19p_folders').insert(folder);if(error)throw error;currentFolders=[...currentFolders,folder];for(const item of uploadQueue)if(item.type==='arte'&&!item.folderId)item.folderId=folder.id;renderUploadList(m,{lockedType:isMockupMode});toast('Pasta criada e selecionada.','ok')}catch(error){console.error(error);toast(error.message||'Não foi possível criar a pasta.','err')}});
   async function addFiles(files){
-    const defaultFolder=activeFolder!=='all'&&activeFolder!=='root'?activeFolder:'';
     for(const f of files){
-      const preview=URL.createObjectURL(f),item={file:f,name:'',type:presetType,folderId:defaultFolder,readyForPrint:false,widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview};
+      const preview=URL.createObjectURL(f);
+      uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:false,widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
+      const item=uploadQueue[uploadQueue.length-1];
       try{const bmp=await createImageBitmap(f);item.aspectRatio=bmp.height>0?bmp.width/bmp.height:0;bmp.close?.()}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
-      uploadQueue.push(item);
     }
     dz.classList.toggle('has-files',uploadQueue.length>0);
     renderUploadList(m,{lockedType:isMockupMode});
