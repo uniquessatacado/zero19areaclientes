@@ -1137,20 +1137,20 @@ export function createProductionModule(ctx){
     const spotButton=document.createElement('button');spotButton.className='btn';spotButton.dataset.generateSpotExport='';spotButton.textContent='Baixar com Spot';modal.querySelector('[data-generate-film-export]').before(spotButton);modal.querySelector('.modal-footer').style.flexWrap='wrap';
     const productionRecorder=createFilmProduction({supabase,isCurrent:currentExport});
     const productionNotice=document.createElement('div');productionNotice.className='film-export-hint';productionNotice.dataset.productionResult='';modal.querySelector('[data-film-export-results]').after(productionNotice);
-    const officialGroups=ctx.officialOrders?.exportGroups?.(items)||[],selectedOfficialProjects=new Set(officialGroups.map(group=>group.projectId));
-    if(officialGroups.length){const box=document.createElement('section');box.className='film-export-orders';box.innerHTML='<b>Marcar pedidos como em produção</b><small>Todos vêm marcados. Desmarque algum pedido se este arquivo ainda não deve alterar o status dele.</small><div>'+officialGroups.map(group=>'<label><input type="checkbox" data-official-project="'+h(group.projectId)+'" checked><span>'+h(group.companyName)+' · Pedido '+h(group.orderRef||group.projectId.slice(0,8))+'</span></label>').join('')+'</div>';productionNotice.before(box);box.querySelectorAll('[data-official-project]').forEach(input=>input.onchange=()=>input.checked?selectedOfficialProjects.add(input.dataset.officialProject):selectedOfficialProjects.delete(input.dataset.officialProject));}
+    const productionGroups=ctx.officialOrders?.exportGroups?.(items)||[],selectedProductionGroups=new Set(productionGroups.map(group=>group.key));
+    if(productionGroups.length){const box=document.createElement('section');box.className='film-export-orders';box.innerHTML='<b>Marcar como em produção</b><small>Pedidos oficiais e grupos manuais vêm marcados. Desmarque o que ainda não foi impresso neste arquivo.</small><div>'+productionGroups.map(group=>'<label><input type="checkbox" data-production-group="'+h(group.key)+'" checked><span>'+h(group.companyName)+' · '+(group.projectId?'Pedido '+h(group.orderRef||group.projectId.slice(0,8)):h(group.groupName||'Grupo manual'))+'</span></label>').join('')+'</div>';productionNotice.before(box);box.querySelectorAll('[data-production-group]').forEach(input=>input.onchange=()=>input.checked?selectedProductionGroups.add(input.dataset.productionGroup):selectedProductionGroups.delete(input.dataset.productionGroup));}
     const recordExportOnce=async()=>{
       if(!currentExport()||exportRecorded)return;
       productionNotice.textContent=items.some(item=>item.orderLink)?'Atualizando as quantidades dos pedidos…':'';
       try{
         const recorded=await productionRecorder.record(items,layout,identity);
         if(!currentExport())return;
-        const officialRecorded=await ctx.officialOrders?.markProduction?.(items,[...selectedOfficialProjects]);
+        const officialRecorded=await ctx.officialOrders?.markProduction?.(items,[...selectedProductionGroups]);
         if(!currentExport())return;
         exportRecorded=true;
         let skipFinance=false;
         if(!recorded.unlinked){productionNotice.textContent=recorded.added_quantity>0?`${recorded.added_quantity} estampa(s) registrada(s). Pedidos em produção; as quantidades restantes continuam pendentes.`:'Filme já registrado. Reexportação sem duplicar quantidades.';if(recorded.has_previous_items&&recorded.added_quantity>0)productionNotice.textContent+=' Esta montagem também contém peças já registradas; o custo anterior não será lançado novamente.';skipFinance=recorded.added_quantity===0||recorded.has_previous_items;}
-        if(officialRecorded?.projects)productionNotice.textContent+=(productionNotice.textContent?' ':'')+`${officialRecorded.projects} pedido(s) oficial(is) marcado(s) como em produção.`;
+        if(officialRecorded?.projects||officialRecorded?.placements)productionNotice.textContent+=(productionNotice.textContent?' ':'')+`${officialRecorded?.projects||0} pedido(s) e ${officialRecorded?.placements||0} item(ns) marcados como em produção.`;
         if(skipFinance)return;
       }catch(error){
         if(!currentExport())return;
