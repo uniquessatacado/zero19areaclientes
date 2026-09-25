@@ -29,8 +29,9 @@ export function buildFilmAssetCatalogue({profiles = [], assetMap = new Map(), wo
     const clientName = workspace?.client_name || '';
     const projectName = project?.title || (project?.sequence_no ? `Projeto ${project.sequence_no}` : '');
     const folderName = folder?.name || (asset.folder_id ? '' : 'Sem pasta');
-    return [{id:asset.id, asset, profile, workspaceId:asset.workspace_id || '_unassigned', companyName, clientName, projectName, folderName, path, widthCm, heightCm, aspect:widthCm/heightCm,
-      search:normalize([asset.name, companyName, clientName, projectName, folderName].join(' '))}];
+    const ownLibrary=workspace?.workspace_type!=='client'||/^(zero\s*19|zero19|019)(\b|\s)/i.test(String(companyName).trim());
+    return [{id:asset.id, asset, profile, workspaceId:asset.workspace_id || '_unassigned', companyName, clientName, workspaceType:workspace?.workspace_type||'client', ownLibrary, projectName, folderName, path, widthCm, heightCm, aspect:widthCm/heightCm,
+      search:normalize([asset.name, companyName, clientName, projectName, folderName,ownLibrary?'biblioteca zero19':''].join(' '))}];
   }).sort((left, right) => left.companyName.localeCompare(right.companyName, 'pt-BR') || String(left.asset.name).localeCompare(String(right.asset.name), 'pt-BR'));
 }
 
@@ -52,9 +53,9 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   const catalogue = buildFilmAssetCatalogue({profiles, assetMap, workspaces, projects, folders});
   const entries = new Map(catalogue.map(entry => [entry.id, entry]));
   const companies = new Map();
-  for (const workspace of asMap(workspaces).values()) companies.set(workspace.id, {id:workspace.id, name:workspace.company_name || workspace.client_name || 'Biblioteca sem nome', client:workspace.client_name || '', count:0});
+  for (const workspace of asMap(workspaces).values()) {const name=workspace.company_name || workspace.client_name || 'Biblioteca sem nome',ownLibrary=workspace.workspace_type!=='client'||/^(zero\s*19|zero19|019)(\b|\s)/i.test(String(name).trim());companies.set(workspace.id,{id:workspace.id,name,client:workspace.client_name||'',ownLibrary,count:0});}
   for (const entry of catalogue) {
-    if (!companies.has(entry.workspaceId)) companies.set(entry.workspaceId, {id:entry.workspaceId, name:entry.companyName, client:entry.clientName, count:0});
+    if (!companies.has(entry.workspaceId)) companies.set(entry.workspaceId, {id:entry.workspaceId, name:entry.companyName, client:entry.clientName, ownLibrary:Boolean(entry.ownLibrary), count:0});
     companies.get(entry.workspaceId).count++;
   }
   const companyList = [...companies.values()].sort((a,b) => Number(b.count>0)-Number(a.count>0) || a.name.localeCompare(b.name, 'pt-BR'));
@@ -111,7 +112,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
       catalogue.push(next);
       catalogue.sort((a,b)=>a.companyName.localeCompare(b.companyName,'pt-BR')||String(a.asset.name).localeCompare(String(b.asset.name),'pt-BR'));
       entries.set(next.id,next);
-      if (!companies.has(next.workspaceId)) companies.set(next.workspaceId,{id:next.workspaceId,name:next.companyName,client:next.clientName,count:0});
+      if (!companies.has(next.workspaceId)) companies.set(next.workspaceId,{id:next.workspaceId,name:next.companyName,client:next.clientName,ownLibrary:Boolean(next.ownLibrary),count:0});
       companies.get(next.workspaceId).count++;
       if (selection) {
         const overridden = previous && (Math.abs(selection.widthCm-previous.widthCm)>.0001 || Math.abs(selection.heightCm-previous.heightCm)>.0001);
@@ -127,7 +128,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   }
   function imageHTML(entry, small = false) {
     const url = imageURL(entry);
-    return `<div class="fp-image ${small?'fp-image-small':''} ${url?'is-loading':'is-error'}"><span class="fp-image-placeholder">${icons.image}<span>${url?'Carregando arte…':'Prévia indisponível'}</span></span>${url?`<img src="${escapeHTML(url)}" alt="${escapeHTML(entry.asset.name || 'Arte')}" loading="lazy" decoding="async">`:''}</div>`;
+    return `<div class="fp-image ${small?'fp-image-small':''} ${url?'is-loading':'is-error'}"><span class="fp-image-placeholder">${icons.image}<span>${url?'Carregando arte…':'Prévia indisponível'}</span></span>${url?`<img src="${escapeHTML(url)}" alt="${escapeHTML(entry.asset.name || 'Arte')}" loading="${small?'eager':'lazy'}" fetchpriority="${small?'high':'auto'}" decoding="async">`:''}</div>`;
   }
   function watchImages(scope) {
     scope.querySelectorAll('.fp-image img').forEach(img => {
@@ -146,7 +147,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     const matching = companyList.filter(company => normalize(`${company.name} ${company.client}`).includes(companyQuery));
     find('.fp-company-list').innerHTML = `<button class="fp-company ${activeCompany==='all'?'is-active':''}" data-action="company" data-company="all" aria-pressed="${activeCompany==='all'}"><span class="fp-company-avatar">${icons.stack}</span><span><b>Todas as empresas</b><small>Biblioteca completa</small></span><span class="fp-company-count">${catalogue.length}</span></button><div class="fp-company-divider">EMPRESAS E CLIENTES <span>${matching.length}</span></div>${matching.map(company => {
       const selectionCount = [...selected.keys()].filter(id => entries.get(id)?.workspaceId === company.id).length;
-      return `<button class="fp-company ${activeCompany===company.id?'is-active':''} ${company.count?'':'is-empty'}" data-action="company" data-company="${escapeHTML(company.id)}" aria-pressed="${activeCompany===company.id}"><span class="fp-company-avatar">${escapeHTML(company.name.slice(0,2).toUpperCase())}</span><span><b>${escapeHTML(company.name)}</b><small>${escapeHTML(company.client || (company.count?'Artes de produção':'Sem artes liberadas'))}</small></span><span class="fp-company-count ${selectionCount?'has-selection':''}" aria-label="${company.count} artes, ${selectionCount} selecionadas">${selectionCount?`${selectionCount} ✓`:company.count}</span></button>`;
+      return `<button class="fp-company ${activeCompany===company.id?'is-active':''} ${company.count?'':'is-empty'} ${company.ownLibrary?'is-own-library':''}" data-action="company" data-company="${escapeHTML(company.id)}" aria-pressed="${activeCompany===company.id}"><span class="fp-company-avatar">${company.ownLibrary?'019':escapeHTML(company.name.slice(0,2).toUpperCase())}</span><span><b>${escapeHTML(company.name)}</b><small>${escapeHTML(company.ownLibrary?'Biblioteca própria ZERO19':company.client || (company.count?'Artes de produção':'Sem artes liberadas'))}</small></span><span class="fp-company-count ${selectionCount?'has-selection':''}" aria-label="${company.count} artes, ${selectionCount} selecionadas">${selectionCount?`${selectionCount} ✓`:company.count}</span></button>`;
     }).join('')}${matching.length?'':'<p class="fp-no-companies">Nenhuma empresa ou cliente encontrado.</p>'}`;
   }
   function cardHTML(entry) {
@@ -158,7 +159,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
         <label class="fp-card-quantity">Quantidade desta arte<input data-input="quantity" data-id="${escapeHTML(entry.id)}" type="number" inputmode="numeric" min="1" max="999" step="1" value="${quantityOf(dims.quantity)}" aria-label="Quantidade de ${escapeHTML(entry.asset.name || 'arte')}"></label>
         ${sizeEditing===entry.id?sizeFormHTML(entry,dims):''}
         <div class="fp-card-actions"><button class="fp-button ${chosen?'fp-button-selected':'fp-button-quick'}" data-action="${chosen?'toggle':'quick'}" data-id="${escapeHTML(entry.id)}">${chosen?'✓ Selecionada':'＋ Adicionar rápido'}</button></div>
-        ${[onGarment,onMockup,onEdit].some(callback=>typeof callback==='function')?`<div class="fp-studio-actions" aria-label="Ferramentas da arte">${typeof onGarment==='function'?`<button class="fp-button fp-studio-garment" data-action="garment" data-id="${escapeHTML(entry.id)}" aria-label="Montar camiseta com ${escapeHTML(entry.asset.name || 'esta arte')}">${icons.shirt}<span>Montar camiseta</span></button>`:''}${typeof onMockup==='function'?`<button class="fp-button" data-action="mockup" data-id="${escapeHTML(entry.id)}" aria-label="Ver ${escapeHTML(entry.asset.name || 'arte')} na camisa"><span>Ver na camisa</span></button>`:''}${typeof onEdit==='function'?`<button class="fp-button" data-action="edit" data-id="${escapeHTML(entry.id)}" aria-label="Editar ${escapeHTML(entry.asset.name || 'arte')}"><span>Editar arte</span></button>`:''}</div>`:''}
+        ${[onMockup,onEdit].some(callback=>typeof callback==='function')?`<div class="fp-studio-actions" aria-label="Ferramentas da arte">${typeof onMockup==='function'?`<button class="fp-button" data-action="mockup" data-id="${escapeHTML(entry.id)}" aria-label="Ver ${escapeHTML(entry.asset.name || 'arte')} na camisa"><span>Ver na camisa</span></button>`:''}${typeof onEdit==='function'?`<button class="fp-button" data-action="edit" data-id="${escapeHTML(entry.id)}" aria-label="Editar ${escapeHTML(entry.asset.name || 'arte')}"><span>Editar arte</span></button>`:''}</div>`:''}
       </div></article>`;
   }
   function sizeFormHTML(entry,dims) {
@@ -264,8 +265,8 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     if (action==='quick' && entry) { select(entry,true);renderAll();focusAction('toggle',id);return; }
     if ((action==='size'||action==='cart-size') && entry) { if(sizeEditing===id && action==='size'){sizeEditing=null;renderGrid();focusAction('size',id);}else openSize(id);return; }
     if (action==='restore-size' && entry) { const form=button.closest('form');form.elements.width.value=formatInput(entry.widthCm);form.elements.height.value=formatInput(entry.heightCm);form.querySelector('.fp-size-error').textContent='';return; }
-    if ((action==='garment'||action==='mockup'||action==='edit') && entry) {
-      const callback=action==='garment'?onGarment:action==='mockup'?onMockup:onEdit;
+    if ((action==='mockup'||action==='edit') && entry) {
+      const callback=action==='mockup'?onMockup:onEdit;
       try { if(closed)return;await callback?.(entry.asset,entry.profile,{signal:lifetime.signal});if(closed)return; }
       catch(error) { if(closed)return;report(error.message||'Não foi possível abrir a arte.');toast?.(error.message||'Não foi possível abrir a arte.','err'); }
       return;
