@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const app=fs.readFileSync('app.js','utf8');
 const actions=fs.readFileSync('asset-studio-actions.js','utf8');
 const studio=fs.readFileSync('art-studio.js','utf8');
+const production=fs.readFileSync('production-v217.js','utf8');
 const css=fs.readFileSync('art-studio.css','utf8');
 const styles=fs.readFileSync('styles.css','utf8');
 
@@ -19,6 +20,8 @@ assert.match(app,/openSettingsModal = async function/);
 assert.ok(!app.includes("toast(existing?'Empresa salva.':'Empresa criada com as pastas padrão.'"),'novo fluxo não deve recriar pastas por padrão');
 
 assert.match(actions,/garmentEnabled=handlers\.garmentEnabled!==false/);
+assert.match(production,/garmentEnabled:ctx\.isGarmentStudioEnabled\?\.\(\)===true/);
+assert.match(production,/onGarment:ctx\.isGarmentStudioEnabled\?\.\(\)===true/);
 assert.match(actions,/artwork&&typeof handlers\.openMockup==='function'&&\['mockup','Ver tamanho na camisa'/);
 
 assert.match(studio,/data-size="43" data-back-only hidden/);
