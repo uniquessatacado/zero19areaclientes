@@ -14,7 +14,7 @@ assert.match(app,/WhatsApp \*/);
 assert.match(app,/Responsável \*/);
 assert.match(app,/garment_studio_enabled/);
 assert.match(app,/Pedidos do cliente/);
-assert.match(app,/Nenhum pedido sincronizado ainda/);
+assert.match(app,/Nenhum pedido oficial sincronizado ainda/);
 assert.match(app,/dashboardClientListsHTML = function/);
 assert.match(app,/openSettingsModal = async function/);
 const lastBind=app.lastIndexOf('bindWorkspaceCards = function(){');
