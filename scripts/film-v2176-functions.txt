@@ -41,10 +41,9 @@
   function mountFilmTools(media){
     const page=app.querySelector('.film-page');if(!page)return;
     let tools=page.querySelector('[data-film-tools]');if(tools)tools.remove();
-    tools=document.createElement('section');tools.dataset.filmTools='';
-    tools.style.cssText='display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:0 0 18px;padding:14px;border:1px solid #34343a;border-radius:14px';
+    tools=document.createElement('section');tools.dataset.filmTools='';tools.className='film-draft-toolbar';
     const hasNames=filmItems.some(i=>i.type==='team_customization'&&(i.name||i.number)&&!i.vectorSource);
-    tools.innerHTML='<button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn" style="border-color:#7c3b37;color:#ffaea4" data-clear-film '+(!filmItems.length?'disabled':'')+'>Limpar filme</button><button class="btn" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button>'+(hasNames?'<button class="btn" data-fix-names>Corrigir nomes/números e recalcular</button><small style="display:block;width:100%;color:#aaa">Altura do corpo da letra e do número preservada. Acentos, cedilha, coroas e ornamentos ficam fora da medida-base. Rascunhos e jobs antigos só mudam ao recalcular.</small>':'');
+    tools.innerHTML='<div class="film-draft-toolbar-title"><div><small>ARQUIVO DE TRABALHO</small><b>Filme atual</b></div><span>O rascunho fica salvo na nuvem enquanto você trabalha.</span></div><div class="film-draft-toolbar-actions"><button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn film-clear-button" data-clear-film '+(!filmItems.length?'disabled':'')+'>Limpar filme</button><button class="btn film-proof-button" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button></div>';
     page.querySelector('.simple-hero').insertAdjacentElement('afterend',tools);
     const saved=createSavedFilmDrafts({supabase,owner,user:uid});
     const snapshot=()=>({items:filmItems,layout:lastFilm,settings:filmSettings});
@@ -78,19 +77,37 @@
     tools.querySelector('[data-new-film]').onclick=()=>filmItems.length?dialog('new'):safe(()=>switchTo(null));
     tools.querySelector('[data-clear-film]').onclick=async()=>{
       if(!filmItems.length)return;
-      if(!confirm('Limpar todos os itens deste filme agora? Artes, fontes e jobs salvos não serão apagados.'))return;
+      if(!confirm('Limpar todos os itens deste filme agora? Artes, fontes e filmes salvos não serão apagados.'))return;
       clearTimeout(filmDraftTimer);filmCalculationGeneration++;filmPreviewGeneration++;
       filmItems=[];lastFilm=null;filmMaskCache.clear();filmCostPanel?.destroy();filmCostPanel=null;filmDraftNote='';saveFilmDraft(true);
-      const host=app.querySelector('#filmItems');if(host)host.innerHTML='<div class="empty mini">Nenhum item.</div>';
+      const host=app.querySelector('#filmItems');if(host)host.innerHTML='<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>';
       const preview=app.querySelector('#filmPreview');if(preview)preview.innerHTML='<div class="empty">Filme limpo. Adicione itens para começar outra montagem.</div>';
       const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.innerHTML='';app.querySelector('#filmInspector')?.remove();
       const exportButton=app.querySelector('#exportFilm'),saveButton=app.querySelector('#saveFilm');if(exportButton)exportButton.disabled=true;if(saveButton)saveButton.disabled=true;
-      mountFilmTools(media);filmDraftBanner();ctx.toast('Filme limpo de uma vez.','ok');
+      mountFilmTools(media);filmDraftBanner();ctx.toast('Filme limpo.','ok');
     };
-    tools.querySelector('[data-fix-names]')?.addEventListener('click',()=>calculateFilm(media));
     tools.querySelector('[data-proof-names]').onclick=()=>{
-      const rows=filmNameProof(filmItems),modal=document.createElement('div'),focus=document.activeElement;modal.className='modal-backdrop';
-      modal.innerHTML='<div class="modal wide" role="dialog" aria-modal="true"><div class="modal-head"><h2>Conferir nomes do filme</h2><button class="btn ghost small" data-close aria-label="Fechar">×</button></div><p>Esta é a lista dos textos cadastrados no filme. O encaixe muda somente a posição; não cria nem corrige nomes.</p><div>'+rows.map((r,index)=>'<div style="display:flex;gap:16px;justify-content:space-between;border-bottom:1px solid #34343a;padding:12px 0"><b>'+h(index+1)+'. '+h(r.name||'(só número)')+'</b><span>'+h(r.number||'—')+' · '+h(r.quantity)+' un.</span></div>').join('')+'</div><div class="modal-footer"><button class="btn primary" data-close>Conferido</button></div></div>';
-      const close=()=>{modal.remove();focus?.isConnected&&focus.focus();};modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=close);modal.onkeydown=e=>{if(e.key==='Escape')close();};document.body.appendChild(modal);modal.querySelector('[data-close]').focus();
+      const candidates=filmItems.filter(item=>item.type==='team_customization'&&(item.name||item.number)&&!item.vectorSource);
+      if(!candidates.length)return;
+      const modal=document.createElement('div'),focus=document.activeElement;modal.className='modal-backdrop film-proof-backdrop';
+      modal.innerHTML='<div class="modal wide film-proof-modal" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">CONFERÊNCIA ANTES DE IMPRIMIR</div><h2>Conferir e editar nomes</h2><p>Corrija nome, número ou quantidade. Você também pode remover uma linha do filme.</p></div><button class="btn ghost small" data-close aria-label="Fechar">×</button></div><div class="film-proof-list">'+candidates.map((item,index)=>'<article class="film-proof-row" data-proof-id="'+h(item.localId)+'"><span class="film-proof-index">'+h(index+1)+'</span><div class="field"><label>Nome</label><input data-proof-name value="'+h(item.name||'')+'" autocomplete="off"></div><div class="field"><label>Número</label><input data-proof-number value="'+h(item.number||'')+'" autocomplete="off"></div><div class="field film-proof-qty"><label>Qtd.</label><input data-proof-quantity type="number" min="1" max="999" value="'+h(item.quantity||1)+'" inputmode="numeric"></div><button class="btn film-proof-remove" data-remove-proof type="button">Remover</button></article>').join('')+'</div><p class="film-proof-note">Ao salvar, o sistema refaz a prévia e atualiza o encaixe. A medida física configurada para letras e números é preservada.</p><div class="modal-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" data-save-proof>Salvar e atualizar filme</button></div></div>';
+      const removed=new Set(),close=()=>{modal.remove();focus?.isConnected&&focus.focus();};
+      modal.querySelectorAll('[data-close]').forEach(button=>button.onclick=close);
+      modal.querySelectorAll('[data-remove-proof]').forEach(button=>button.onclick=()=>{const row=button.closest('[data-proof-id]');removed.add(row.dataset.proofId);row.classList.add('is-removed');row.querySelectorAll('input,button').forEach(control=>control.disabled=true);});
+      modal.querySelector('[data-save-proof]').onclick=()=>safe(async()=>{
+        let changed=false;
+        for(const row of modal.querySelectorAll('[data-proof-id]')){
+          const item=filmItems.find(entry=>entry.localId===row.dataset.proofId);if(!item)continue;
+          if(removed.has(item.localId)){filmItems=filmItems.filter(entry=>entry.localId!==item.localId);changed=true;continue;}
+          const name=row.querySelector('[data-proof-name]').value.trim().normalize('NFC'),number=row.querySelector('[data-proof-number]').value.trim(),quantity=Number(row.querySelector('[data-proof-quantity]').value);
+          if(!Number.isInteger(quantity)||quantity<1||quantity>999)throw new Error('Confira as quantidades: use números inteiros de 1 a 999.');
+          const oldText=[item.name,item.number].filter(Boolean).join(' '),newText=[name,number].filter(Boolean).join(' ');
+          if(name!==String(item.name||'')||number!==String(item.number||'')||quantity!==Number(item.quantity||1)){changed=true;item.name=name;item.number=number;item.quantity=quantity;delete item.previewDataUrl;delete item.previewQualityVersion;if(oldText&&String(item.label||'').endsWith(' • '+oldText))item.label=String(item.label).slice(0,-(' • '+oldText).length)+(newText?' • '+newText:'');}
+        }
+        if(!changed){close();return;}
+        filmCalculationGeneration++;filmPreviewGeneration++;lastFilm=null;filmMaskCache.clear();filmDraftNote='Nomes e números revisados. Atualizando o encaixe…';saveFilmDraft();close();await renderFilm();if(filmItems.length)await calculateFilm(media);ctx.toast('Conferência salva e filme atualizado.','ok');
+      });
+      modal.onkeydown=e=>{if(e.key==='Escape')close();};document.body.appendChild(modal);modal.querySelector('[data-proof-name]')?.focus();
     };
   }
+
