@@ -496,7 +496,9 @@ async function renderWorkspace(id){
   currentWorkspace=w;currentFolders=f||[];currentAssets=a||[];activeFolder='all';
   const isLibrary=w.workspace_type&&w.workspace_type!=='client';
   const isMockupsLibrary=w.workspace_type==='library_mockups';
-  if(isLibrary)currentQuotes=[];else await loadQuotes(id);
+  // v2.17.15: orçamento saiu do fluxo visual de clientes. O código legado
+  // permanece preservado para a integração futura, mas não é consultado aqui.
+  currentQuotes=[];
   const st=statusById(w.status_id);
   const logoFolder=currentFolders.find(x=>x.purpose==='logo_empresa');
   const logoAsset=logoFolder?currentAssets.find(a=>a.folder_id===logoFolder.id):null;
