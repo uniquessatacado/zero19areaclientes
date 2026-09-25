@@ -1,3 +1,4 @@
+import {loadBlankShirtCatalog,realMockupPreview,renderPieceMockup,colorForCatalog,modelForCatalog} from './manual-shirt-catalog.js?v=2.17.22';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -98,7 +99,7 @@ async function loadImage(src){const img=new Image();img.crossOrigin='anonymous';
 
 export function createOfficialOrderWorkflow(ctx){
   const {supabase}=ctx,owner=()=>ctx.accountOwnerId(),user=()=>ctx.userId(),state=()=>ctx.state();
-  let positionsCache=null,positionsOwner=null;
+  let positionsCache=null,positionsOwner=null,catalogCache=null,catalogPromise=null;
   async function loadPositions(force=false){
     const account=owner();if(!account)return [];
     if(!force&&positionsOwner===account&&positionsCache)return positionsCache;
