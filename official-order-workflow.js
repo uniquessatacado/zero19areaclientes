@@ -352,12 +352,20 @@ export function createOfficialOrderWorkflow(ctx){
     document.body.appendChild(modal);draw();return modal;
   }
   function exportGroups(items=[]){
-    const groups=new Map();for(const item of items){if(!item.officialProjectId)continue;const id=item.officialProjectId;if(!groups.has(id))groups.set(id,{projectId:id,orderRef:item.officialOrderRef||'',companyName:item.companyName||item.label?.split(' • ')[0]||'Cliente',placementIds:[]});if(item.officialPlacementId)groups.get(id).placementIds.push(item.officialPlacementId)}
-    return [...groups.values()];
+    const groups=new Map();
+    for(const item of items){
+      const keys=item.productionGroupKeys?.length?item.productionGroupKeys:[item.officialProjectId?'order:'+item.officialProjectId:item.manualGarmentGroupId?'manual:'+item.manualGarmentGroupId:null].filter(Boolean);
+      const placementIds=item.productionPlacementIds?.length?item.productionPlacementIds:[item.officialPlacementId].filter(Boolean);
+      for(const key of keys){
+        if(!groups.has(key))groups.set(key,{key,projectId:key.startsWith('order:')?key.slice(6):null,orderRef:item.officialOrderRef||'',companyName:item.companyName||item.label?.split(' • ')[0]||'Cliente',groupName:key.startsWith('manual:')?'Grupo manual':'',placementIds:[]});
+        groups.get(key).placementIds.push(...placementIds);
+      }
+    }
+    return [...groups.values()].map(group=>({...group,placementIds:[...new Set(group.placementIds)]}));
   }
-  async function markProduction(items,selectedProjectIds){
-    const selected=new Set(selectedProjectIds||[]),groups=exportGroups(items).filter(g=>selected.has(g.projectId));if(!groups.length)return {projects:0,placements:0};
-    const projectIds=groups.map(g=>g.projectId),placementIds=[...new Set(groups.flatMap(g=>g.placementIds))],{data,error}=await supabase.rpc('z19p_mark_official_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds});if(error)throw error;return data||{projects:0,placements:0};
+  async function markProduction(items,selectedGroupKeys){
+    const selected=new Set(selectedGroupKeys||[]),groups=exportGroups(items).filter(group=>selected.has(group.key));if(!groups.length)return {projects:0,placements:0};
+    const projectIds=[...new Set(groups.map(group=>group.projectId).filter(Boolean))],placementIds=[...new Set(groups.flatMap(group=>group.placementIds))],{data,error}=await supabase.rpc('z19p_mark_official_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds});if(error)throw error;return data||{projects:0,placements:0};
   }
   return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
 }
