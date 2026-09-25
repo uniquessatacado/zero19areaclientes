@@ -25,7 +25,7 @@ assert.match(production,/id="addOfficialPending">◷ Aguardando produção/);
 assert.match(production,/id="filmName"/);
 assert.match(production,/suggestedFilmName/);
 assert.match(production,/filmExportBase/);
-assert.match(production,/selectedOfficialProjects/);
+assert.match(production,/selectedProductionGroups/);
 assert.match(production,/markProduction/);
 assert.ok(!production.includes('Preservar a largura inteira do filme'));
 assert.match(production,/trim=true/);
