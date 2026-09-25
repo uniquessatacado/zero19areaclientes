@@ -154,3 +154,39 @@ html,body,#app,.app-shell{max-width:100%}.simple-container,.workspace-main,.work
   .client-project-row{align-items:flex-start;flex-direction:column}
   .client-project-row>span{align-self:flex-start}
 }
+
+/* v2.17.18 — Biblioteca ZERO19 destacada no início */
+.library-launcher .zero19-library-card{
+  grid-column:1/-1;
+  min-height:92px;
+  border-color:#7b4b30;
+  background:
+    radial-gradient(circle at 8% 20%,rgba(255,111,45,.16),transparent 34%),
+    linear-gradient(135deg,#1d1714,#111115 58%,#171318);
+  box-shadow:inset 4px 0 #ff6b28,0 14px 36px rgba(0,0,0,.18);
+}
+.library-launcher .zero19-library-card:hover{
+  border-color:#b36239;
+  background:
+    radial-gradient(circle at 8% 20%,rgba(255,111,45,.22),transparent 36%),
+    linear-gradient(135deg,#241914,#151519 58%,#1a1519);
+}
+.library-launcher .zero19-library-card .library-symbol{
+  width:54px;
+  min-width:54px;
+  height:54px;
+  border-radius:15px;
+  background:#ff6b28;
+  color:#180b04;
+  font-size:14px;
+  font-weight:950;
+  letter-spacing:-.04em;
+  box-shadow:0 8px 24px rgba(255,107,40,.16);
+}
+.library-launcher .zero19-library-card b{font-size:15px;color:#fff}
+.library-launcher .zero19-library-card small{color:#b3aaa6}
+.library-launcher .zero19-library-card i{color:#ff9c6c;font-size:24px}
+@media(max-width:680px){
+  .library-launcher .zero19-library-card{min-height:82px}
+  .library-launcher .zero19-library-card .library-symbol{width:48px;min-width:48px;height:48px}
+}
