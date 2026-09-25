@@ -1055,10 +1055,10 @@ renderWorkspaceCards = function(items){
   }).join('');
 };
 bindWorkspaceCards = function(){
-  $('.open-workspace').forEach(b=>b.onclick=()=>nav(`/ambiente/${b.dataset.id}`));
-  $('.quick-upload-workspace').forEach(b=>b.onclick=()=>{pendingQuickUploadWorkspaceId=b.dataset.id;nav(`/ambiente/${b.dataset.id}`)});
-  $('.workspace-more').forEach(b=>b.onclick=()=>openWorkspaceActions(workspaces.find(w=>w.id===b.dataset.id)));
-  $('.wa-workspace').forEach(b=>b.onclick=()=>openWhatsApp(workspaces.find(w=>w.id===b.dataset.id)?.phone));
+  $$('.open-workspace').forEach(b=>b.onclick=()=>nav(`/ambiente/${b.dataset.id}`));
+  $$('.quick-upload-workspace').forEach(b=>b.onclick=()=>{pendingQuickUploadWorkspaceId=b.dataset.id;nav(`/ambiente/${b.dataset.id}`)});
+  $$('.workspace-more').forEach(b=>b.onclick=()=>openWorkspaceActions(workspaces.find(w=>w.id===b.dataset.id)));
+  $$('.wa-workspace').forEach(b=>b.onclick=()=>openWhatsApp(workspaces.find(w=>w.id===b.dataset.id)?.phone));
 };
 dashboardClientListsHTML = function(items=workspaces){return `<section class="clients-section client-list-simple"><div class="client-section-head"><h2>Clientes</h2><span>${items.length}</span></div><div id="workspaceGrid" class="grid workspace-grid-clean">${renderWorkspaceCards(items)}</div></section>`;};
 
