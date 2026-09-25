@@ -15,7 +15,7 @@ export function sanitizeFilmDraft(data){
   }
   if(dropped)warnings.push(`${dropped} ${dropped===1?'item inválido não pôde ser recuperado':'itens inválidos não puderam ser recuperados'}. Os demais itens foram mantidos; recalcule o filme.`);
   const source=data.settings||{},validGap=typeof source.gapMm==='number'&&Number.isFinite(source.gapMm)&&source.gapMm>=0&&source.gapMm<=50;
-  const settings={mediaId:typeof source.mediaId==='string'?source.mediaId:null,mode:['normal','maximum'].includes(source.mode)?source.mode:'maximum',gapMm:validGap?source.gapMm:3,freeRotation:source.freeRotation===true,angleStep:[15,30].includes(source.angleStep)?source.angleStep:30};
+  const settings={mediaId:typeof source.mediaId==='string'?source.mediaId:null,mode:['normal','maximum'].includes(source.mode)?source.mode:'maximum',gapMm:validGap?source.gapMm:3,freeRotation:source.freeRotation===true,angleStep:[15,30].includes(source.angleStep)?source.angleStep:30,name:typeof source.name==='string'?source.name.trim().slice(0,220):'',nameCustom:source.nameCustom===true};
   const settingsChanged=!validGap||settings.mode!==source.mode||source.freeRotation!=null&&typeof source.freeRotation!=='boolean'||source.angleStep!=null&&![15,30].includes(source.angleStep);
   if(settingsChanged)warnings.push('Alguma configuração local estava incompleta. Confira as opções e recalcule o filme.');
   return {data:{version:1,ownerId:String(data.ownerId||''),savedAt:typeof data.savedAt==='string'?data.savedAt:null,items,settings,layout:!dropped&&!settingsChanged&&data.layout?stripRuntime(data.layout):null},warnings};
