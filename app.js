@@ -647,14 +647,74 @@ function openUploadModal({presetType='arte',standaloneHalftone=false}={}){
     toast('Este cliente ainda não possui pedido oficial. Ative “Permitir subir arte em cliente sem pedido” em Configurações para liberar temporariamente.','err');return;
   }
   uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. O nome original do arquivo não será usado como nome da arte.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div>${isMockupMode?'':`<div class="upload-required-bar"><div><b>Organização obrigatória</b><small>Antes de salvar cada arte, informe um nome claro e escolha uma pasta.</small></div><button class="btn small" id="uploadCreateFolder" type="button">${icon('plus')} Criar pasta</button></div>`}<div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Resolução automática para 300 DPI</b><span>Informe a medida física em cada arte. O sistema mantém o original e só amplia até os pixels realmente necessários.</span></div><strong>AUTO 300 DPI</strong></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
-  const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
+  const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>void addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');void addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#uploadCreateFolder',m)?.addEventListener('click',async()=>{try{const name=prompt('Nome da nova pasta:');if(!name?.trim())return;const projectId=currentWorkspace?.workspace_type==='client'?(currentProjects[0]?.id||null):null,folder={id:crypto.randomUUID(),owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:projectId,parent_id:null,name:name.trim(),sort_order:(currentFolders.length+1)*10,created_by:session.user.id,updated_by:session.user.id};const {error}=await supabase.from('z19p_folders').insert(folder);if(error)throw error;currentFolders=[...currentFolders,folder];for(const item of uploadQueue)if(item.type==='arte'&&!item.folderId)item.folderId=folder.id;renderUploadList(m,{lockedType:isMockupMode});toast('Pasta criada e selecionada.','ok')}catch(error){console.error(error);toast(error.message||'Não foi possível criar a pasta.','err')}});
-  function addFiles(files){for(const f of files)uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:false,widthCm:'',heightCm:'',standaloneHalftone:Boolean(standaloneHalftone),preview:URL.createObjectURL(f)});renderUploadList(m,{lockedType:isMockupMode});setTimeout(()=>$('#uploadList input[data-k="name"]',m)?.focus(),0);}
+  async function addFiles(files){
+    const defaultFolder=activeFolder!=='all'&&activeFolder!=='root'?activeFolder:'';
+    for(const f of files){
+      const preview=URL.createObjectURL(f),item={file:f,name:'',type:presetType,folderId:defaultFolder,readyForPrint:false,widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview};
+      try{const bmp=await createImageBitmap(f);item.aspectRatio=bmp.height>0?bmp.width/bmp.height:0;bmp.close?.()}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
+      uploadQueue.push(item);
+    }
+    dz.classList.toggle('has-files',uploadQueue.length>0);
+    renderUploadList(m,{lockedType:isMockupMode});
+    setTimeout(()=>$('#uploadList input[data-k="name"]',m)?.focus(),0);
+  }
   $('#processUpload',m).onclick=()=>processQueue(m,{mockupMode:isMockupMode});
 }
 function renderUploadList(m,{lockedType=false}={}){
-  const list=$('#uploadList',m);list.innerHTML=uploadQueue.map((q,i)=>{const autoReady=q.type==='arte'&&Boolean(productionModule?.folderInReadyTree(q.folderId||null));if(autoReady)q.readyForPrint=true;return `<div class="upload-row clean-upload ${q.type==='arte'?'has-ready':''}"><img class="upload-thumb" src="${q.preview}"><div class="upload-name"><label>Nome</label><input data-i="${i}" data-k="name" value="${escapeHTML(q.name)}" placeholder="Nome da arte"></div>${lockedType?'':`<div><label>Tipo</label><select data-i="${i}" data-k="type"><option value="arte" ${q.type==='arte'?'selected':''}>Arte</option><option value="mockup" ${q.type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${q.type==='outro'?'selected':''}>Outro</option></select></div>`}<div><label>Pasta${q.type==='arte'?' *':''}</label><select data-i="${i}" data-k="folderId"><option value="">${q.type==='arte'?'Escolha uma pasta':'Sem pasta'}</option>${folderOptionHTML(currentFolders,q.folderId||'')}</select></div>${q.type==='arte'?`<div class="upload-physical-size"><label>Tamanho final da estampa</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><input data-i="${i}" data-k="widthCm" inputmode="decimal" value="${escapeHTML(q.widthCm||'')}" placeholder="Largura cm"><input data-i="${i}" data-k="heightCm" inputmode="decimal" value="${escapeHTML(q.heightCm||'')}" placeholder="Altura cm (opcional)"></div><small>${q.widthCm||q.heightCm?`300 DPI · ${q.widthCm?pxAt300(String(q.widthCm).replace(',','.'))+' px de largura':pxAt300(String(q.heightCm).replace(',','.'))+' px de altura'}`:'Informe uma medida; a outra acompanha a proporção da arte.'}</small></div><label class="upload-ready-switch ${autoReady?'automatic':''}"><span class="switch"><input type="checkbox" data-ready="${i}" ${q.readyForPrint?'checked':''} ${autoReady?'disabled':''}><span></span></span><span><b>Arte pronta para impressão</b><small>${autoReady?'Ativada automaticamente pela pasta Artes prontas.':'Ative para liberar no Montar Filme depois de posicionar.'}</small></span></label>`:''}<button class="remove-upload" data-remove="${i}" title="Remover">×</button></div>`}).join('');
-  $$('[data-i][data-k]',list).forEach(el=>{const update=()=>{const q=uploadQueue[+el.dataset.i],oldFolder=q.folderId;q[el.dataset.k]=el.value;if(el.dataset.k==='type'&&q.type!=='arte')q.readyForPrint=false;if(el.dataset.k==='type'&&q.type==='arte'&&productionModule?.folderInReadyTree(q.folderId||null))q.readyForPrint=true;if(el.dataset.k==='folderId'){const wasReady=productionModule?.folderInReadyTree(oldFolder||null),isReady=productionModule?.folderInReadyTree(q.folderId||null);if(isReady)q.readyForPrint=true;else if(wasReady)q.readyForPrint=false}if(el.dataset.k!=='name')renderUploadList(m,{lockedType});else{const complete=uploadQueue.length&&uploadQueue.every(item=>item.name.trim()&&(item.type!=='arte'||item.folderId));$('#processUpload',m).disabled=!complete}};el.dataset.k==='name'?el.addEventListener('input',update):el.addEventListener('change',update)});$$('[data-ready]',list).forEach(el=>el.onchange=()=>{uploadQueue[+el.dataset.ready].readyForPrint=el.checked});$$('[data-remove]',list).forEach(b=>b.onclick=()=>{const q=uploadQueue.splice(+b.dataset.remove,1)[0];if(q?.preview)URL.revokeObjectURL(q.preview);renderUploadList(m,{lockedType});});const complete=uploadQueue.length&&uploadQueue.every(q=>q.name.trim()&&(q.type!=='arte'||q.folderId));$('#processUpload',m).disabled=!complete;
+  const list=$('#uploadList',m);
+  const cmText=value=>{const n=Math.round(Number(value)*100)/100;return Number.isFinite(n)?String(n).replace('.',','):''};
+  const sizeInfo=q=>{
+    const width=Number(String(q.widthCm||'').replace(',','.'))||0,height=Number(String(q.heightCm||'').replace(',','.'))||0;
+    if(width>0&&height>0)return `${cmText(width)} × ${cmText(height)} cm · ${pxAt300(width)} × ${pxAt300(height)} px a 300 DPI`;
+    if(q.aspectRatio>0)return 'Digite largura ou altura: a outra medida será calculada automaticamente.';
+    return 'Digite uma medida; a outra acompanha a proporção original da arte.';
+  };
+  list.innerHTML=uploadQueue.map((q,i)=>{
+    const autoReady=q.type==='arte'&&Boolean(productionModule?.folderInReadyTree(q.folderId||null));if(autoReady)q.readyForPrint=true;
+    return `<div class="upload-row clean-upload ${q.type==='arte'?'has-ready':''}">
+      <img class="upload-thumb" src="${q.preview}">
+      <div class="upload-name"><label>Nome</label><input data-i="${i}" data-k="name" value="${escapeHTML(q.name)}" placeholder="Nome da arte"></div>
+      ${lockedType?'':`<div class="upload-type"><label>Tipo</label><select data-i="${i}" data-k="type"><option value="arte" ${q.type==='arte'?'selected':''}>Arte</option><option value="mockup" ${q.type==='mockup'?'selected':''}>Mockup</option><option value="outro" ${q.type==='outro'?'selected':''}>Outro</option></select></div>`}
+      <div class="upload-folder"><label>Pasta${q.type==='arte'?' *':''}</label><select data-i="${i}" data-k="folderId"><option value="">${q.type==='arte'?'Escolha uma pasta':'Sem pasta'}</option>${folderOptionHTML(currentFolders,q.folderId||'')}</select></div>
+      ${q.type==='arte'?`<div class="upload-physical-size"><label>Tamanho final da estampa</label><div class="upload-size-inputs"><input data-i="${i}" data-k="widthCm" data-size-axis="width" inputmode="decimal" value="${escapeHTML(q.widthCm||'')}" placeholder="Largura cm"><span>×</span><input data-i="${i}" data-k="heightCm" data-size-axis="height" inputmode="decimal" value="${escapeHTML(q.heightCm||'')}" placeholder="Altura cm"></div><small data-size-info="${i}">${sizeInfo(q)}</small></div><label class="upload-ready-switch ${autoReady?'automatic':''}"><span class="switch"><input type="checkbox" data-ready="${i}" ${q.readyForPrint?'checked':''} ${autoReady?'disabled':''}><span></span></span><span><b>Arte pronta para impressão</b><small>${autoReady?'Ativada automaticamente pela pasta Artes prontas.':'Ative para liberar no Montar Filme depois de posicionar.'}</small></span></label>`:''}
+      <button class="remove-upload" data-remove="${i}" title="Remover">×</button>
+    </div>`;
+  }).join('');
+
+  $$('[data-i][data-k]',list).forEach(el=>{
+    if(el.dataset.k==='widthCm'||el.dataset.k==='heightCm')return;
+    const update=()=>{
+      const q=uploadQueue[+el.dataset.i],oldFolder=q.folderId;q[el.dataset.k]=el.value;
+      if(el.dataset.k==='type'&&q.type!=='arte')q.readyForPrint=false;
+      if(el.dataset.k==='type'&&q.type==='arte'&&productionModule?.folderInReadyTree(q.folderId||null))q.readyForPrint=true;
+      if(el.dataset.k==='folderId'){
+        const wasReady=productionModule?.folderInReadyTree(oldFolder||null),isReady=productionModule?.folderInReadyTree(q.folderId||null);
+        if(isReady)q.readyForPrint=true;else if(wasReady)q.readyForPrint=false;
+      }
+      if(el.dataset.k!=='name')renderUploadList(m,{lockedType});
+      else{const complete=uploadQueue.length&&uploadQueue.every(item=>item.name.trim()&&(item.type!=='arte'||item.folderId));$('#processUpload',m).disabled=!complete}
+    };
+    el.dataset.k==='name'?el.addEventListener('input',update):el.addEventListener('change',update);
+  });
+
+  $$('[data-size-axis]',list).forEach(el=>el.addEventListener('input',()=>{
+    const index=+el.dataset.i,q=uploadQueue[index],axis=el.dataset.sizeAxis,raw=el.value.replace(/[^0-9,.]/g,''),value=Number(raw.replace(',','.'))||0;
+    el.value=raw;q[axis==='width'?'widthCm':'heightCm']=raw;
+    const ratio=Number(q.aspectRatio)||0;
+    if(value>0&&ratio>0){
+      const other=axis==='width'?value/ratio:value*ratio,otherKey=axis==='width'?'heightCm':'widthCm',otherAxis=axis==='width'?'height':'width',formatted=cmText(other);
+      q[otherKey]=formatted;
+      const otherInput=list.querySelector(`[data-i="${index}"][data-size-axis="${otherAxis}"]`);
+      if(otherInput)otherInput.value=formatted;
+    }
+    const info=list.querySelector(`[data-size-info="${index}"]`);if(info)info.textContent=sizeInfo(q);
+  }));
+
+  $$('[data-ready]',list).forEach(el=>el.onchange=()=>{uploadQueue[+el.dataset.ready].readyForPrint=el.checked});
+  $$('[data-remove]',list).forEach(b=>b.onclick=()=>{const q=uploadQueue.splice(+b.dataset.remove,1)[0];if(q?.preview)URL.revokeObjectURL(q.preview);const dz=$('#dropzone',m);dz?.classList.toggle('has-files',uploadQueue.length>0);renderUploadList(m,{lockedType})});
+  const complete=uploadQueue.length&&uploadQueue.every(q=>q.name.trim()&&(q.type!=='arte'||q.folderId));$('#processUpload',m).disabled=!complete;
 }
 
 async function processQueue(m,{mockupMode=false}={}){
