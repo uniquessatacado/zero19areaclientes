@@ -3,12 +3,12 @@
 export function attachAssetStudioActions(card,asset,handlers={}){
   if(!card||!asset)return null;
   const artwork=asset.asset_type==='arte'&&Boolean(asset.processed_path||asset.original_path);
-  const montage=Boolean(asset.metadata?.garment_scene);
+  const montage=Boolean(asset.metadata?.garment_scene),garmentEnabled=handlers.garmentEnabled!==false;
   const actions=[
-    (artwork||montage)&&typeof handlers.openGarment==='function'&&['montar',montage?'Editar montagem':'Montar camiseta',()=>handlers.openGarment(asset)],
-    (artwork||montage)&&typeof handlers.open3D==='function'&&['3d','Ver em 3D',()=>handlers.open3D(asset)],
-    (artwork||montage)&&typeof handlers.openPresentation==='function'&&['apresentar','Link 3D / cliente',()=>handlers.openPresentation(asset)],
-    (artwork||montage)&&typeof handlers.openBlank==='function'&&['modelo','Baixar modelo liso',()=>handlers.openBlank(asset)],
+    garmentEnabled&&(artwork||montage)&&typeof handlers.openGarment==='function'&&['montar',montage?'Editar montagem':'Montar camiseta',()=>handlers.openGarment(asset)],
+    garmentEnabled&&(artwork||montage)&&typeof handlers.open3D==='function'&&['3d','Ver em 3D',()=>handlers.open3D(asset)],
+    garmentEnabled&&(artwork||montage)&&typeof handlers.openPresentation==='function'&&['apresentar','Link 3D / cliente',()=>handlers.openPresentation(asset)],
+    garmentEnabled&&(artwork||montage)&&typeof handlers.openBlank==='function'&&['modelo','Baixar modelo liso',()=>handlers.openBlank(asset)],
     artwork&&typeof handlers.openMockup==='function'&&['mockup','Ver tamanho na camisa',()=>handlers.openMockup(asset)],
     artwork&&typeof handlers.openEditor==='function'&&['editar','Editar arte',()=>handlers.openEditor(asset)]
   ].filter(Boolean);
