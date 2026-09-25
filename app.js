@@ -636,6 +636,9 @@ function openAssetActions(a){
 }
 
 function openUploadModal({presetType='arte'}={}){
+  if(presetType==='arte'&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id)){
+    toast('Este cliente ainda não possui pedido oficial. Ative “Permitir subir arte em cliente sem pedido” em Configurações para liberar temporariamente.','err');return;
+  }
   uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. O nome original do arquivo não será usado como nome da arte.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div>${isMockupMode?'':`<div class="upload-required-bar"><div><b>Organização obrigatória</b><small>Antes de salvar cada arte, informe um nome claro e escolha uma pasta.</small></div><button class="btn small" id="uploadCreateFolder" type="button">${icon('plus')} Criar pasta</button></div>`}<div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Qualidade / dimensão máxima</b><span>Nunca reduz o arquivo original. Só amplia quando necessário.</span></div><select id="qualityPreset"><option value="original">Original — sem ampliar</option><option value="alta">Alta — até 4032 px</option><option value="ultra" selected>Ultra — até 6000 px</option><option value="maxima">Máxima — até 8192 px</option></select></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
   const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#uploadCreateFolder',m)?.addEventListener('click',async()=>{try{const name=prompt('Nome da nova pasta:');if(!name?.trim())return;const projectId=currentWorkspace?.workspace_type==='client'?(currentProjects[0]?.id||null):null,folder={id:crypto.randomUUID(),owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:projectId,parent_id:null,name:name.trim(),sort_order:(currentFolders.length+1)*10,created_by:session.user.id,updated_by:session.user.id};const {error}=await supabase.from('z19p_folders').insert(folder);if(error)throw error;currentFolders=[...currentFolders,folder];for(const item of uploadQueue)if(item.type==='arte'&&!item.folderId)item.folderId=folder.id;renderUploadList(m,{lockedType:isMockupMode});toast('Pasta criada e selecionada.','ok')}catch(error){console.error(error);toast(error.message||'Não foi possível criar a pasta.','err')}});
@@ -648,24 +651,71 @@ function renderUploadList(m,{lockedType=false}={}){
 }
 
 async function processQueue(m,{mockupMode=false}={}){
-  if(!uploadQueue.length)return;if(uploadQueue.some(q=>!q.name.trim()))return toast('Dê um nome claro para cada arquivo antes de salvar.','err');if(uploadQueue.some(q=>q.type==='arte'&&!q.folderId))return toast('Escolha uma pasta para cada arte antes de salvar.','err');const trim=mockupMode?false:$('#optTrim',m).checked;const quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY);const btn=$('#processUpload',m);btn.disabled=true;const prog=$('#progress',m);prog.classList.remove('hidden');let done=0;const savedAssets=[],uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects];
-  for(const q of uploadQueue){try{$('#progressText',m).textContent=`${mockupMode?'Salvando':'Processando'} ${done+1}/${uploadQueue.length}: ${q.name}`;const isMockup=q.type==='mockup';const doTrim=isMockup?false:trim;const qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0);const result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget});const assetId=crypto.randomUUID();const base=`${session.user.id}/${currentWorkspace.id}/${q.folderId||'root'}/${assetId}`;const ext=(q.file.name.split('.').pop()||'bin').toLowerCase();const originalPath=`${base}/original.${ext}`;const processedPath=`${base}/processed.png`;
+  if(!uploadQueue.length)return;
+  if(uploadQueue.some(q=>!q.name.trim()))return toast('Dê um nome claro para cada arquivo antes de salvar.','err');
+  if(uploadQueue.some(q=>q.type==='arte'&&!q.folderId))return toast('Escolha uma pasta para cada arte antes de salvar.','err');
+  if(!mockupMode&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id))return toast('Este cliente ainda não possui pedido oficial. Libere temporariamente em Configurações ou sincronize o pedido.','err');
+  const trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m),prog=$('#progress',m),status=$('#progressText',m);
+  btn.disabled=true;prog.classList.remove('hidden');let done=0;const savedAssets=[],uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue];
+  const stage=text=>{if(status?.isConnected)status.textContent=text};
+  for(const q of queue){
+    try{
+      stage(`${mockupMode?'Salvando':'Processando'} ${done+1}/${queue.length}: ${q.name}`);
+      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0);
+      const result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
+      const assetId=crypto.randomUUID(),base=`${session.user.id}/${uploadWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`;
+      stage(`${done+1}/${queue.length} · Enviando arquivo original…`);
       let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;
+      stage(`${done+1}/${queue.length} · Enviando PNG final…`);
       up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
-      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:qualityTarget>0&&result.upscaled,metadata:{source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled}};const {data:savedAsset,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;savedAssets.push(savedAsset||assetRow);
-      done++;prog.firstElementChild.style.width=`${Math.round(done/uploadQueue.length*100)}%`;
-    }catch(err){console.error(err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');}}
-  $('#progressText',m).textContent=`Concluído: ${done} de ${uploadQueue.length} arquivo(s).`;toast(`${done} arquivo(s) salvo(s).`,'ok');setTimeout(async()=>{uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));m.remove();if(uploadWorkspace?.id)await renderWorkspace(uploadWorkspace.id);if(savedAssets.length&&officialOrders&&currentWorkspace?.id===uploadWorkspace?.id)await officialOrders.offerAfterUpload(savedAssets,{workspace:uploadWorkspace,projects:uploadProjects});},350);
+      stage(`${done+1}/${queue.length} · Salvando no cliente…`);
+      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:result.upscaled,metadata:{source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
+      const {data:savedAsset,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;savedAssets.push(savedAsset||assetRow);
+      done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
+    }catch(err){
+      console.error('upload artwork',err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');
+    }
+  }
+  if(!done){
+    stage('Não foi possível concluir o arquivo. Tente novamente; nenhuma arte nova foi salva.');
+    btn.disabled=false;return;
+  }
+  stage(`Concluído: ${done} de ${queue.length}. Abrindo tamanho e posição…`);
+  uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));uploadQueue=[];m.remove();
+  try{
+    if(savedAssets.length&&officialOrders&&uploadWorkspace?.id){
+      await officialOrders.offerAfterUpload(savedAssets,{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled});
+    }
+  }catch(error){
+    console.error('placement after upload',error);toast((error.message||'Arte salva, mas não foi possível abrir tamanho e posição.')+' A arte continua salva no cliente.','err');
+  }
+  if(currentWorkspace?.id===uploadWorkspace?.id&&!document.querySelector('.official-placement-backdrop'))await renderWorkspace(uploadWorkspace.id);
 }
 
-async function processImage(file,{trim,targetMax=0}){
-  const bmp=await createImageBitmap(file);let source=document.createElement('canvas');source.width=bmp.width;source.height=bmp.height;source.getContext('2d',{willReadFrequently:true,alpha:true}).drawImage(bmp,0,0);const sourceWidth=bmp.width,sourceHeight=bmp.height;bmp.close?.();
-  if(trim)source=trimTransparentSafe(source);
-  let out=source,upscaled=false;
-  if(targetMax>0&&Math.max(source.width,source.height)<targetMax){const scale=targetMax/Math.max(source.width,source.height);const w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale));out=document.createElement('canvas');out.width=w;out.height=h;await pica.resize(source,out,{quality:3,alpha:true,unsharpAmount:50,unsharpRadius:.55,unsharpThreshold:2});upscaled=true;}
-  const raw=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('Falha ao gerar PNG')),'image/png',1));
-  const blob=await setPngDpi(raw,300);return{blob,width:out.width,height:out.height,sourceWidth,sourceHeight,upscaled};
+async function processImage(file,{trim,targetMax=0,onStage=()=>{}}={}){
+  onStage('Lendo imagem…');
+  const bmp=await createImageBitmap(file);let source=document.createElement('canvas');source.width=bmp.width;source.height=bmp.height;const sourceCtx=source.getContext('2d',{willReadFrequently:true,alpha:true});if(!sourceCtx){bmp.close?.();throw new Error('Não foi possível preparar a imagem neste aparelho.')}sourceCtx.drawImage(bmp,0,0);const sourceWidth=bmp.width,sourceHeight=bmp.height;bmp.close?.();
+  if(trim){onStage('Removendo prancheta transparente…');source=trimTransparentSafe(source);}
+  let out=source,upscaled=false,engine='original';
+  if(targetMax>0&&Math.max(source.width,source.height)<targetMax){
+    const scale=targetMax/Math.max(source.width,source.height),w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale)),touchDevice=(navigator.maxTouchPoints||0)>1||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||'');
+    onStage(`Ajustando qualidade para ${Math.max(w,h)} px…`);
+    out=document.createElement('canvas');out.width=w;out.height=h;
+    if(touchDevice){
+      const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-mobile';
+    }else{
+      try{await pica.resize(source,out,{quality:3,alpha:true,unsharpAmount:50,unsharpRadius:.55,unsharpThreshold:2});engine='pica';}
+      catch(error){console.warn('pica resize fallback',error);const g=out.getContext('2d',{alpha:true});if(!g)throw error;g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-fallback';}
+    }
+    upscaled=true;
+  }
+  onStage('Gerando PNG transparente 300 DPI…');
+  const raw=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('O navegador não conseguiu finalizar o PNG. Tente “Original — sem ampliar” para este arquivo.')),'image/png',1));
+  const blob=await setPngDpi(raw,300);
+  if(out!==source){out.width=out.height=1}source.width=source.height=1;
+  return{blob,width:upscaled?Math.round(sourceWidth*(targetMax/Math.max(sourceWidth,sourceHeight))):sourceWidth,height:upscaled?Math.round(sourceHeight*(targetMax/Math.max(sourceWidth,sourceHeight))):sourceHeight,sourceWidth,sourceHeight,upscaled,engine};
 }
+
 function trimTransparentSafe(canvas){
   const ctx=canvas.getContext('2d',{willReadFrequently:true}),w=canvas.width,h=canvas.height,data=ctx.getImageData(0,0,w,h).data;
   const rowVisible=y=>{for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>=2)return true;return false};
@@ -1012,13 +1062,13 @@ async function renderShareLinks(){
   $$('.send-client-link').forEach(b=>b.onclick=()=>sendSharedLink('client',workspaces.find(x=>x.id===b.dataset.id)));
 }
 
-let garmentStudioEnabled=false,garmentFeatureOwner=null;
+let garmentStudioEnabled=false,clientUploadWithoutOrderEnabled=true,garmentFeatureOwner=null;
 async function loadUiFeatureSettings({force=false}={}){
-  const owner=accountOwnerId();if(!owner){garmentStudioEnabled=false;garmentFeatureOwner=null;return false}
+  const owner=accountOwnerId();if(!owner){garmentStudioEnabled=false;clientUploadWithoutOrderEnabled=true;garmentFeatureOwner=null;return false}
   if(!force&&garmentFeatureOwner===owner)return garmentStudioEnabled;
   const {data,error}=await supabase.from('z19p_public_settings').select('*').eq('owner_id',owner).maybeSingle();
-  if(error){console.warn('ui feature settings',error);garmentStudioEnabled=false;garmentFeatureOwner=owner;return false}
-  garmentStudioEnabled=Boolean(data?.garment_studio_enabled);garmentFeatureOwner=owner;return garmentStudioEnabled;
+  if(error){console.warn('ui feature settings',error);garmentStudioEnabled=false;clientUploadWithoutOrderEnabled=true;garmentFeatureOwner=owner;return false}
+  garmentStudioEnabled=Boolean(data?.garment_studio_enabled);clientUploadWithoutOrderEnabled=data?.client_upload_without_order_enabled!==false;garmentFeatureOwner=owner;return garmentStudioEnabled;
 }
 async function saveGarmentStudioEnabled(enabled){
   const owner=accountOwnerId();if(!owner)return false;
@@ -1027,6 +1077,18 @@ async function saveGarmentStudioEnabled(enabled){
   if(error){toast(error.code==='42703'||error.code==='PGRST204'?'A chave ainda não existe no banco. Execute a migration v2.17.15 antes de ativar.':error.message,'err');return false}
   garmentStudioEnabled=Boolean(enabled);garmentFeatureOwner=owner;toast(garmentStudioEnabled?'Montar camiseta e 3D ativados.':'Montar camiseta e 3D desativados.','ok');return true;
 }
+async function saveClientUploadWithoutOrderEnabled(enabled){
+  const owner=accountOwnerId();if(!owner)return false;
+  const payload={owner_id:owner,slug:'zero19',client_upload_without_order_enabled:Boolean(enabled),updated_at:nowISO()};
+  const {error}=await supabase.from('z19p_public_settings').upsert(payload,{onConflict:'owner_id'});
+  if(error){toast(error.message||'Não foi possível salvar esta configuração.','err');return false}
+  clientUploadWithoutOrderEnabled=Boolean(enabled);garmentFeatureOwner=owner;
+  toast(clientUploadWithoutOrderEnabled?'Upload em cliente sem pedido liberado.':'Cliente sem pedido oficial ficará bloqueado para novas artes.','ok');return true;
+}
+function workspaceHasOfficialOrder(workspaceId){
+  return currentProjects.some(project=>project.workspace_id===workspaceId&&String(project.official_order_ref||'').trim());
+}
+
 const clientDisplayName=w=>String(w?.client_name||w?.company_name||'Cliente');
 const optionalCompanyName=w=>{const client=String(w?.client_name||'').trim(),company=String(w?.company_name||'').trim();return company&&company!==client?company:''};
 
@@ -1064,7 +1126,7 @@ dashboardClientListsHTML = function(items=workspaces){return `<section class="cl
 
 openSettingsModal = async function(){
   await loadUiFeatureSettings({force:true});const m=document.createElement('div');m.className='modal-backdrop';
-  const draw=()=>{m.innerHTML=`<div class="modal compact settings-modal clean-settings"><div class="modal-head"><div><div class="eyebrow">Configurações</div><h2>Recursos do sistema</h2></div><button class="btn ghost small close">×</button></div><section class="settings-section feature-settings"><div class="settings-head"><div><b>Montar camiseta e 3D</b><small>Controla Montar camiseta, Ver em 3D e Link 3D / cliente. “Ver tamanho na camisa” continua disponível.</small></div><label class="switch"><input id="garmentFeatureToggle" type="checkbox" ${garmentStudioEnabled?'checked':''}><span></span></label></div><div class="settings-note">${garmentStudioEnabled?'Ativado para esta conta.':'Desativado por enquanto.'}</div></section><section class="settings-section"><div class="settings-head"><div><b>Posições de estampa</b><small>Frente, costas e mangas. Cadastre ou remova os pontos usados no mockup automático.</small></div><button class="btn small" id="managePrintPositions">Gerenciar</button></div></section></div>`;$('.close',m).onclick=()=>m.remove();$('#garmentFeatureToggle',m).onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;const ok=await saveGarmentStudioEnabled(wanted);e.target.disabled=false;if(!ok)e.target.checked=garmentStudioEnabled;else{m.remove();await renderRoute();}};$('#managePrintPositions',m).onclick=()=>officialOrders?.openPositionSettings?.();};
+  const draw=()=>{m.innerHTML=`<div class="modal compact settings-modal clean-settings"><div class="modal-head"><div><div class="eyebrow">Configurações</div><h2>Recursos do sistema</h2></div><button class="btn ghost small close">×</button></div><section class="settings-section feature-settings"><div class="settings-head"><div><b>Montar camiseta e 3D</b><small>Controla Montar camiseta, Ver em 3D e Link 3D / cliente. “Ver tamanho na camisa” continua disponível.</small></div><label class="switch"><input id="garmentFeatureToggle" type="checkbox" ${garmentStudioEnabled?'checked':''}><span></span></label></div><div class="settings-note">${garmentStudioEnabled?'Ativado para esta conta.':'Desativado por enquanto.'}</div></section><section class="settings-section feature-settings"><div class="settings-head"><div><b>Permitir subir arte em cliente sem pedido</b><small>Temporário enquanto a sincronização dos pedidos não está completa. Ligado: permite seguir para tamanho e posição mesmo sem pedido oficial.</small></div><label class="switch"><input id="clientUploadWithoutOrderToggle" type="checkbox" ${clientUploadWithoutOrderEnabled?'checked':''}><span></span></label></div><div class="settings-note">${clientUploadWithoutOrderEnabled?'Permitido por enquanto.':'Bloqueado: o cliente precisa ter pedido oficial.'}</div></section><section class="settings-section"><div class="settings-head"><div><b>Posições de estampa</b><small>Frente, costas e mangas. Cadastre ou remova os pontos usados no mockup automático.</small></div><button class="btn small" id="managePrintPositions">Gerenciar</button></div></section></div>`;$('.close',m).onclick=()=>m.remove();$('#garmentFeatureToggle',m).onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;const ok=await saveGarmentStudioEnabled(wanted);e.target.disabled=false;if(!ok)e.target.checked=garmentStudioEnabled;else{m.remove();await renderRoute();}};$('#clientUploadWithoutOrderToggle',m).onchange=async e=>{const wanted=e.target.checked;e.target.disabled=true;const ok=await saveClientUploadWithoutOrderEnabled(wanted);e.target.disabled=false;if(!ok)e.target.checked=clientUploadWithoutOrderEnabled;else draw();};$('#managePrintPositions',m).onclick=()=>officialOrders?.openPositionSettings?.();};
   document.body.appendChild(m);draw();
 };
 
