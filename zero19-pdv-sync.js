@@ -64,7 +64,7 @@ function stageFromProject(project,items){
 }
 export function createZero19PdvSync(ctx){
   installStyles();
-  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
+  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,startStandaloneHalftone,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
   let cache=null,cacheAt=0;
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
@@ -72,11 +72,18 @@ export function createZero19PdvSync(ctx){
     const [wi,pr,ws,sla]=await Promise.all([
       supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
       supabase.from('z19p_projects').select('*').eq('owner_id',owner).eq('official_order_source','zero19_pdv').order('source_order_created_at',{ascending:false,nullsFirst:false}),
-      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).eq('workspace_type','client').order('created_at',{ascending:false}),
+      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).order('created_at',{ascending:false}),
       supabase.rpc('zero19_personalization_ops_snapshot',{p_tenant_id:ZERO19_TENANT_ID})
     ]);
     const err=wi.error||pr.error||ws.error;if(err)throw err;
     const projects=pr.data||[],workspaces=ws.data||[],items=wi.data||[],pm=new Map(projects.map(x=>[x.id,x])),wm=new Map(workspaces.map(x=>[x.id,x])),groups=new Map();
+    const zero19Library=workspaces.find(w=>w.workspace_type==='library_zero19')||null;
+    let standaloneHalftones=[];
+    if(zero19Library){
+      const halftones=await supabase.from('z19p_assets').select('*').eq('owner_id',owner).eq('workspace_id',zero19Library.id).eq('asset_type','arte').order('created_at',{ascending:true});
+      if(halftones.error)throw halftones.error;
+      standaloneHalftones=(halftones.data||[]).filter(asset=>asset.metadata?.standalone_halftone_pending===true);
+    }
     for(const item of items){if(!groups.has(item.project_id))groups.set(item.project_id,[]);groups.get(item.project_id).push(item)}
     const avgMinutes=Math.max(1,Number(sla?.data?.avg_minutes_per_shirt)||30),summaries=projects.map(project=>{
       const rows=groups.get(project.id)||[],workspace=wm.get(project.workspace_id)||null,stage=stageFromProject(project,rows),qty=rows.reduce((s,x)=>s+Math.max(1,Number(x.quantity)||1),0),promised=project.promised_at||rows.map(x=>x.promised_at).filter(Boolean).sort()[0]||null;
@@ -91,10 +98,10 @@ export function createZero19PdvSync(ctx){
       cumulative+=Math.max(1,summary.qty);summary.predicted=addBusinessMinutes(new Date(),cumulative*avgMinutes);
       summary.risk=Boolean(summary.promised&&summary.predicted.getTime()>new Date(summary.promised).getTime());
     }
-    cache={items,projects,workspaces,summaries,pm,wm,avgMinutes};cacheAt=Date.now();return cache;
+    cache={items,projects,workspaces,summaries,pm,wm,avgMinutes,zero19Library,standaloneHalftones};cacheAt=Date.now();return cache;
   }
   function invalidate(){cache=null;cacheAt=0}
-  function counts(summaries){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;return out}
+  function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
   function itemLine(item){
     const title=item.text_value||item.garment_name||item.kind||'Personalização',garment=[item.garment_name,item.garment_color,item.garment_size].filter(Boolean).join(' · ');
     return '<div class="z19-zero19-item"><b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+'</div>';
@@ -123,7 +130,7 @@ export function createZero19PdvSync(ctx){
   async function enhanceDashboard(){
     try{
       if(!app||app.querySelector('[data-z19-sync-strip]'))return;
-      const data=await load(true),c=counts(data.summaries),overdue=data.summaries.filter(x=>x.overdue).length,risk=data.summaries.filter(x=>x.risk&&!x.overdue).length,hero=app.querySelector('.simple-hero');
+      const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),overdue=data.summaries.filter(x=>x.overdue).length,risk=data.summaries.filter(x=>x.risk&&!x.overdue).length,hero=app.querySelector('.simple-hero');
       if(!hero)return;
       const section=document.createElement('section');section.className='z19-sync-strip';section.dataset.z19SyncStrip='';
       section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+(risk?'<b>'+risk+' pedido(s) com risco de atraso.</b> ':'')+'Média atual '+Number(data.avgMinutes||30).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min/camisa. Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
@@ -139,6 +146,7 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-upload-workspace]').forEach(b=>b.onclick=()=>startUploadForWorkspace?.(b.dataset.z19UploadWorkspace));
     root.querySelectorAll('[data-z19-import-source]').forEach(b=>b.onclick=()=>importSourceArtwork(b.dataset.z19ImportSource));
     root.querySelectorAll('[data-z19-halftone-ready]').forEach(b=>b.onclick=()=>finishHalftone(b.dataset.z19HalftoneReady));
+    root.querySelectorAll('[data-z19-standalone-halftone-ready]').forEach(b=>b.onclick=()=>finishStandaloneHalftone(b.dataset.z19StandaloneHalftoneReady));
     root.querySelectorAll('[data-z19-open]').forEach(b=>b.onclick=()=>nav('/ambiente/'+encodeURIComponent(b.dataset.z19Open)));
     root.querySelectorAll('[data-z19-times]').forEach(b=>b.onclick=()=>nav('/times'));
     root.querySelectorAll('[data-z19-film]').forEach(b=>b.onclick=()=>nav('/filme'));
@@ -151,8 +159,8 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-wa]').forEach(b=>b.onclick=()=>{const d=digits(b.dataset.z19Wa);if(d)window.open('https://wa.me/'+(d.startsWith('55')?d:'55'+d),'_blank','noopener,noreferrer')});
   }
   async function renderQueue(){
-    const data=await load(true),c=counts(data.summaries),saved=sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
-    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage);return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+rows.length+'</b></div><div class="z19-zero19-grid">'+(rows.length?rows.map(card).join(''):'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
+    const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),saved=sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
     bindCommon();bindRoot(app);app.querySelectorAll('[data-z19-jump]').forEach(b=>b.onclick=()=>document.getElementById('z19-stage-'+b.dataset.z19Jump)?.scrollIntoView({behavior:'smooth',block:'start'}));
     if(saved)setTimeout(()=>document.getElementById('z19-stage-'+saved)?.scrollIntoView({behavior:'smooth',block:'start'}),50);
   }
@@ -161,9 +169,9 @@ export function createZero19PdvSync(ctx){
     const data=await load(true),pending=[];
     for(const summary of data.summaries)for(const item of summary.items)if(item.stage==='awaiting_art')pending.push({summary,item});
     const modal=document.createElement('div');modal.className='modal-backdrop';
-    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Subir arte</div><h2>Para qual pedido?</h2><p>Escolha uma pendência do PDV ZERO19. A arte será salva dentro do cliente correto.</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pending.length?pending.map((row,index)=>'<button class="z19-transfer-row" data-global-upload="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>Prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="modal-footer"><button class="btn close">Fechar</button></div></div>';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Subir arte</div><h2>Para qual pedido?</h2><p>Escolha uma pendência do PDV ZERO19 ou envie um halftone avulso sem cliente.</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pending.length?pending.map((row,index)=>'<button class="z19-transfer-row" data-global-upload="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>Prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div>'+(data.zero19Library?'<button class="z19-transfer-row" data-standalone-halftone style="width:100%;margin-top:10px"><b>Halftone avulso · sem cliente</b><span>Salvar na Biblioteca ZERO19 e colocar na fila Aguardando Halftone.</span><small>Depois você pode transferir a arte pronta para qualquer cliente/pedido.</small></button>':'')+'<div class="modal-footer"><button class="btn close">Fechar</button></div></div>';
     document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
-    modal.querySelectorAll('[data-global-upload]').forEach(b=>b.onclick=()=>{const row=pending[Number(b.dataset.globalUpload)];modal.remove();startUploadForWorkspace?.(row.summary.workspace.id)});
+    modal.querySelectorAll('[data-global-upload]').forEach(b=>b.onclick=()=>{const row=pending[Number(b.dataset.globalUpload)];modal.remove();startUploadForWorkspace?.(row.summary.workspace.id)});const standalone=modal.querySelector('[data-standalone-halftone]');if(standalone)standalone.onclick=()=>{modal.remove();startStandaloneHalftone?.(data.zero19Library.id)};
   }
   async function sourceImageSize(blob){
     if(!String(blob.type||'').startsWith('image/'))return {width:null,height:null};
@@ -207,6 +215,12 @@ export function createZero19PdvSync(ctx){
     const asset=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(asset.error)return toast(asset.error.message,'err');
     if(item.without_application){try{await ensureDtfProfile(item,asset.data)}catch(error){return toast(error.message,'err')}const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');return renderQueue()}
     try{await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});invalidate()}catch(error){toast(error.message||'Não foi possível abrir tamanho e posição.','err')}
+  }
+  async function finishStandaloneHalftone(assetId){
+    const data=await load(true),asset=(data.standaloneHalftones||[]).find(row=>row.id===assetId);if(!asset)return toast('Halftone avulso não encontrado.','err');
+    const metadata={...(asset.metadata||{}),standalone_halftone_pending:false,standalone_halftone_completed_at:new Date().toISOString()};
+    const result=await supabase.from('z19p_assets').update({metadata,updated_at:new Date().toISOString()}).eq('id',assetId).eq('owner_id',accountOwnerId());if(result.error)return toast(result.error.message,'err');
+    invalidate();toast('Halftone concluído. A arte continua na Biblioteca ZERO19 para você transferir quando quiser.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
   }
   async function chooseFont(workItemId){
     if(!workItemId)return;
@@ -288,9 +302,9 @@ export function createZero19PdvSync(ctx){
   async function openTransfer(asset){
     const data=await load(true),pending=data.summaries.filter(s=>['awaiting_art','awaiting_font','ready_production'].includes(s.stage)),modal=document.createElement('div');modal.className='modal-backdrop';
     const pendingRows=[];for(const s of pending){const artItems=s.items.filter(i=>i.stage==='awaiting_art');if(artItems.length){for(const item of artItems)pendingRows.push({summary:s,item})}}
-    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Biblioteca ZERO19</div><h2>Transferir arte</h2><p>'+h(asset.name)+'</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pendingRows.length?pendingRows.map((row,index)=>'<button class="z19-transfer-row" data-transfer-index="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>'+h(STAGE_LABELS[row.item.stage])+' · prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="field"><label>Ou transferir apenas para outro cliente</label><select data-transfer-workspace><option value="">Escolha um cliente</option>'+data.workspaces.map(w=>'<option value="'+h(w.id)+'">'+h(w.client_name||w.company_name)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn" data-transfer-only disabled>Transferir para cliente</button></div></div>';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Biblioteca ZERO19</div><h2>Transferir arte</h2><p>'+h(asset.name)+'</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pendingRows.length?pendingRows.map((row,index)=>'<button class="z19-transfer-row" data-transfer-index="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>'+h(STAGE_LABELS[row.item.stage])+' · prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="field"><label>Ou transferir apenas para outro cliente</label><select data-transfer-workspace><option value="">Escolha um cliente</option>'+data.workspaces.filter(w=>w.workspace_type==='client').map(w=>'<option value="'+h(w.id)+'">'+h(w.client_name||w.company_name)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn" data-transfer-only disabled>Transferir para cliente</button></div></div>';
     document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
-    const only=modal.querySelector('[data-transfer-only]'),select=modal.querySelector('[data-transfer-workspace]');select.onchange=()=>only.disabled=!select.value;only.onclick=()=>transferAsset(asset,{workspace:data.workspaces.find(w=>w.id===select.value),project:null,item:null},modal);
+    const only=modal.querySelector('[data-transfer-only]'),select=modal.querySelector('[data-transfer-workspace]');select.onchange=()=>only.disabled=!select.value;only.onclick=()=>transferAsset(asset,{workspace:data.workspaces.find(w=>w.workspace_type==='client'&&w.id===select.value),project:null,item:null},modal);
     modal.querySelectorAll('[data-transfer-index]').forEach(b=>b.onclick=()=>{const row=pendingRows[Number(b.dataset.transferIndex)];transferAsset(asset,{workspace:row.summary.workspace,project:row.summary.project,item:row.item},modal)});
   }
   async function transferAsset(asset,target,modal){
@@ -301,8 +315,14 @@ export function createZero19PdvSync(ctx){
       original=await copyOne(asset.original_path,'original');processed=asset.processed_path&&asset.processed_path!==asset.original_path?await copyOne(asset.processed_path,'processed'):original;
       const row={id:newId,owner_id:owner,workspace_id:workspace.id,project_id:project?.id||null,folder_id:null,name:asset.name,asset_type:asset.asset_type||'arte',original_path:original,processed_path:processed,mime_type:asset.mime_type||'image/png',size_bytes:asset.size_bytes||null,width:asset.width||null,height:asset.height||null,dpi:asset.dpi||300,alpha_trimmed:Boolean(asset.alpha_trimmed),background_removed:Boolean(asset.background_removed),maximized:Boolean(asset.maximized),metadata:{...(asset.metadata||{}),transferred_from_asset_id:asset.id,transferred_from_library:'ZERO19'},created_by:state().session?.user?.id||owner,updated_by:state().session?.user?.id||owner};
       const {error}=await supabase.from('z19p_assets').insert(row);if(error)throw error;
-      if(project&&target.item){const linked=await supabase.rpc('z19p_zero19_mark_art_ready',{p_project_id:project.id,p_personalization_sale_id:target.item.personalization_sale_id,p_asset_id:newId});if(linked.error)throw linked.error}
-      invalidate();modal?.remove();toast(project?'Arte transferida e pedido liberado para produção.':'Arte transferida para o cliente.','ok');nav('/ambiente/'+encodeURIComponent(workspace.id));
+      if(project&&target.item){
+        if(target.item.without_application){
+          const imported={...row,id:newId};await ensureDtfProfile(target.item,imported);const linked=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:target.item.id,p_asset_id:newId});if(linked.error)throw linked.error;
+          invalidate();modal?.remove();toast('DTF transferido e liberado para Aguardando produção.','ok');nav('/ambiente/'+encodeURIComponent(workspace.id));return;
+        }
+        const imported={...row,id:newId};modal?.remove();invalidate();toast('Arte transferida. Confira medida e posição antes de liberar para produção.','ok');await offerAfterUpload?.([imported],{workspace,projects:[project],allowWithoutOrder:true});return;
+      }
+      invalidate();modal?.remove();toast('Arte transferida para o cliente.','ok');nav('/ambiente/'+encodeURIComponent(workspace.id));
     }catch(error){if(copied.length)await supabase.storage.from(bucket).remove(copied);toast(error.message||'Não foi possível transferir a arte.','err')}
   }
   function enhanceWorkspace(workspace,assets){

@@ -64,6 +64,7 @@ let artStudio = null;
 let officialOrders = null;
 let zero19Sync = null;
 let pendingQuickUploadWorkspaceId = null;
+let pendingQuickUploadMode = null;
 let productionCosts = null;
 let productionCostOwner = null;
 let projectAdvisor = null;
@@ -640,14 +641,14 @@ function openAssetActions(a){
   $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.code==='23503'?'Esta arte está vinculada a um filme salvo e deve ser preservada.':error.message,'err');const paths=[...new Set([a.original_path,a.processed_path].filter(Boolean))];if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)toast('Cadastro excluído; o arquivo foi preservado no armazenamento por falha na limpeza.','err')}m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
 }
 
-function openUploadModal({presetType='arte'}={}){
+function openUploadModal({presetType='arte',standaloneHalftone=false}={}){
   if(presetType==='arte'&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id)){
     toast('Este cliente ainda não possui pedido oficial. Ative “Permitir subir arte em cliente sem pedido” em Configurações para liberar temporariamente.','err');return;
   }
   uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. O nome original do arquivo não será usado como nome da arte.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div>${isMockupMode?'':`<div class="upload-required-bar"><div><b>Organização obrigatória</b><small>Antes de salvar cada arte, informe um nome claro e escolha uma pasta.</small></div><button class="btn small" id="uploadCreateFolder" type="button">${icon('plus')} Criar pasta</button></div>`}<div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Resolução automática para 300 DPI</b><span>Informe a medida física em cada arte. O sistema mantém o original e só amplia até os pixels realmente necessários.</span></div><strong>AUTO 300 DPI</strong></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
   const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#uploadCreateFolder',m)?.addEventListener('click',async()=>{try{const name=prompt('Nome da nova pasta:');if(!name?.trim())return;const projectId=currentWorkspace?.workspace_type==='client'?(currentProjects[0]?.id||null):null,folder={id:crypto.randomUUID(),owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:projectId,parent_id:null,name:name.trim(),sort_order:(currentFolders.length+1)*10,created_by:session.user.id,updated_by:session.user.id};const {error}=await supabase.from('z19p_folders').insert(folder);if(error)throw error;currentFolders=[...currentFolders,folder];for(const item of uploadQueue)if(item.type==='arte'&&!item.folderId)item.folderId=folder.id;renderUploadList(m,{lockedType:isMockupMode});toast('Pasta criada e selecionada.','ok')}catch(error){console.error(error);toast(error.message||'Não foi possível criar a pasta.','err')}});
-  function addFiles(files){for(const f of files)uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:false,widthCm:'',heightCm:'',preview:URL.createObjectURL(f)});renderUploadList(m,{lockedType:isMockupMode});setTimeout(()=>$('#uploadList input[data-k="name"]',m)?.focus(),0);}
+  function addFiles(files){for(const f of files)uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:false,widthCm:'',heightCm:'',standaloneHalftone:Boolean(standaloneHalftone),preview:URL.createObjectURL(f)});renderUploadList(m,{lockedType:isMockupMode});setTimeout(()=>$('#uploadList input[data-k="name"]',m)?.focus(),0);}
   $('#processUpload',m).onclick=()=>processQueue(m,{mockupMode:isMockupMode});
 }
 function renderUploadList(m,{lockedType=false}={}){
@@ -661,7 +662,7 @@ async function processQueue(m,{mockupMode=false}={}){
   if(uploadQueue.some(q=>q.type==='arte'&&!q.folderId))return toast('Escolha uma pasta para cada arte antes de salvar.','err');
   if(!mockupMode&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id))return toast('Este cliente ainda não possui pedido oficial. Libere temporariamente em Configurações ou sincronize o pedido.','err');
   const trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':'auto300',btn=$('#processUpload',m),prog=$('#progress',m),status=$('#progressText',m);
-  btn.disabled=true;prog.classList.remove('hidden');let done=0;const savedAssets=[],uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue];
+  btn.disabled=true;prog.classList.remove('hidden');let done=0;const savedAssets=[],placementAssets=[],uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue];
   const stage=text=>{if(status?.isConnected)status.textContent=text};
   for(const q of queue){
     try{
@@ -674,8 +675,13 @@ async function processQueue(m,{mockupMode=false}={}){
       stage(`${done+1}/${queue.length} · Enviando PNG final…`);
       up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
       stage(`${done+1}/${queue.length} · Salvando no cliente…`);
-      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:result.upscaled,metadata:{source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:result.targetPixels||null,requested_width_cm:Number(String(q.widthCm||'').replace(',','.'))||null,requested_height_cm:Number(String(q.heightCm||'').replace(',','.'))||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
-      const {data:savedAsset,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;savedAssets.push(savedAsset||assetRow);
+      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:result.upscaled,metadata:{source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:result.targetPixels||null,requested_width_cm:Number(String(q.widthCm||'').replace(',','.'))||null,requested_height_cm:Number(String(q.heightCm||'').replace(',','.'))||null,standalone_halftone_pending:Boolean(q.standaloneHalftone),standalone_halftone:Boolean(q.standaloneHalftone),upscaled:result.upscaled,processing_engine:result.engine||'native'}};
+      const {data:savedAsset,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;const finalAsset=savedAsset||assetRow;savedAssets.push(finalAsset);if(!q.standaloneHalftone)placementAssets.push(finalAsset);
+      if(q.standaloneHalftone){
+        const requestedWidth=Number(String(q.widthCm||'').replace(',','.'))||0,requestedHeight=Number(String(q.heightCm||'').replace(',','.'))||0,ratio=(result.width||1)/(result.height||1),profileWidth=requestedWidth||(requestedHeight>0?requestedHeight*ratio:0),profileHeight=requestedHeight||(requestedWidth>0?requestedWidth/ratio:0);
+        const profile={asset_id:assetId,owner_id:accountOwnerId(),project_id:null,default_width_cm:profileWidth||null,default_height_cm:profileHeight||null,aspect_ratio:ratio,halftone:true,allow_internal_nesting:false,rotation_policy:'none',ready_for_print:false,created_by:session.user.id,updated_by:session.user.id,updated_at:new Date().toISOString()};
+        const profileResult=await supabase.from('z19p_asset_print_profiles').upsert(profile,{onConflict:'asset_id'});if(profileResult.error)throw profileResult.error;
+      }
       done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
     }catch(err){
       console.error('upload artwork',err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');
@@ -688,9 +694,10 @@ async function processQueue(m,{mockupMode=false}={}){
   stage(`Concluído: ${done} de ${queue.length}. Abrindo tamanho e posição…`);
   uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));uploadQueue=[];m.remove();
   try{
-    if(savedAssets.length&&officialOrders&&uploadWorkspace?.id){
-      await officialOrders.offerAfterUpload(savedAssets,{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled});
+    if(placementAssets.length&&officialOrders&&uploadWorkspace?.id){
+      await officialOrders.offerAfterUpload(placementAssets,{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled});
     }
+    if(savedAssets.some(asset=>asset.metadata?.standalone_halftone_pending))toast('Halftone avulso salvo na Biblioteca ZERO19 e adicionado à fila de Halftone.','ok');
   }catch(error){
     console.error('placement after upload',error);toast((error.message||'Arte salva, mas não foi possível abrir tamanho e posição.')+' A arte continua salva no cliente.','err');
   }
@@ -1342,7 +1349,8 @@ officialOrders=createOfficialOrderWorkflow({
 zero19Sync=createZero19PdvSync({
   supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket:BUCKET,
   state:()=>({session,currentProfile,workspaces,currentProjects,currentWorkspace,currentAssets}),
-  startUploadForWorkspace:(workspaceId)=>{pendingQuickUploadWorkspaceId=workspaceId;nav('/ambiente/'+workspaceId)},
+  startUploadForWorkspace:(workspaceId)=>{pendingQuickUploadWorkspaceId=workspaceId;pendingQuickUploadMode='art';nav('/ambiente/'+workspaceId)},
+  startStandaloneHalftone:(workspaceId)=>{pendingQuickUploadWorkspaceId=workspaceId;pendingQuickUploadMode='halftone';nav('/ambiente/'+workspaceId)},
   offerAfterUpload:(assets,options)=>officialOrders?.offerAfterUpload?.(assets,options),
   queueTeamToFilm:(request)=>productionModule?.queueZero19TeamRequest?.(request),
   queueAssetToFilm:(request)=>productionModule?.queueZero19AssetRequest?.(request)
@@ -1389,7 +1397,7 @@ renderWorkspace=async function(id){
     const projectHtml=projects.length?projects.map(p=>{const date=p.official_order_synced_at?new Date(p.official_order_synced_at).toLocaleString('pt-BR'):'',status=p.official_order_status||'Sincronizado';return `<article class="client-project-row"><div><b>Pedido ${escapeHTML(p.official_order_ref)} · ${escapeHTML(p.title||'Pedido oficial')}</b><small>${date?escapeHTML(date)+' • ':''}${escapeHTML(status)}</small></div><span>Pedido oficial</span></article>`}).join(''):'<div class="empty mini">Nenhum pedido oficial sincronizado ainda.</div>';
     const warning=projects.length?'':`<div class="official-order-page-alert"><i></i><div><strong>Pendente de pedido oficial</strong><span>Este cliente ainda não recebeu um pedido sincronizado do outro sistema. Assim que o pedido oficial chegar, esta pendência desaparece automaticamente.</span></div></div>`;
     banner?.insertAdjacentHTML('afterend',warning+`<section class="client-projects-simple"><div class="section-title-row"><div><div class="eyebrow">Projetos</div><h2>Pedidos do cliente</h2><p>Somente pedidos oficiais sincronizados aparecem aqui.</p></div></div><div class="client-project-list">${projectHtml}</div></section>`);
-    if(pendingQuickUploadWorkspaceId===id){pendingQuickUploadWorkspaceId=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte'})},0);}
+    if(pendingQuickUploadWorkspaceId===id){const mode=pendingQuickUploadMode;pendingQuickUploadWorkspaceId=null;pendingQuickUploadMode=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte',standaloneHalftone:mode==='halftone'})},0);}
   }
   zero19Sync?.enhanceWorkspace?.(currentWorkspace,currentAssets,currentProjects);
   if(ticket)routeViewport.complete(ticket);
