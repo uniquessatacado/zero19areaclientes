@@ -65,7 +65,7 @@ if(!artStudio.includes('data-size="43" data-back-only')||!artStudio.includes('ct
 const filmTools=fs.readFileSync(path.join(root,'scripts/film-v2176-functions.txt'),'utf8');
 if(!filmTools.includes('data-clear-film'))throw new Error('Regressão: botão Limpar filme ausente.');
 const officialWorkflow=fs.readFileSync(path.join(temp,'official-order-workflow.js'),'utf8');
-if(!officialWorkflow.includes('z19p_asset_placements')||!officialWorkflow.includes('Aguardando produção')||!appSource.includes('Pendente de pedido oficial'))throw new Error('Regressão: fluxo de pedido oficial v2.17.17 ausente.');
+if(!officialWorkflow.includes('z19p_asset_placements')||!officialWorkflow.includes('openPendingProductionPicker')||!appSource.includes('Pendente de pedido oficial'))throw new Error('Regressão: fluxo de pedido oficial v2.17.17 ausente.');
 if(!fs.readFileSync(path.join(temp,'index.html'),'utf8').includes('z19-version" content="'+version+'"'))throw new Error('Versão de saída inválida.');
 if(path.resolve(output)!==path.resolve(root,'dist')||path.dirname(output)!==root||fs.existsSync(output)&&fs.lstatSync(output).isSymbolicLink())throw new Error('Diretório de saída inseguro.');
 // Keep the directory itself: Windows can hold it as the localhost server cwd.
