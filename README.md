@@ -6,9 +6,9 @@ Aplicação de atendimento, projetos, artes, orçamentos, filas de produção e 
 
 ## Produção e candidata
 
-Produção confirmada antes desta correção: **v2.17.13**. Candidata atual: **v2.17.14**.
+Produção confirmada antes desta correção: **v2.17.13**. Candidata atual: **v2.17.15**.
 
-A v2.17.14 altera somente o preflight de memória da exportação TIFF com Spot: na classe de 4 GB, quando o navegador está gravando diretamente no disco, o orçamento passa de 700 MB para 950 MB. Fallback em memória, limites de canvas, PNG, nesting, 300 DPI, Spot e demais fluxos permanecem inalterados.
+A v2.17.14 ajusta somente o preflight de memória da exportação TIFF com Spot. A v2.17.15 simplifica o fluxo de clientes: cadastro com cliente/empresa/WhatsApp/responsável, tela da empresa sem orçamento/pastas/status manual, projetos em lista simples e chave de Configurações para Montar camiseta/3D. “Ver tamanho na camisa” permanece disponível e ganha preset de 43 cm nas costas.
 
 ## Build e desenvolvimento local
 
@@ -19,7 +19,7 @@ npm run build
 python -m http.server 8080 --directory dist
 ```
 
-Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; o build atual produz o artefato compilado v2.17.14.
+Sirva `dist/`, não a raiz. O build aplica transformações verificadas à fonte estável anterior, valida o JavaScript e produz arquivos estáticos no mesmo domínio. Não existe loader remoto nem alteração de código em runtime. Se uma âncora do código de entrada mudar, o build para para revisão em vez de aplicar uma modificação às cegas. As fontes de entrada da raiz ainda identificam v2.17.5; o build atual produz o artefato compilado v2.17.15.
 
 ## Fontes da revisão
 
@@ -35,3 +35,14 @@ O restante do sistema permanece no mesmo Supabase/GitHub/Vercel. Nenhuma migrati
 Exportação PNG continua em arquivo único transparente 300 DPI. O TIFF CMYK + `Cor Spot 1` já está implementado; a v2.17.14 apenas amplia, de forma localizada, a margem segura para gravação direta em disco em computadores classificados pelo navegador como 4 GB.
 
 Commits devem conter `[skip bootstrap]` para impedir que o workflow histórico v2.12 tente reconstruir a fonte antiga.
+
+
+### v2.17.15 — simplificação
+
+- Cadastro: Nome do cliente obrigatório, empresa opcional, WhatsApp obrigatório e responsável obrigatório.
+- Novos clientes não criam orçamento, projeto ou pastas automaticamente.
+- Tela do cliente: Projetos/Pedidos + Artes; orçamento, pastas, histórico e status manual ficam ocultos, sem apagar código/dados.
+- Configurações: chave “Montar camiseta e 3D”, default desligada.
+- Desligado: Montar camiseta, Ver em 3D e Link 3D/cliente ficam ocultos; Ver tamanho na camisa continua disponível.
+- Provador: puxador de redimensionamento menor e preset 43 cm nas costas.
+- Migration necessária: `20260925004500_v21715_garment_feature_flag.sql`.
