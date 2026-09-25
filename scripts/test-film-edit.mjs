@@ -51,7 +51,7 @@ function harness(){
   const elements={'#filmPreview':{isConnected:true,innerHTML:''},'#filmMetrics':{innerHTML:''},'#filmItems':{innerHTML:''},'#exportFilm':{disabled:false},'#saveFilm':{disabled:false}};
   const app={querySelector:selector=>elements[selector]||null,querySelectorAll:selector=>selector==='.film-item-qty'?rows:[]};
   const factory=new Function('removeFilmEntry','ctx','app','initialItems','initialLayout','owner','mountFilmPreview','filmNestingItems','runNesting','saveFilmDraft',`
-    let filmItems=initialItems,lastFilm=initialLayout,filmCalculationGeneration=0,filmPreviewGeneration=0,productionAccountGeneration=0,filmDraftNote='';
+    let filmItems=initialItems,lastFilm=initialLayout,filmSettings={mediaId:null,mode:'maximum',gapMm:3,freeRotation:false,angleStep:30},filmCalculationGeneration=0,filmPreviewGeneration=0,productionAccountGeneration=0,filmDraftNote='';
     const filmCostPanel={invalidate(){},refresh(){}};
     ${editCode}
     return {draw:()=>drawFilm([]),remove:(id,copy)=>removeCurrentFilmEntry(id,[],copy),state:()=>({items:filmItems,layout:lastFilm}),clear(){filmCalculationGeneration++;filmPreviewGeneration++;lastFilm=null;filmItems=[];},changeSettings(){filmCalculationGeneration++;},accountReset(){productionAccountGeneration++;},replacePage(){app.querySelector('#filmPreview').isConnected=false;}};
