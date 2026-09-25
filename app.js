@@ -1193,9 +1193,10 @@ processQueue = async function(m,{mockupMode=false}={}){
       const officialProject=uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
       const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
 
-      await storageUploader.upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',onProgress:progress=>stage(`${done+1}/${queue.length} · Enviando original · ${progress.percent}%`)});
-      await storageUploader.upload(processedPath,result.blob,{contentType:'image/png',onProgress:progress=>stage(`${done+1}/${queue.length} · Enviando PNG final · ${progress.percent}%`)});
-      stage(`${done+1}/${queue.length} · Salvando no cliente…`);
+      const uploadBytes=q.file.size+result.blob.size,updateUploadProgress=(step,progress,baseBytes)=>{const totalPercent=Math.min(100,Math.round((baseBytes+Number(progress.loaded||0))/uploadBytes*100)),fileProgress=(done+totalPercent/100)/queue.length*100;stage(`${done+1}/${queue.length} · Etapa ${step}/2 · ${step===1?'Original':'PNG final'} ${progress.percent}% · Total ${totalPercent}%`);if(prog.firstElementChild)prog.firstElementChild.style.width=Math.min(100,fileProgress)+'%'};
+      await storageUploader.upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',onProgress:progress=>updateUploadProgress(1,progress,0)});
+      await storageUploader.upload(processedPath,result.blob,{contentType:'image/png',onProgress:progress=>updateUploadProgress(2,progress,q.file.size)});
+      stage(`${done+1}/${queue.length} · Etapa 2/2 concluída · Salvando no cliente…`);
       const {data:saved,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;
       savedAssets.push(saved||assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
     }catch(err){
@@ -1323,6 +1324,7 @@ renderPublic = async function(token){
 
 officialOrders=createOfficialOrderWorkflow({
   supabase,bucket:BUCKET,accountOwnerId,userId:()=>session?.user?.id,publicUrl,toast,
+  uploadFile:(path,blob,options)=>storageUploader.upload(path,blob,options),
   state:()=>({currentWorkspace,currentProjects,currentAssets,currentFolders,session}),
   onSaved:async()=>{if(currentWorkspace?.id)await renderWorkspace(currentWorkspace.id);}
 });
