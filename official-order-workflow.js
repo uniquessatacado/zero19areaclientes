@@ -299,14 +299,13 @@ export function createOfficialOrderWorkflow(ctx){
   async function offerAfterUpload(assets,{workspace=state().currentWorkspace,projects=state().currentProjects||[],allowWithoutOrder=true}={}){
     const official=projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||null;
     if(workspace?.workspace_type==='client'&&!official&&!allowWithoutOrder)throw new Error('Este cliente ainda não possui pedido oficial.');
-    const fallback=projects.find(p=>p.workspace_id===workspace?.id)||null,arts=(assets||[]).filter(a=>a?.asset_type==='arte');
+    const arts=(assets||[]).filter(a=>a?.asset_type==='arte');let manualGroup=null;
+    if(workspace?.workspace_type==='client'&&!official&&arts.length){
+      manualGroup=await chooseManualGroup(workspace);
+      if(!manualGroup)throw new Error('As artes foram salvas, mas a escolha do grupo de camisetas foi cancelada.');
+    }
     for(const asset of arts){
-      let manualGarment=null;
-      if(workspace?.workspace_type==='client'&&!official){
-        manualGarment=await chooseManualGarment(workspace);
-        if(!manualGarment)throw new Error('A arte foi salva, mas a escolha da camiseta foi cancelada.');
-      }
-      await new Promise((resolve,reject)=>{let finished=false;const finish=error=>{if(finished)return;finished=true;clearInterval(watch);error?reject(error):resolve()};const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop'))finish()},180);openPlacementWizard(asset,{workspace,project:official||fallback,manualGarment}).catch(finish)})
+      await new Promise((resolve,reject)=>{let finished=false;const finish=error=>{if(finished)return;finished=true;clearInterval(watch);error?reject(error):resolve()};const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop'))finish()},180);openPlacementWizard(asset,{workspace,project:official,manualGroup}).catch(finish)})
     }
   }
   async function pendingRows(){
@@ -336,5 +335,5 @@ export function createOfficialOrderWorkflow(ctx){
     const selected=new Set(selectedProjectIds||[]),groups=exportGroups(items).filter(g=>selected.has(g.projectId));if(!groups.length)return {projects:0,placements:0};
     const projectIds=groups.map(g=>g.projectId),placementIds=[...new Set(groups.flatMap(g=>g.placementIds))],{data,error}=await supabase.rpc('z19p_mark_official_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds});if(error)throw error;return data||{projects:0,placements:0};
   }
-  return {loadPositions,loadManualGarments,chooseManualGarment,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
+  return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
 }
