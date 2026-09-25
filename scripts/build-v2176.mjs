@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.23';
+const version='2.17.24';
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21715-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
@@ -48,7 +48,7 @@ for(const name of fs.readdirSync(temp).filter(name=>/\.(js|html)$/.test(name))){
 }
 production=fs.readFileSync(path.join(temp,'production-v217.js'),'utf8');
 const readme=path.join(temp,'README.md');fs.writeFileSync(readme,fs.readFileSync(readme,'utf8')+'\nBuild estático v'+version+': exclusão sem reorganizar, encaixe com comparação de rotação, prévias reutilizadas e TIFF CMYK + Spot local. Primeira impressão deve ser conferida no RIP.\n');
-for(const name of ['app.js','production-v217.js','lettering-layout-v2176.js','film-saved-drafts.js','film-preview.js','customization-preparer.js','nesting-core.js','film-edit-core.js','film-tiff-core.js','film-cmyk-converter.js','film-spot-export.js','film-spot-worker.js','network-read.js','asset-preview.js','asset-studio-actions.js','art-studio.js','official-order-workflow.js','storage-upload.js','manual-shirt-catalog.js'])execFileSync(process.execPath,['--check',name],{cwd:temp,stdio:'inherit'});
+for(const name of ['app.js','production-v217.js','lettering-layout-v2176.js','film-saved-drafts.js','film-preview.js','customization-preparer.js','nesting-core.js','film-edit-core.js','film-tiff-core.js','film-cmyk-converter.js','film-spot-export.js','film-spot-worker.js','network-read.js','asset-preview.js','asset-studio-actions.js','art-studio.js','official-order-workflow.js','storage-upload.js','manual-shirt-catalog.js','zero19-pdv-sync.js'])execFileSync(process.execPath,['--check',name],{cwd:temp,stdio:'inherit'});
 // Every deterministic Node test belongs in the release gate. The optional
 // private-image comparison is run locally, never copied into the public build.
 for(const name of ['validate-static.mjs',...fs.readdirSync(path.join(temp,'scripts')).filter(name=>/^test-.*\.mjs$/.test(name)&&name!=='test-spot-reference.mjs').sort()])execFileSync(process.execPath,['scripts/'+name],{cwd:temp,stdio:'inherit'});
