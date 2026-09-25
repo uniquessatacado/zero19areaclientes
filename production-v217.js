@@ -767,7 +767,7 @@ export function createProductionModule(ctx){
     detachProductionListener?.();detachProductionListener=null;
     productionAccountGeneration++;filmCalculationGeneration++;filmPreviewGeneration++;queueRequest++;
     clearTimeout(filmDraftTimer);filmDraftTimer=null;filmDraftDirty=false;filmDraftRestoring=null;filmDraftOwner=null;filmDraftUser=null;filmDraftStore=null;filmDraftLoaded=false;filmDraftSavedAt=null;filmDraftWarning='';filmDraftNote='';filmDraftSaving=false;filmDraftChange=0;filmDraftConflict=false;filmDraftLegacy=null;filmDraftLegacyActive=false;filmDraftWrite=null;
-    queueRows=[];queueSnapshot=null;launcherScope='mine';lastFilm=null;filmItems=[];filmSettings=freshFilmSettings();filmPickerMetaOwner=null;filmPickerMetaPromise=null;filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
+    queueRows=[];queueSnapshot=null;launcherScope='mine';lastFilm=null;filmItems=[];pendingZero19TeamRequest=null;pendingZero19AssetRequest=null;filmSettings=freshFilmSettings();filmPickerMetaOwner=null;filmPickerMetaPromise=null;filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
     if(typeof document!=='undefined'){for(const face of document.fonts||[])if(fontCoverageByFamily.has(face.family))document.fonts.delete(face);document.querySelector('[data-film-draft-confirm]')?.remove();}
     fontCache.clear();fontCoverageByFamily.clear();vectorMarkupCache.clear();
     if(typeof clearLetteringLayoutCache==='function')clearLetteringLayoutCache();
