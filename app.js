@@ -274,7 +274,7 @@ async function ensureDefaults(){
 async function ensureLibraries(){
   if(!session?.user?.id)return;
   const uid=session.user.id;
-  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);
+  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos','library_zero19']);
   if(error){console.error(error);return;}
   const byType=Object.fromEntries((data||[]).map(w=>[w.workspace_type,w]));
   const missing=[];
@@ -283,7 +283,7 @@ async function ensureLibraries(){
   if(missing.length){
     const {error:ie}=await supabase.from('z19p_workspaces').insert(missing);if(ie)console.error(ie);
   }
-  const {data:fresh}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);
+  const {data:fresh}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos','library_zero19']);
   libraryWorkspaces=Object.fromEntries((fresh||[]).map(w=>[w.workspace_type,w]));
 }
 async function loadConfig(){
@@ -895,7 +895,7 @@ ensureDefaults = async function(){
 };
 ensureLibraries = async function(){
   if(!session?.user?.id)return; const uid=accountOwnerId(),epoch=accountContextEpoch;
-  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);if(error)throw error;
+  const {data,error}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos','library_zero19']);if(error)throw error;
   if(epoch!==accountContextEpoch||uid!==accountOwnerId())return;
   const byType=Object.fromEntries((data||[]).map(w=>[w.workspace_type,w])),missing=[];
   if(!byType.library_artes)missing.push({owner_id:uid,company_name:'Artes',client_name:'Biblioteca interna de artes',notes:'Ambiente interno para organizar e transferir artes entre celular e computador.',share_enabled:false,client_can_download:false,workspace_type:'library_artes',created_by:session.user.id});
@@ -903,7 +903,7 @@ ensureLibraries = async function(){
   if(!byType.library_videos)missing.push({owner_id:uid,company_name:'Vídeos de demonstração',client_name:'Biblioteca interna de vídeos de qualidade',notes:'Ambiente interno para salvar vídeos de demonstração, baixar depois e compartilhar com clientes.',share_enabled:false,client_can_download:false,workspace_type:'library_videos',created_by:session.user.id});
   if(!missing.length){libraryWorkspaces=byType;return;}
   const inserted=await supabase.from('z19p_workspaces').insert(missing);if(inserted.error)throw inserted.error;
-  const {data:fresh,error:freshError}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos']);if(freshError)throw freshError;
+  const {data:fresh,error:freshError}=await supabase.from('z19p_workspaces').select('*').eq('owner_id',uid).in('workspace_type',['library_artes','library_mockups','library_videos','library_zero19']);if(freshError)throw freshError;
   if(epoch===accountContextEpoch&&uid===accountOwnerId())libraryWorkspaces=Object.fromEntries((fresh||[]).map(w=>[w.workspace_type,w]));
 };
 
@@ -1247,7 +1247,7 @@ artStudio=createArtStudio({supabase,publicUrl,setPngDpi,toast,logEvent,accountOw
 projectAdvisor=createProjectAdvisorUI({supabase,app,accountOwnerId,route,nav,toast,state:()=>({workspaces,currentWorkspace,currentProjects,currentAssets,currentFolders,currentQuotes,statuses,teamProfiles,session}),openQuote:()=>openQuoteModal(),editWorkspace:workspace=>openWorkspaceModal(workspace),openPrintProfile:asset=>productionModule.openPrintProfile(asset),askDeliveryDate:initial=>productionModule.askDeliveryDate(initial),renderWorkspace:id=>renderWorkspace(id)});
 
 const renderDashboardV216=renderDashboard;
-renderDashboard=async function(){const stillCurrent=accountReadGuard(true);const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderDashboardV216();if(!stillCurrent())return;const libraries=app.querySelector('.library-launcher');if(garmentStudioEnabled&&libraries&&!libraries.querySelector('[data-open-studio]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card studio-launch-card" data-open-studio><span class="library-symbol">◈</span><span><b>Estúdio de mockups</b><small>Comece pela camiseta. Monte frente, costas e mangas.</small></span><i>→</i></button>');libraries.querySelector('[data-open-studio]').onclick=()=>nav('/studio')}await productionModule.enhanceDashboard();if(!stillCurrent())return;await projectAdvisor.refreshDashboard();if(!stillCurrent())return;if(ticket)routeViewport.complete(ticket);};
+renderDashboard=async function(){const stillCurrent=accountReadGuard(true);const ticket=!renderingRoute?routeViewport.begin(route()):null;await renderDashboardV216();if(!stillCurrent())return;const libraries=app.querySelector('.library-launcher'),zero19=libraryWorkspaces.library_zero19;if(zero19&&libraries&&!libraries.querySelector('[data-open-zero19]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card zero19-library-card" data-open-zero19><span class="library-symbol">019</span><span><b>ZERO19</b><small>Biblioteca própria de artes. Não é um cliente.</small></span><i>→</i></button>');libraries.querySelector('[data-open-zero19]').onclick=()=>nav(`/ambiente/${zero19.id}`)}if(garmentStudioEnabled&&libraries&&!libraries.querySelector('[data-open-studio]')){libraries.insertAdjacentHTML('afterbegin','<button class="library-card studio-launch-card" data-open-studio><span class="library-symbol">◈</span><span><b>Estúdio de mockups</b><small>Comece pela camiseta. Monte frente, costas e mangas.</small></span><i>→</i></button>');libraries.querySelector('[data-open-studio]').onclick=()=>nav('/studio')}await productionModule.enhanceDashboard();if(!stillCurrent())return;await projectAdvisor.refreshDashboard();if(!stillCurrent())return;if(ticket)routeViewport.complete(ticket);};
 
 const renderWorkspaceV216=renderWorkspace;
 renderWorkspace=async function(id){
