@@ -82,9 +82,10 @@ export async function fetchQueueRecords(supabase,ownerId,pageSize=500){
       if((data||[]).length<pageSize)return rows;
     }
   };
-  const [projects,quotes]=await Promise.all([
-    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,service_type,source_kind,company_order_id,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id'),
+  const [projectRows,quotes]=await Promise.all([
+    fetchTable('z19p_projects','id,workspace_id,sequence_no,title,status_id,service_type,official_order_ref,official_order_source,official_order_status,delivery_date,status_entered_at,started_at,finalized_at,desisted_at,responsible_user_id,created_at'),
     fetchTable('z19p_quotes','id,workspace_id,project_id,title,service_type,payment_status,paid_at,delivery_date,created_at,updated_at')
   ]);
+  const projects=projectRows.map(project=>({...project,source_kind:project.source_kind||'internal',company_order_id:project.company_order_id||null}));
   return {projects,quotes};
 }
