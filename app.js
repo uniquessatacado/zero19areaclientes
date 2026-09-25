@@ -703,14 +703,14 @@ async function processImage(file,{trim,targetMax=0,onStage=()=>{}}={}){
     const scale=targetMax/Math.max(workingWidth,workingHeight),w=Math.max(1,Math.round(workingWidth*scale)),h=Math.max(1,Math.round(workingHeight*scale)),touchDevice=(navigator.maxTouchPoints||0)>1||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||'');
     outputWidth=w;outputHeight=h;onStage(`Ajustando qualidade para ${Math.max(w,h)} px…`);
     out=document.createElement('canvas');out.width=w;out.height=h;
-    const nativeResize=touchDevice||targetMax>=6000||(workingWidth*workingHeight)>12000000;
+    const nativeResize=touchDevice;
     if(nativeResize){
-      const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine=touchDevice?'native-mobile':'native-large';
+      const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-mobile';
     }else{
       try{
         await Promise.race([
           pica.resize(source,out,{quality:3,alpha:true,unsharpAmount:50,unsharpRadius:.55,unsharpThreshold:2}),
-          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Redimensionamento demorou demais.')),15000))
+          new Promise((_,reject)=>setTimeout(()=>reject(new Error('Redimensionamento demorou demais.')),30000))
         ]);
         engine='pica';
       }catch(error){
@@ -1193,10 +1193,13 @@ processQueue = async function(m,{mockupMode=false}={}){
       const officialProject=uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
       const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
 
-      const uploadBytes=q.file.size+result.blob.size,updateUploadProgress=(step,progress,baseBytes)=>{const totalPercent=Math.min(100,Math.round((baseBytes+Number(progress.loaded||0))/uploadBytes*100)),fileProgress=(done+totalPercent/100)/queue.length*100;stage(`${done+1}/${queue.length} · Etapa ${step}/2 · ${step===1?'Original':'PNG final'} ${progress.percent}% · Total ${totalPercent}%`);if(prog.firstElementChild)prog.firstElementChild.style.width=Math.min(100,fileProgress)+'%'};
-      await storageUploader.upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',onProgress:progress=>updateUploadProgress(1,progress,0)});
-      await storageUploader.upload(processedPath,result.blob,{contentType:'image/png',onProgress:progress=>updateUploadProgress(2,progress,q.file.size)});
-      stage(`${done+1}/${queue.length} · Etapa 2/2 concluída · Salvando no cliente…`);
+      const uploadBytes=q.file.size+result.blob.size,uploadState={original:0,processed:0};
+      const updateUploadProgress=(kind,progress)=>{uploadState[kind]=Math.min(kind==='original'?q.file.size:result.blob.size,Number(progress.loaded||0));const totalPercent=Math.min(100,Math.round((uploadState.original+uploadState.processed)/uploadBytes*100)),originalPercent=Math.round(uploadState.original/q.file.size*100),processedPercent=Math.round(uploadState.processed/result.blob.size*100),fileProgress=(done+totalPercent/100)/queue.length*100;stage(`${done+1}/${queue.length} · Original ${originalPercent}% · PNG final ${processedPercent}% · Total ${totalPercent}%`);if(prog.firstElementChild)prog.firstElementChild.style.width=Math.min(100,fileProgress)+'%'};
+      await Promise.all([
+        storageUploader.upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',onProgress:progress=>updateUploadProgress('original',progress)}),
+        storageUploader.upload(processedPath,result.blob,{contentType:'image/png',onProgress:progress=>updateUploadProgress('processed',progress)})
+      ]);
+      stage(`${done+1}/${queue.length} · Uploads concluídos · Salvando no cliente…`);
       const {data:saved,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;
       savedAssets.push(saved||assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
     }catch(err){
