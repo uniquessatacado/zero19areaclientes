@@ -24,7 +24,7 @@ assert.match(actions,/artwork&&typeof handlers\.openMockup==='function'&&\['mock
 assert.match(studio,/data-size="43" data-back-only hidden/);
 assert.match(studio,/backOnly\.hidden=state\.side!=='back'/);
 assert.match(studio,/ctx\.isGarmentStudioEnabled\?\.\(\)/);
-assert.match(css,/\.shirt-resize\{[^}]*width:20px[^}]*background:#151519e8/);
+assert.match(css,/\.shirt-resize\{[^}]*bottom:-18px[^}]*right:-18px[^}]*width:16px[^}]*background:#151519e8/);
 assert.match(styles,/v2\.17\.15 — fluxo de clientes simplificado/);
 
 console.log('v2.17.15 UI: cadastro limpo, workspace simples, feature flag, provador e 43cm costas OK');
