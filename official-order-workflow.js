@@ -75,7 +75,11 @@ function positionFits(model,surface,width,height,position){
 }
 function safePosition(model,surface,width,height,position){
   const m=surfaceMetrics(model,surface),margin=surface.includes('sleeve')?.035:.025,halfW=Math.min(.49,width/m.width/2),halfH=Math.min(.49,height/m.length/2);
-  return {...position,anchor_x:Math.max(margin+halfW,Math.min(1-margin-halfW,Number(position.anchor_x))),anchor_y:Math.max(margin+halfH,Math.min(1-margin-halfH,Number(position.anchor_y)))};
+  // The front printable area starts below the collar. "Frente · em cima" must
+  // never allow the art to climb over the lower edge of the neck opening.
+  const collarFloor=surface==='front'?(model==='oversized'?.11:.12):margin;
+  const minY=Math.max(margin,collarFloor)+halfH,maxY=1-margin-halfH;
+  return {...position,anchor_x:Math.max(margin+halfW,Math.min(1-margin-halfW,Number(position.anchor_x))),anchor_y:Math.min(maxY,Math.max(minY,Number(position.anchor_y)))};
 }
 function surfaceBox(surface){
   if(surface==='left_sleeve')return {x:.055,y:.195,w:.205,h:.285};
@@ -252,11 +256,17 @@ export function createOfficialOrderWorkflow(ctx){
     if(!asset||!workspace)return null;
     const positions=await loadPositions(),projects=(state().currentProjects||[]).filter(p=>p.workspace_id===workspace.id),official=project&&project.official_order_ref?project:projects.find(p=>p.official_order_ref)||null,products=productCards(official),groupPieces=(manualGroup?.garments||[]).filter(Boolean),firstPiece=groupPieces[0]||null;
     const modal=document.createElement('div');modal.className='official-placement-backdrop';
-    let selectedProduct=products[0]||null,model=firstPiece?.garment_model||modelFrom(selectedProduct||{}),color=firstPiece?.color||colorFrom(selectedProduct||{}),size=firstPiece?.size||selectedProduct?.size||'',category=firstPiece?.category||selectedProduct?.category||'',surface='front',position=null,ratio=(asset.width&&asset.height?asset.width/asset.height:1),widthCm=9,heightCm=9/ratio,busy=false,saveText='';
+    const pdvMeta=asset.metadata||{},pdvPosition=positions.find(p=>p.code===String(pdvMeta.pdv_position_code||''))||null;
+    const ratio=(asset.width&&asset.height?asset.width/asset.height:1);
+    let initialWidth=Number(pdvMeta.pdv_width_cm)||0,initialHeight=Number(pdvMeta.pdv_height_cm)||0;
+    if(initialWidth>0&&!(initialHeight>0)&&ratio>0)initialHeight=initialWidth/ratio;
+    if(initialHeight>0&&!(initialWidth>0)&&ratio>0)initialWidth=initialHeight*ratio;
+    if(!(initialWidth>0)){initialWidth=9;initialHeight=9/ratio}
+    let selectedProduct=products[0]||null,model=firstPiece?.garment_model||modelFrom(selectedProduct||{}),color=firstPiece?.color||colorFrom(selectedProduct||{}),size=firstPiece?.size||selectedProduct?.size||'',category=firstPiece?.category||selectedProduct?.category||'',surface=pdvPosition?.surface||'front',position=null,widthCm=initialWidth,heightCm=initialHeight,busy=false,saveText='';
     const targetModels=()=>groupPieces.length?groupPieces.map(piece=>piece.garment_model==='oversized'?'oversized':'normal'):[model==='oversized'?'oversized':'normal'];
     const surfaceFits=s=>targetModels().every(value=>fits(value,s,widthCm,heightCm));
     const positionFitsAll=p=>targetModels().every(value=>positionFits(value,surface,widthCm,heightCm,p));
-    const chooseDefault=()=>{const available=positions.filter(p=>p.surface===surface&&positionFitsAll(p));position=available[0]||null};chooseDefault();
+    const chooseDefault=()=>{const available=positions.filter(p=>p.surface===surface&&positionFitsAll(p));position=(pdvPosition&&available.some(p=>p.id===pdvPosition.id)?pdvPosition:null)||available[0]||null};chooseDefault();
     const previewPiece=()=>firstPiece||{garment_model:model,color,color_name:colorInfo(color).label,color_hex:colorInfo(color).hex,size,category,product_name:selectedProduct?.name||'Camiseta',name:selectedProduct?.name||'Camiseta'};
     const draw=()=>{
       const availableSurfaces=['front','back','left_sleeve','right_sleeve'].filter(surfaceFits),surfacePositions=positions.filter(p=>p.surface===surface&&positionFitsAll(p));
