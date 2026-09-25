@@ -20,7 +20,10 @@ assert.match(app,/openSettingsModal = async function/);
 const lastBind=app.lastIndexOf('bindWorkspaceCards = function(){');
 const lastBindEnd=app.indexOf('};',lastBind)+2;
 assert.ok(lastBind>=0&&!app.slice(lastBind,lastBindEnd).includes('card-status-select'),'implementação final dos cards não pode permitir status manual');
-assert.ok(!app.includes("toast(existing?'Empresa salva.':'Empresa criada com as pastas padrão.'"),'novo fluxo não deve recriar pastas por padrão');
+const finalWorkspaceModalStart=app.lastIndexOf('openWorkspaceModal = function(existing=null){');
+const finalWorkspaceModalEnd=app.indexOf('\n};',finalWorkspaceModalStart)+3;
+const finalWorkspaceModal=app.slice(finalWorkspaceModalStart,finalWorkspaceModalEnd);
+assert.ok(finalWorkspaceModalStart>=0&&!finalWorkspaceModal.includes('createDefaultFoldersForWorkspace'),'novo fluxo não deve recriar pastas por padrão');
 
 assert.match(actions,/garmentEnabled=handlers\.garmentEnabled!==false/);
 assert.match(production,/garmentEnabled:ctx\.isGarmentStudioEnabled\?\.\(\)===true/);
