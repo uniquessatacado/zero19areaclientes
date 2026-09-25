@@ -117,6 +117,62 @@ export function createOfficialOrderWorkflow(ctx){
   function productCards(project){
     return officialOrderItems(project);
   }
+  async function loadManualGarments(workspaceId){
+    if(!workspaceId)return [];
+    const {data,error}=await supabase.from('z19p_manual_garments').select('*').eq('owner_id',owner()).eq('workspace_id',workspaceId).eq('active',true).order('created_at',{ascending:false});
+    if(error)throw error;return data||[];
+  }
+  function manualModelOptions(category){
+    if(category==='infantil')return ['kids'];
+    if(category==='feminina')return ['babylook','normal','oversized'];
+    return ['normal','oversized'];
+  }
+  function manualSizeOptions(category){
+    return category==='infantil'?['2','4','6','8','10','12','14','16']:['PP','P','M','G','GG','G1','G2','G3','G4','G5'];
+  }
+  async function createManualGarment(workspace){
+    const modal=document.createElement('div');modal.className='manual-garment-backdrop';
+    let step=0,category='masculina',model='normal',size='M',color='black',busy=false;
+    const steps=['Categoria','Modelagem','Tamanho','Cor'];
+    return new Promise(resolve=>{
+      const close=value=>{modal.remove();resolve(value||null)};
+      const save=async()=>{if(busy)return;busy=true;draw();try{
+        const colorData=colorInfo(color),name=[category==='masculina'?'Masculina':category==='feminina'?'Feminina':'Infantil',GARMENT_MODELS[model]?.label||model,size,colorData.label].join(' · ');
+        const row={owner_id:owner(),workspace_id:workspace.id,project_id:null,name,category,garment_model:model,size,color,color_name:colorData.label,created_by:user(),updated_by:user()};
+        const {data,error}=await supabase.from('z19p_manual_garments').insert(row).select().single();if(error)throw error;close(data);
+      }catch(error){busy=false;draw();ctx.toast(error.message||'Não foi possível criar a camiseta.','err')}};
+      const draw=()=>{
+        const progress=steps.map((label,index)=>'<span class="'+(index===step?'active':index<step?'done':'')+'">'+(index+1)+'<small>'+label+'</small></span>').join('');
+        let body='';
+        if(step===0)body='<div class="manual-choice-grid"><button data-category="masculina" class="'+(category==='masculina'?'active':'')+'"><b>Masculina</b><small>Camiseta adulto</small></button><button data-category="feminina" class="'+(category==='feminina'?'active':'')+'"><b>Feminina</b><small>Baby Look ou camiseta feminina</small></button><button data-category="infantil" class="'+(category==='infantil'?'active':'')+'"><b>Infantil</b><small>Camiseta infantil</small></button></div>';
+        if(step===1)body='<div class="manual-choice-grid">'+manualModelOptions(category).map(id=>'<button data-model="'+id+'" class="'+(model===id?'active':'')+'"><b>'+esc(GARMENT_MODELS[id]?.label||id)+'</b><small>Modelagem da peça</small></button>').join('')+'</div>';
+        if(step===2)body='<div class="manual-size-grid">'+manualSizeOptions(category).map(value=>'<button data-size="'+value+'" class="'+(size===value?'active':'')+'">'+esc(value)+'</button>').join('')+'</div>';
+        if(step===3)body='<div class="manual-color-grid">'+GARMENT_COLORS.map(item=>'<button data-color="'+item.id+'" class="'+(color===item.id?'active':'')+'"><i style="background:'+esc(item.hex)+'"></i><b>'+esc(item.label)+'</b></button>').join('')+'</div>';
+        modal.innerHTML='<section class="manual-garment-page"><header><div><div class="eyebrow">CAMISETA SEM PEDIDO</div><h2>Criar camiseta manual</h2><p>'+esc(workspace.client_name||workspace.company_name||'Cliente')+' · etapa '+(step+1)+' de 4</p></div><button class="btn ghost" data-close>Cancelar</button></header><div class="manual-stepper">'+progress+'</div><main><h3>'+steps[step]+'</h3>'+body+'</main><footer><button class="btn" data-back '+(step===0?'disabled':'')+'>Voltar</button><div class="manual-garment-summary"><b>'+esc([category,GARMENT_MODELS[model]?.label,size,colorInfo(color).label].filter(Boolean).join(' · '))+'</b></div><button class="btn primary" data-next '+(busy?'disabled':'')+'>'+(busy?'Salvando…':step===3?'Criar camiseta':'Continuar')+'</button></footer></section>';
+        modal.querySelector('[data-close]').onclick=()=>close(null);
+        modal.querySelector('[data-back]').onclick=()=>{if(step>0){step--;draw()}};
+        modal.querySelector('[data-next]').onclick=()=>step===3?save():(step++,draw());
+        modal.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{category=b.dataset.category;model=manualModelOptions(category)[0];size=manualSizeOptions(category)[0];draw()});
+        modal.querySelectorAll('[data-model]').forEach(b=>b.onclick=()=>{model=b.dataset.model;draw()});
+        modal.querySelectorAll('[data-size]').forEach(b=>b.onclick=()=>{size=b.dataset.size;draw()});
+        modal.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{color=b.dataset.color;draw()});
+      };
+      document.body.appendChild(modal);draw();
+    });
+  }
+  async function chooseManualGarment(workspace){
+    const garments=await loadManualGarments(workspace.id);
+    if(!garments.length)return createManualGarment(workspace);
+    const modal=document.createElement('div');modal.className='manual-garment-backdrop';
+    return new Promise(resolve=>{
+      const close=value=>{modal.remove();resolve(value||null)};
+      modal.innerHTML='<section class="manual-garment-page choose-existing"><header><div><div class="eyebrow">CAMISETA SEM PEDIDO</div><h2>Qual camiseta vai receber esta arte?</h2><p>Use a mesma camiseta já criada ou cadastre uma nova.</p></div><button class="btn ghost" data-close>Cancelar</button></header><main><div class="manual-existing-grid">'+garments.map(g=>'<button data-garment="'+g.id+'"><div class="manual-garment-thumb"><img src="'+mockupSvg(g.garment_model,g.color,'front')+'" alt=""></div><span><b>'+esc(g.name)+'</b><small>'+esc([g.category,g.size,g.color_name].filter(Boolean).join(' · '))+'</small></span></button>').join('')+'<button class="create-new" data-new><div class="manual-garment-plus">＋</div><span><b>Criar nova camiseta</b><small>Outra peça para este cliente</small></span></button></div></main></section>';
+      modal.querySelector('[data-close]').onclick=()=>close(null);
+      modal.querySelectorAll('[data-garment]').forEach(b=>b.onclick=()=>close(garments.find(g=>g.id===b.dataset.garment)));
+      modal.querySelector('[data-new]').onclick=async()=>{modal.remove();resolve(await createManualGarment(workspace))};
+      document.body.appendChild(modal);
+    });
+  }
   async function generateMockup(asset,choice,position,widthCm,heightCm){
     const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=1493;const g=canvas.getContext('2d');if(!g)throw new Error('Seu navegador não conseguiu gerar o mockup.');
     const [base,art]=await Promise.all([loadImage(mockupSvg(choice.model,choice.color,choice.surface)),loadImage(ctx.publicUrl(asset.processed_path||asset.original_path))]);
