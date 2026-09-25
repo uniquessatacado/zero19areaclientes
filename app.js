@@ -696,10 +696,10 @@ async function processImage(file,{trim,targetMax=0,onStage=()=>{}}={}){
   onStage('Lendo imagem…');
   const bmp=await createImageBitmap(file);let source=document.createElement('canvas');source.width=bmp.width;source.height=bmp.height;const sourceCtx=source.getContext('2d',{willReadFrequently:true,alpha:true});if(!sourceCtx){bmp.close?.();throw new Error('Não foi possível preparar a imagem neste aparelho.')}sourceCtx.drawImage(bmp,0,0);const sourceWidth=bmp.width,sourceHeight=bmp.height;bmp.close?.();
   if(trim){onStage('Removendo prancheta transparente…');source=trimTransparentSafe(source);}
-  let out=source,upscaled=false,engine='original';
-  if(targetMax>0&&Math.max(source.width,source.height)<targetMax){
-    const scale=targetMax/Math.max(source.width,source.height),w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale)),touchDevice=(navigator.maxTouchPoints||0)>1||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||'');
-    onStage(`Ajustando qualidade para ${Math.max(w,h)} px…`);
+  const workingWidth=source.width,workingHeight=source.height;let out=source,upscaled=false,engine='original',outputWidth=workingWidth,outputHeight=workingHeight;
+  if(targetMax>0&&Math.max(workingWidth,workingHeight)<targetMax){
+    const scale=targetMax/Math.max(workingWidth,workingHeight),w=Math.max(1,Math.round(workingWidth*scale)),h=Math.max(1,Math.round(workingHeight*scale)),touchDevice=(navigator.maxTouchPoints||0)>1||/iPhone|iPad|iPod|Android/i.test(navigator.userAgent||'');
+    outputWidth=w;outputHeight=h;onStage(`Ajustando qualidade para ${Math.max(w,h)} px…`);
     out=document.createElement('canvas');out.width=w;out.height=h;
     if(touchDevice){
       const g=out.getContext('2d',{alpha:true});if(!g)throw new Error('Memória insuficiente para ampliar esta imagem.');g.imageSmoothingEnabled=true;g.imageSmoothingQuality='high';g.drawImage(source,0,0,w,h);engine='native-mobile';
@@ -713,7 +713,7 @@ async function processImage(file,{trim,targetMax=0,onStage=()=>{}}={}){
   const raw=await new Promise((resolve,reject)=>out.toBlob(b=>b?resolve(b):reject(new Error('O navegador não conseguiu finalizar o PNG. Tente “Original — sem ampliar” para este arquivo.')),'image/png',1));
   const blob=await setPngDpi(raw,300);
   if(out!==source){out.width=out.height=1}source.width=source.height=1;
-  return{blob,width:upscaled?Math.round(sourceWidth*(targetMax/Math.max(sourceWidth,sourceHeight))):sourceWidth,height:upscaled?Math.round(sourceHeight*(targetMax/Math.max(sourceWidth,sourceHeight))):sourceHeight,sourceWidth,sourceHeight,upscaled,engine};
+  return{blob,width:outputWidth,height:outputHeight,sourceWidth,sourceHeight,upscaled,engine};
 }
 
 function trimTransparentSafe(canvas){
