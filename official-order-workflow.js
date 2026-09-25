@@ -174,8 +174,13 @@ export function createOfficialOrderWorkflow(ctx){
     modal.querySelector('[data-close]').onclick=()=>modal.remove();modal.onkeydown=e=>{if(e.key==='Escape')modal.remove()};document.body.appendChild(modal);modal.querySelector('[data-close]').focus();return true;
   }
 
-  async function offerAfterUpload(assets,{workspace=state().currentWorkspace,projects=state().currentProjects||[]}={}){
-    const arts=(assets||[]).filter(a=>a?.asset_type==='arte');for(const asset of arts){await new Promise(resolve=>{let finished=false;const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop')){clearInterval(watch);if(!finished){finished=true;resolve()}}},180);openPlacementWizard(asset,{workspace,project:projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||projects.find(p=>p.workspace_id===workspace?.id)}).catch(()=>{clearInterval(watch);resolve()})})}
+  async function offerAfterUpload(assets,{workspace=state().currentWorkspace,projects=state().currentProjects||[],allowWithoutOrder=true}={}){
+    const official=projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||null;
+    if(workspace?.workspace_type==='client'&&!official&&!allowWithoutOrder)throw new Error('Este cliente ainda não possui pedido oficial.');
+    const fallback=projects.find(p=>p.workspace_id===workspace?.id)||null,arts=(assets||[]).filter(a=>a?.asset_type==='arte');
+    for(const asset of arts){
+      await new Promise((resolve,reject)=>{let finished=false;const finish=error=>{if(finished)return;finished=true;clearInterval(watch);error?reject(error):resolve()};const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop'))finish()},180);openPlacementWizard(asset,{workspace,project:official||fallback}).catch(finish)})
+    }
   }
   async function pendingRows(){
     const account=owner();if(!account)return [];
