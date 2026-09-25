@@ -23,6 +23,6 @@ group=attachAssetStudioActions(card,asset,{openGarment(){throw Error('Fixture fa
 assert.equal(attachAssetStudioActions(card,asset,{}),null,'no dead controls');
 const source=await readFile(new URL('../app.js',import.meta.url),'utf8'),finalBinder=source.slice(source.lastIndexOf('bindAssetCards = function(){')).split('\n};')[0];
 assert.ok(finalBinder.includes('bindStudioAssetCards();'),'final overridden binder retains studio controls');assert.ok(finalBinder.includes('productionModule?.enhanceAssetCards?.();'));
-assert.ok(source.includes("if(session&&current==='/studio')return renderStudioHome"));assert.ok(source.includes('data-nav="/studio">Estúdio de mockups'));assert.ok(source.includes('data-nav="/studio"><i>M</i><span>Estúdio'));
+assert.ok(source.includes("if(session&&current==='/studio'){if(!garmentStudioEnabled)"),'studio route must honor the feature flag');assert.ok(source.includes("return renderStudioHome({app,shell,bindCommon,artStudio,publicUrl,toast});}"),'enabled studio route must still open the mockup studio');assert.ok(source.includes('data-nav="/studio">Estúdio de mockups'));assert.ok(source.includes('data-nav="/studio"><i>M</i><span>Estúdio'));
 assert.ok(source.includes("attachAssetStudioActions($('.preview-controls',m)"));assert.ok(source.includes("attachAssetStudioActions($('.file-actions',m)"));
 console.log('Studio access: visible real actions, filtering idempotence, error recovery, no fake3D/photo controls, final binder, preview/menu/mobile routing passed.');
