@@ -49,7 +49,7 @@ export function filmItemFromSelection(entry, selection = {}) {
 }
 
 /** Opens a local selection draft. Nothing is added or persisted until onAdd succeeds. */
-export function openFilmAssetPicker({profiles = [], assetMap = new Map(), workspaces = [], projects = [], folders = [], publicUrl = path => path, onAdd, onGarment, onMockup, onEdit, toast} = {}) {
+export function openFilmAssetPicker({profiles = [], assetMap = new Map(), workspaces = [], projects = [], folders = [], publicUrl = path => path, previewUrl = null, onAdd, onGarment, onMockup, onEdit, toast} = {}) {
   const catalogue = buildFilmAssetCatalogue({profiles, assetMap, workspaces, projects, folders});
   const entries = new Map(catalogue.map(entry => [entry.id, entry]));
   const companies = new Map();
@@ -81,7 +81,8 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   const dialog = root.querySelector('.film-picker');
   const find = selector => root.querySelector(selector);
   const report = message => { find('.fp-status').textContent = message; };
-  const imageURL = entry => { try { return publicUrl(assetPreviewPath(entry.asset) || entry.path) || ''; } catch { return ''; } };
+  const imageURL = entry => { try { const path=assetPreviewPath(entry.asset)||entry.path;return (previewUrl?.(path,entry.asset)||publicUrl(path))||''; } catch { return ''; } };
+  const imageFallbackURL = entry => { try { return publicUrl(assetPreviewPath(entry.asset)||entry.path)||''; } catch { return ''; } };
   const visibleEntries = () => catalogue.filter(entry => (activeCompany === 'all' || entry.workspaceId === activeCompany) && (!artQuery || entry.search.includes(artQuery)));
   const defaults = entry => ({widthCm:entry.widthCm, heightCm:entry.heightCm, quantity:1});
   const focusAction = (action,id) => [...root.querySelectorAll('[data-action]')].find(button => button.dataset.action === action && (!id || button.dataset.id === id))?.focus({preventScroll:true});
@@ -128,7 +129,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   }
   function imageHTML(entry, small = false) {
     const url = imageURL(entry);
-    return `<div class="fp-image ${small?'fp-image-small':''} ${url?'is-loading':'is-error'}"><span class="fp-image-placeholder">${icons.image}<span>${url?'Carregando arte…':'Prévia indisponível'}</span></span>${url?`<img src="${escapeHTML(url)}" alt="${escapeHTML(entry.asset.name || 'Arte')}" loading="${small?'eager':'lazy'}" fetchpriority="${small?'high':'auto'}" decoding="async">`:''}</div>`;
+    const fallback=imageFallbackURL(entry);return `<div class="fp-image ${small?'fp-image-small':''} ${url?'is-loading':'is-error'}"><span class="fp-image-placeholder">${icons.image}<span>${url?'Carregando arte…':'Prévia indisponível'}</span></span>${url?`<img src="${escapeHTML(url)}" data-fallback-src="${escapeHTML(fallback)}" alt="${escapeHTML(entry.asset.name || 'Arte')}" loading="${small?'eager':'lazy'}" fetchpriority="${small?'high':'auto'}" decoding="async">`:''}</div>`;
   }
   function watchImages(scope) {
     scope.querySelectorAll('.fp-image img').forEach(img => {
@@ -139,7 +140,7 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
         if (failed) img.parentElement.querySelector('.fp-image-placeholder span').textContent = 'Prévia indisponível';
       };
       img.onload = settle;
-      img.onerror = settle;
+      img.onerror = () => {const fallback=img.dataset.fallbackSrc;if(fallback&&img.src!==fallback&&!img.dataset.fallbackUsed){img.dataset.fallbackUsed='1';img.src=fallback;return}settle()};
       if (img.complete) settle();
     });
   }
