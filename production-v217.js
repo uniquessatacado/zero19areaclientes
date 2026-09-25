@@ -37,7 +37,7 @@ export function createProductionModule(ctx){
   let filmSettings={mediaId:null,mode:'maximum',gapMm:3,freeRotation:false,angleStep:30};
   let filmPreviewGeneration=0,filmCostPanel=null;
   let detachProductionListener=null;
-  const fontCache=new Map(),fontCoverageByFamily=new Map();
+  const fontCache=new Map(),fontCoverageByFamily=new Map(),vectorMarkupCache=new Map();
   let fontFaceSequence=0,productionAccountGeneration=0;
   const state=()=>ctx.state();
   const h=ctx.escapeHTML;
@@ -80,6 +80,36 @@ export function createProductionModule(ctx){
     doc.querySelectorAll('script,foreignObject,iframe,object,embed').forEach(node=>node.remove());
     doc.querySelectorAll('*').forEach(node=>[...node.attributes].forEach(attr=>{const name=attr.name.toLowerCase(),value=attr.value.trim();if(name.startsWith('on')||((name==='href'||name.endsWith(':href'))&&!value.startsWith('#')))node.removeAttribute(attr.name)}));
     root.setAttribute('preserveAspectRatio','xMidYMid meet');return new XMLSerializer().serializeToString(root);
+  }
+  function canonicalVectorColor(value){
+    const raw=String(value||'').trim().toUpperCase();
+    if(/^#[0-9A-F]{3}$/.test(raw))return '#'+[...raw.slice(1)].map(char=>char+char).join('');
+    if(/^#[0-9A-F]{6}$/.test(raw))return raw;
+    if(raw==='WHITE')return '#FFFFFF';if(raw==='BLACK')return '#000000';
+    return null;
+  }
+  function vectorSvgColors(markup){
+    const doc=new DOMParser().parseFromString(sanitizeSvg(markup),'image/svg+xml'),colors=new Set();
+    const add=value=>{const color=canonicalVectorColor(value);if(color)colors.add(color)};
+    doc.querySelectorAll('*').forEach(node=>{add(node.getAttribute('fill'));add(node.getAttribute('stroke'));add(node.style?.fill);add(node.style?.stroke)});
+    return [...colors];
+  }
+  function applyVectorColorOverrides(markup,overrides={}){
+    const doc=new DOMParser().parseFromString(sanitizeSvg(markup),'image/svg+xml'),map=new Map();
+    for(const [from,to] of Object.entries(overrides||{})){const source=canonicalVectorColor(from),target=canonicalVectorColor(to);if(source&&target&&source!==target)map.set(source,target)}
+    if(!map.size)return new XMLSerializer().serializeToString(doc.documentElement);
+    const replace=value=>{const key=canonicalVectorColor(value);return key&&map.has(key)?map.get(key):value};
+    doc.querySelectorAll('*').forEach(node=>{
+      for(const name of ['fill','stroke'])if(node.hasAttribute(name))node.setAttribute(name,replace(node.getAttribute(name)));
+      if(node.style){if(node.style.fill)node.style.fill=replace(node.style.fill);if(node.style.stroke)node.style.stroke=replace(node.style.stroke)}
+    });
+    return new XMLSerializer().serializeToString(doc.documentElement);
+  }
+  async function privateVectorMarkup(source){
+    if(!source?.storage_path)throw new Error('O SVG final desta personalização não foi encontrado.');
+    const key=String(source.id||source.storage_path);if(vectorMarkupCache.has(key))return vectorMarkupCache.get(key);
+    const loading=(async()=>{const response=await fetch(await signedSourceUrl(source.storage_path));if(!response.ok)throw new Error('Não foi possível carregar o SVG para editar as cores.');return sanitizeSvg(await response.text())})();
+    vectorMarkupCache.set(key,loading);try{return await loading}catch(error){if(vectorMarkupCache.get(key)===loading)vectorMarkupCache.delete(key);throw error}
   }
 
   function runNesting(items,options){
@@ -527,12 +557,12 @@ export function createProductionModule(ctx){
     const layout=measureLetteringItem({...item,measureFont:(char,source)=>{const family=families.get(source.id);if(!family)throw new Error('A fonte mapeada para este caractere não foi carregada.');const coverage=fontCoverageByFamily.get(family);if(!coverage?.hasGlyph(char)){const code=`U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')}`;throw new Error(`A fonte oficial não contém “${char}” (${code}). Cadastre o SVG deste caractere ou uma fonte que o inclua.`)}measure.font=`1000px "${family}"`;measure.textAlign='left';measure.textBaseline='alphabetic';return measure.measureText(char)},glyphAspect:glyph=>glyphAspect(glyph.svg_markup)});
     return {...layout,families};
   }
-  async function drawPreparedLetteringLine(g,line,families,x,y,color){
+  async function drawPreparedLetteringLine(g,line,families,x,y,color,vectorColorOverrides=null){
     g.textAlign='left';g.textBaseline='alphabetic';g.fillStyle=color;
     for(const part of line.parts){
       if(part.kind==='font'){g.save();g.translate(x+part.xCm,y+part.baselineCm);g.scale(part.fontSizeCm/1000,part.fontSizeCm/1000);g.font=`1000px "${families.get(part.source.id)}"`;g.fillText(part.char,part.metrics.left,0);g.restore();}
       else if(part.kind==='vector'){
-        const url=URL.createObjectURL(new Blob([sanitizeSvg(part.glyph.svg_markup)],{type:'image/svg+xml'}));
+        const url=URL.createObjectURL(new Blob([applyVectorColorOverrides(part.glyph.svg_markup,vectorColorOverrides||{})],{type:'image/svg+xml'}));
         try{const image=new Image();image.src=url;await image.decode();g.drawImage(image,x+part.xCm,y+part.yCm,part.widthCm,part.heightCm)}finally{URL.revokeObjectURL(url)}
       }
     }
@@ -727,7 +757,7 @@ export function createProductionModule(ctx){
     clearTimeout(filmDraftTimer);filmDraftTimer=null;filmDraftDirty=false;filmDraftRestoring=null;filmDraftOwner=null;filmDraftUser=null;filmDraftStore=null;filmDraftLoaded=false;filmDraftSavedAt=null;filmDraftWarning='';filmDraftNote='';filmDraftSaving=false;filmDraftChange=0;filmDraftConflict=false;filmDraftLegacy=null;filmDraftLegacyActive=false;filmDraftWrite=null;
     queueRows=[];queueSnapshot=null;launcherScope='mine';lastFilm=null;filmItems=[];filmSettings=freshFilmSettings();filmPickerMetaOwner=null;filmPickerMetaPromise=null;filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
     if(typeof document!=='undefined'){for(const face of document.fonts||[])if(fontCoverageByFamily.has(face.family))document.fonts.delete(face);document.querySelector('[data-film-draft-confirm]')?.remove();}
-    fontCache.clear();fontCoverageByFamily.clear();
+    fontCache.clear();fontCoverageByFamily.clear();vectorMarkupCache.clear();
     if(typeof clearLetteringLayoutCache==='function')clearLetteringLayoutCache();
   }
   function filmDraftBanner(){
@@ -770,7 +800,7 @@ export function createProductionModule(ctx){
       try{
         // Prefer the real SVG for an isolated mapped digit so zoom remains vector-sharp.
         const directGlyph=item.pieceType==='digit'&&String(item.number||'').length===1?(item.glyphs||[]).find(glyph=>glyph.glyph_key===String(item.number)&&glyph.svg_markup):null;
-        if(directGlyph){item.previewDataUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(sanitizeSvg(directGlyph.svg_markup));item.previewQualityVersion=3;continue;}
+        if(directGlyph){item.previewDataUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(applyVectorColorOverrides(directGlyph.svg_markup,item.vectorColorOverrides||{}));item.previewQualityVersion=3;continue;}
         // Names/composites are rendered much larger than the screen preview.
         const targetPx=1600,canvas=document.createElement('canvas'),scale=Math.max(1,Math.min(64,targetPx/item.widthCm,targetPx/item.heightCm));canvas.width=Math.max(1,Math.ceil(item.widthCm*scale));canvas.height=Math.max(1,Math.ceil(item.heightCm*scale));
         try{await drawTeamCustomization(canvas.getContext('2d'),item,0,0,canvas.width,canvas.height);if(accountGeneration!==productionAccountGeneration||account!==filmDraftOwner||account!==String(owner()||''))return false;item.previewDataUrl=canvas.toDataURL('image/png');item.previewQualityVersion=2;}finally{canvas.width=canvas.height=1;}
@@ -872,6 +902,7 @@ export function createProductionModule(ctx){
       app.querySelectorAll('.film-item-qty').forEach(input=>input.onchange=async()=>{if(!pageCurrent())return;const item=filmItems.find(i=>i.localId===input.dataset.id),quantity=Number(input.value);if(!item)return;if(!Number.isInteger(quantity)||quantity<1||quantity>999){input.value=item.quantity;return ctx.toast('Quantidade deve ser inteira, de 1 a 999.','err')}item.quantity=quantity;await refreshItems()});
       app.querySelectorAll('.edit-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())editFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
       app.querySelectorAll('.duplicate-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())duplicateFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
+      app.querySelectorAll('.color-film-vector').forEach(b=>b.onclick=()=>{if(pageCurrent())safe(()=>openFilmVectorColorEditor(filmItems.find(i=>i.localId===b.dataset.id),refreshItems))});
       app.querySelectorAll('.remove-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent()){removeCurrentFilmEntry(b.dataset.id,media);drawOrders()}});
     };
     const refreshItems=async()=>{if(!pageCurrent())return;filmCalculationGeneration++;filmPreviewGeneration++;filmCostPanel?.invalidate?.();
@@ -920,7 +951,22 @@ export function createProductionModule(ctx){
     }));
   }
   function filmItemPreview(item){const url=item.previewDataUrl||(item.path?ctx.publicUrl(item.path):'');return url?`<img src="${h(url)}" alt="" loading="lazy" decoding="async">`:'<span>ARTE</span>'}
-  function filmItemsHTML(){return filmItems.length?filmItems.map(i=>`<article class="film-item editable-film-item"><div class="film-item-thumb">${filmItemPreview(i)}</div><div class="film-item-main"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}</small></div><button class="film-remove-item remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" max="999" value="${i.quantity}"></label><button class="btn small edit-film-item" data-id="${i.localId}">Tamanho</button><button class="btn small duplicate-film-item" data-id="${i.localId}">Duplicar</button></div></div></article>`).join(''):'<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>'}
+  function hasEditableVectorColor(item){return item?.type==='team_customization'&&Boolean(item.vectorSource||(item.glyphs||[]).some(glyph=>glyph.svg_markup))}
+  function filmItemsHTML(){return filmItems.length?filmItems.map(i=>`<article class="film-item editable-film-item"><div class="film-item-thumb">${filmItemPreview(i)}</div><div class="film-item-main"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}</small></div><button class="film-remove-item remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" max="999" value="${i.quantity}"></label><button class="btn small edit-film-item" data-id="${i.localId}">Tamanho</button><button class="btn small duplicate-film-item" data-id="${i.localId}">Duplicar</button>${hasEditableVectorColor(i)?`<button class="btn small color-film-vector" data-id="${i.localId}">Cor vetor</button>`:''}</div></div></article>`).join(''):'<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>'}
+  async function openFilmVectorColorEditor(item,done){
+    if(!hasEditableVectorColor(item))return;let markups=[];
+    if(item.vectorSource)markups=[await privateVectorMarkup(item.vectorSource)];else{const used=new Set([...(String(item.name||'')),...(String(item.number||''))]);markups=(item.glyphs||[]).filter(glyph=>glyph.svg_markup&&(!used.size||used.has(String(glyph.glyph_key)))).map(glyph=>glyph.svg_markup)}
+    const colors=[...new Set(markups.flatMap(vectorSvgColors))];if(!colors.length)throw new Error('Não encontrei cores sólidas editáveis neste vetor.');
+    const current={...(item.vectorColorOverrides||{})},palette=[...new Map((item.palette||[]).map(entry=>[canonicalVectorColor(entry.color_hex),entry]).filter(([key])=>key)).values()];let active=colors[0];
+    const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML=`<div class="modal compact vector-color-modal" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">COR DO VETOR</div><h2>${h(item.label)}</h2><p>Troque somente a cor escolhida. As outras cores e o desenho do SVG são preservados.</p></div><button class="btn ghost small close">×</button></div><div class="vector-color-list">${colors.map(color=>{const value=canonicalVectorColor(current[color])||color;return `<label class="vector-color-row" data-vector-source="${color}"><span class="vector-original-swatch" style="--vector-color:${color}"></span><span><b>${color}</b><small>Cor encontrada no vetor</small></span><input type="color" data-vector-color value="${value}"><button type="button" class="btn small" data-eyedrop ${typeof EyeDropper==='undefined'?'hidden':''}>Conta-gotas</button><button type="button" class="btn ghost small" data-vector-reset>Original</button></label>`}).join('')}</div>${palette.length?`<div class="vector-palette"><small>CORES CADASTRADAS</small><div>${palette.map(entry=>`<button type="button" data-palette-color="${h(canonicalVectorColor(entry.color_hex))}" style="--vector-color:${h(canonicalVectorColor(entry.color_hex))}" title="${h(entry.role||entry.name||entry.color_hex)}"></button>`).join('')}</div></div>`:''}<div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" data-save-vector type="button">Aplicar cor no vetor</button></div></div>`;
+    document.body.appendChild(modal);const selectRow=row=>{active=row?.dataset.vectorSource||active;modal.querySelectorAll('[data-vector-source]').forEach(node=>node.classList.toggle('active',node.dataset.vectorSource===active))};selectRow(modal.querySelector('[data-vector-source]'));
+    modal.querySelectorAll('[data-vector-source]').forEach(row=>row.onclick=event=>{if(!event.target.closest('button,input'))selectRow(row)});
+    modal.querySelectorAll('[data-vector-color]').forEach(input=>{input.onfocus=()=>selectRow(input.closest('[data-vector-source]'));input.oninput=()=>{const source=input.closest('[data-vector-source]').dataset.vectorSource;current[source]=canonicalVectorColor(input.value)||source}});
+    modal.querySelectorAll('[data-vector-reset]').forEach(button=>button.onclick=()=>{const row=button.closest('[data-vector-source]'),source=row.dataset.vectorSource;delete current[source];row.querySelector('[data-vector-color]').value=source;selectRow(row)});
+    modal.querySelectorAll('[data-eyedrop]').forEach(button=>button.onclick=async()=>{selectRow(button.closest('[data-vector-source]'));try{const result=await new EyeDropper().open(),input=button.closest('[data-vector-source]').querySelector('[data-vector-color]');input.value=result.sRGBHex;input.dispatchEvent(new Event('input',{bubbles:true}))}catch(error){if(error?.name!=='AbortError')throw error}});
+    modal.querySelectorAll('[data-palette-color]').forEach(button=>button.onclick=()=>{const row=[...modal.querySelectorAll('[data-vector-source]')].find(node=>node.dataset.vectorSource===active),input=row?.querySelector('[data-vector-color]');if(input){input.value=button.dataset.paletteColor;input.dispatchEvent(new Event('input',{bubbles:true})}});
+    const close=()=>modal.remove();modal.querySelectorAll('.close').forEach(button=>button.onclick=close);modal.querySelector('[data-save-vector]').onclick=()=>safe(async()=>{const cleaned={};for(const source of colors){const target=canonicalVectorColor(current[source]);if(target&&target!==source)cleaned[source]=target}item.vectorColorOverrides=cleaned;delete item.previewDataUrl;delete item.previewQualityVersion;lastFilm=null;filmMaskCache.clear();await regenerateFilmDraftPreviews();saveFilmDraft();close();await done();ctx.toast('Cor do vetor atualizada neste filme.','ok')});
+  }
   function duplicateFilmItem(item,done){
     if(!item)return;const copy=structuredClone(item);copy.localId=crypto.randomUUID();copy.quantity=1;const index=filmItems.indexOf(item);filmItems.splice(index<0?filmItems.length:index+1,0,copy);
     const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML=`<div class="modal compact" role="dialog" aria-modal="true" aria-label="Duplicar item"><div class="modal-head"><div><div class="eyebrow">Duplicar arte</div><h2>${h(item.label)}</h2></div><button class="btn ghost small close">×</button></div><p>Escolha se a cópia mantém a medida atual ou será usada em outro tamanho.</p><div class="modal-footer"><button class="btn close" data-keep>Manter tamanho</button><button class="btn primary" data-resize>Alterar tamanho</button></div></div>`;document.body.appendChild(modal);let settled=false;const finish=async resize=>{if(settled)return;settled=true;modal.remove();if(resize)editFilmItem(copy,done);else await done()};modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>finish(false));modal.querySelector('[data-keep]').onclick=()=>finish(false);modal.querySelector('[data-resize]').onclick=()=>finish(true);
@@ -1047,12 +1093,12 @@ export function createProductionModule(ctx){
     g.save();try{g.translate(x+(maxWidth-line.widthCm*pixelsPerCm)/2,y);g.scale(pixelsPerCm,pixelsPerCm);await drawPreparedLetteringLine(g,line,new Map(),0,0,'#fff')}finally{g.restore()}
   }
   async function drawTeamCustomization(g,item,x,y,w,height){
-    if(item.vectorSource){const image=await loadPrivateVectorImage(item.vectorSource);g.drawImage(image,x,y,w,height);return}
+    if(item.vectorSource){if(item.vectorColorOverrides&&Object.keys(item.vectorColorOverrides).length){const markup=applyVectorColorOverrides(await privateVectorMarkup(item.vectorSource),item.vectorColorOverrides),url=URL.createObjectURL(new Blob([markup],{type:'image/svg+xml'}));try{const image=new Image();image.src=url;await image.decode();g.drawImage(image,x,y,w,height)}finally{URL.revokeObjectURL(url)}}else{const image=await loadPrivateVectorImage(item.vectorSource);g.drawImage(image,x,y,w,height)}return}
     const layout=await prepareLetteringLayout({...item,nameTrackingCm:item.nameTrackingCm??item.letterTrackingCm??0,digitSpacingCm:item.digitSpacingCm??0});
     g.save();try{
       g.translate(x,y);g.scale(w/layout.widthCm,height/layout.heightCm);
-      await drawPreparedLetteringLine(g,layout.nameLine,layout.families,(layout.widthCm-layout.nameLine.widthCm)/2,0,colorFor(item,'name'));
-      await drawPreparedLetteringLine(g,layout.numberLine,layout.families,(layout.widthCm-layout.numberLine.widthCm)/2,layout.numberYcm,colorFor(item,'number'));
+      await drawPreparedLetteringLine(g,layout.nameLine,layout.families,(layout.widthCm-layout.nameLine.widthCm)/2,0,colorFor(item,'name'),item.vectorColorOverrides);
+      await drawPreparedLetteringLine(g,layout.numberLine,layout.families,(layout.widthCm-layout.numberLine.widthCm)/2,layout.numberYcm,colorFor(item,'number'),item.vectorColorOverrides);
     }finally{g.restore()}
   }
   async function exportFilm(media,assetMap){
