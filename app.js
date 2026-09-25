@@ -19,6 +19,7 @@ import { installMobileViewport } from './mobile-viewport.js?v=2.17.11';
 import { createCompanyPortalAdmin } from './company-portal-admin.js?v=2.17.12';
 import { createCompanyOrderOperations } from './company-order-operations.js?v=2.17.12';
 import { createOfficialOrderWorkflow, workspaceOfficialOrderState } from './official-order-workflow.js?v=2.17.17';
+import { createReliableStorageUploader } from './storage-upload.js?v=2.17.21';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
@@ -30,6 +31,7 @@ const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'ultra';
 const STATUS_STALE_MS = 24 * 60 * 60 * 1000;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true }, global: { fetch: createResilientReadFetch({origin:SUPABASE_URL}) } });
+const storageUploader=createReliableStorageUploader({supabase,projectUrl:SUPABASE_URL,publishableKey:SUPABASE_KEY,bucket:BUCKET});
 const pica = picaFactory({ features: ['js','wasm','ww'] });
 
 const $ = (s, root=document) => root.querySelector(s);
@@ -1191,10 +1193,8 @@ processQueue = async function(m,{mockupMode=false}={}){
       const officialProject=uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
       const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
 
-      stage(`${done+1}/${queue.length} · Enviando arquivo original…`);
-      let up=await supabase.storage.from(BUCKET).upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',upsert:false});if(up.error)throw up.error;
-      stage(`${done+1}/${queue.length} · Enviando PNG final…`);
-      up=await supabase.storage.from(BUCKET).upload(processedPath,result.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error;
+      await storageUploader.upload(originalPath,q.file,{contentType:q.file.type||'application/octet-stream',onProgress:progress=>stage(`${done+1}/${queue.length} · Enviando original · ${progress.percent}%`)});
+      await storageUploader.upload(processedPath,result.blob,{contentType:'image/png',onProgress:progress=>stage(`${done+1}/${queue.length} · Enviando PNG final · ${progress.percent}%`)});
       stage(`${done+1}/${queue.length} · Salvando no cliente…`);
       const {data:saved,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;
       savedAssets.push(saved||assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
