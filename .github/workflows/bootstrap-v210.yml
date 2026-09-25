@@ -1,45 +1,28 @@
-name: Bootstrap v2.12 static source
+name: Validate 019 Personalizacoes
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  rebuild:
-    if: ${{ !contains(github.event.head_commit.message, '[skip bootstrap]') }}
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Rebuild v2.12 static source
-        run: node scripts/bootstrap-v212.mjs
-      - name: Validate release
+          node-version: '24'
+      - name: Build and run release gates
+        run: npm run build
+      - name: Verify current release
         run: |
-          node --check app.js
-          ! grep -q 'DecompressionStream' index.html
-          ! grep -q 'runtime-bundle/' index.html
-          grep -q "APP_VERSION = '2.12'" app.js
-          grep -q 'app-version-badge' styles.css
-          grep -q 'Versão 2.12' index.html
-          grep -q 'Demonstrações de Qualidade' qualidades.html
-          grep -q 'v2.12' comercial-admin.html
-          grep -q 'v2.12' PROJECT_MEMORY.md
-          test -s demo.html
-          test -s portfolio.html
-          test -s zero19-logo.png
-      - name: Commit generated source
-        run: |
-          git config user.name 'zero19-version-bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add app.js styles.css qualidades.html comercial-admin.html PROJECT_MEMORY.md
-          if git diff --cached --quiet; then
-            echo 'No generated changes.'
-            exit 0
-          fi
-          git commit -m 'v2.12: static release source [skip bootstrap]'
-          git push
+          grep -q 'content="2.17.26"' dist/index.html
+          grep -q "APP_VERSION = '2.17.26'" dist/app.js
+          grep -q 'createZero19PdvSync' dist/app.js
+          grep -q 'Aguardando halftone' dist/zero19-pdv-sync.js
+          grep -q 'AUTO 300 DPI' dist/app.js
+          test -s dist/production-v217.js
