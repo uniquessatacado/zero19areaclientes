@@ -64,7 +64,7 @@ function stageFromProject(project,items){
 }
 export function createZero19PdvSync(ctx){
   installStyles();
-  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,offerAfterUpload}=ctx;
+  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
   let cache=null,cacheAt=0;
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
@@ -108,8 +108,13 @@ export function createZero19PdvSync(ctx){
       if(stageItem?.asset_id){actions.push('<button class="btn" data-z19-open="'+h(w.id)+'">Abrir arte</button>');actions.push('<button class="btn primary" data-z19-halftone-ready="'+h(stageItem.id)+'">Halftone pronto</button>')}
       else actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar para halftone</button>');
     }
-    if(stage==='awaiting_font'){actions.push('<button class="btn" data-z19-times>Definir fonte</button>');actions.push('<button class="btn primary" data-z19-font-ready="'+h(summary.items.find(i=>i.stage==='awaiting_font')?.id||'')+'">Fonte definida</button>')}
-    if(stage==='ready_production')actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
+    if(stage==='awaiting_font')actions.push('<button class="btn primary" data-z19-choose-font="'+h(summary.items.find(i=>i.stage==='awaiting_font')?.id||'')+'">Escolher fonte</button>');
+    if(stage==='ready_production'){
+      const fontSet=stageItem?.metadata?.font_set_id||stageItem?.metadata?.details?.[0]?.production?.font_set_id;
+      if(fontSet&&['NAME_NUMBER','PHRASE'].includes(String(stageItem?.kind||'').toUpperCase()))actions.push('<button class="btn primary" data-z19-team-film="'+h(stageItem.id)+'">Adicionar ao filme</button>');
+      else if(stageItem?.asset_id&&stageItem?.without_application)actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar DTF ao filme</button>');
+      else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
+    }
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
     if(stage==='ready_pickup'){if(phone)actions.push('<button class="btn whatsapp" data-z19-notify="'+h(p.id)+'">Avisar cliente</button>');actions.push('<button class="btn primary" data-z19-delivered="'+h(p.id)+'">Entregue</button>')}
     if(phone)actions.push('<button class="btn ghost" data-z19-wa="'+h(w.phone||'')+'">WhatsApp</button>');
@@ -137,7 +142,9 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-open]').forEach(b=>b.onclick=()=>nav('/ambiente/'+encodeURIComponent(b.dataset.z19Open)));
     root.querySelectorAll('[data-z19-times]').forEach(b=>b.onclick=()=>nav('/times'));
     root.querySelectorAll('[data-z19-film]').forEach(b=>b.onclick=()=>nav('/filme'));
-    root.querySelectorAll('[data-z19-font-ready]').forEach(b=>b.onclick=()=>markFontReady(b.dataset.z19FontReady));
+    root.querySelectorAll('[data-z19-choose-font]').forEach(b=>b.onclick=()=>chooseFont(b.dataset.z19ChooseFont));
+    root.querySelectorAll('[data-z19-team-film]').forEach(b=>b.onclick=()=>addTeamToFilm(b.dataset.z19TeamFilm));
+    root.querySelectorAll('[data-z19-asset-film]').forEach(b=>b.onclick=()=>addAssetToFilm(b.dataset.z19AssetFilm));
     root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready));
     root.querySelectorAll('[data-z19-notify]').forEach(b=>b.onclick=()=>notifyProject(b.dataset.z19Notify));
     root.querySelectorAll('[data-z19-delivered]').forEach(b=>b.onclick=()=>markDelivered(b.dataset.z19Delivered));
@@ -163,6 +170,15 @@ export function createZero19PdvSync(ctx){
     const url=URL.createObjectURL(blob);
     try{const img=new Image();img.src=url;await img.decode();return {width:img.naturalWidth||null,height:img.naturalHeight||null}}finally{URL.revokeObjectURL(url)}
   }
+  async function ensureDtfProfile(item,asset){
+    const production=item.metadata?.details?.[0]?.production||{},ratio=(Number(asset.width)||0)/(Number(asset.height)||1);
+    let width=Number(production.width_cm)||0,height=Number(production.height_cm)||0;
+    if(width>0&&!(height>0)&&ratio>0)height=width/ratio;
+    if(height>0&&!(width>0)&&ratio>0)width=height*ratio;
+    if(!(width>0&&height>0))throw new Error('Este DTF ainda não tem medida física completa. Abra a arte e defina largura ou altura antes de liberar.');
+    const owner=accountOwnerId(),actor=state().session?.user?.id||owner,payload={asset_id:asset.id,owner_id:owner,project_id:item.project_id||null,default_width_cm:width,default_height_cm:height,aspect_ratio:ratio>0?ratio:width/height,halftone:Boolean(production.needs_halftone),allow_internal_nesting:!production.needs_halftone,rotation_policy:'180',ready_for_print:true,created_by:actor,updated_by:actor,updated_at:new Date().toISOString()};
+    const result=await supabase.from('z19p_asset_print_profiles').upsert(payload,{onConflict:'asset_id'});if(result.error)throw result.error;return payload;
+  }
   async function importSourceArtwork(workItemId){
     const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('Item não encontrado.','err');
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
@@ -179,7 +195,7 @@ export function createZero19PdvSync(ctx){
       const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner);if(linked.error)throw linked.error;
       invalidate();
       if(item.stage==='awaiting_halftone'){toast('Arte importada. Faça o halftone e depois use “Halftone pronto”.','ok');nav('/ambiente/'+summary.workspace.id);return}
-      if(item.without_application){const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();return}
+      if(item.without_application){await ensureDtfProfile(item,saved.data);const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();return}
       await offerAfterUpload?.([saved.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});
       invalidate();
     }catch(error){console.error('import zero19 artwork',error);toast(error.message||'Não foi possível importar a arte recebida no PDV.','err')}
@@ -189,8 +205,45 @@ export function createZero19PdvSync(ctx){
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return;
     if(!item.asset_id)return importSourceArtwork(item.id);
     const asset=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(asset.error)return toast(asset.error.message,'err');
-    if(item.without_application){const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');return renderQueue()}
+    if(item.without_application){try{await ensureDtfProfile(item,asset.data)}catch(error){return toast(error.message,'err')}const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');return renderQueue()}
     try{await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});invalidate()}catch(error){toast(error.message||'Não foi possível abrir tamanho e posição.','err')}
+  }
+  async function chooseFont(workItemId){
+    if(!workItemId)return;
+    const owner=accountOwnerId(),[setsResult,kitsResult,teamsResult]=await Promise.all([
+      supabase.from('z19p_customization_sets').select('id,kit_id,name,default_name_height_cm,default_number_height_cm,tested_at,status').eq('owner_id',owner).eq('status','ready').not('tested_at','is',null),
+      supabase.from('z19p_team_kits').select('id,team_id,name,season,active').eq('owner_id',owner).eq('active',true),
+      supabase.from('z19p_teams').select('id,name,active').eq('owner_id',owner).eq('active',true)
+    ]);
+    const error=setsResult.error||kitsResult.error||teamsResult.error;if(error)return toast(error.message,'err');
+    const kits=new Map((kitsResult.data||[]).map(row=>[row.id,row])),teams=new Map((teamsResult.data||[]).map(row=>[row.id,row]));
+    const fonts=(setsResult.data||[]).map(set=>{const kit=kits.get(set.kit_id),team=teams.get(kit?.team_id);return {...set,kit,team,label:[team?.name,kit?.season,kit?.name,set.name].filter(Boolean).join(' · ')}}).filter(row=>row.kit&&row.team).sort((a,b)=>a.label.localeCompare(b.label,'pt-BR'));
+    const modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Camisa de time</div><h2>Escolher fonte</h2><p>A fonte precisa estar testada e liberada.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Fonte / temporada</label><select data-font-select><option value="">Escolha</option>'+fonts.map(font=>'<option value="'+h(font.id)+'">'+h(font.label)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-font-confirm disabled>Usar esta fonte</button></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
+    const select=modal.querySelector('[data-font-select]'),button=modal.querySelector('[data-font-confirm]');select.onchange=()=>button.disabled=!select.value;
+    button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida. Pedido liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue()};
+  }
+  async function addAssetToFilm(workItemId){
+    const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('DTF não encontrado.','err');
+    const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
+    if(!item.asset_id)return toast('Este DTF ainda não possui arte vinculada.','err');
+    queueAssetToFilm?.({
+      workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
+      personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
+      assetId:item.asset_id,quantity:item.quantity||1
+    });
+  }
+  async function addTeamToFilm(workItemId){
+    const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('Personalização não encontrada.','err');
+    const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
+    const production=item.metadata?.details?.[0]?.production||{},fontSetId=item.metadata?.font_set_id||production.font_set_id;
+    if(!fontSetId)return chooseFont(item.id);
+    queueTeamToFilm?.({
+      workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
+      personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
+      fontSetId,name:production.top_text||'',number:production.number||'',quantity:item.quantity||1
+    });
   }
   async function markFontReady(id){
     if(!id)return;const {error}=await supabase.rpc('z19p_zero19_mark_font_ready',{p_work_item_id:id});if(error)return toast(error.message,'err');invalidate();toast('Fonte liberada. Pedido movido para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();

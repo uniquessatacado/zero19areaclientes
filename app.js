@@ -26,7 +26,7 @@ const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
-const APP_VERSION = '2.17.26';
+const APP_VERSION = '2.17.27';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -1343,7 +1343,9 @@ zero19Sync=createZero19PdvSync({
   supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket:BUCKET,
   state:()=>({session,currentProfile,workspaces,currentProjects,currentWorkspace,currentAssets}),
   startUploadForWorkspace:(workspaceId)=>{pendingQuickUploadWorkspaceId=workspaceId;nav('/ambiente/'+workspaceId)},
-  offerAfterUpload:(assets,options)=>officialOrders?.offerAfterUpload?.(assets,options)
+  offerAfterUpload:(assets,options)=>officialOrders?.offerAfterUpload?.(assets,options),
+  queueTeamToFilm:(request)=>productionModule?.queueZero19TeamRequest?.(request),
+  queueAssetToFilm:(request)=>productionModule?.queueZero19AssetRequest?.(request)
 });
 
 productionModule=createProductionModule({

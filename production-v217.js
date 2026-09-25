@@ -33,7 +33,7 @@ export function customizationName(set){const name=String(set?.name||'');return n
 
 export function createProductionModule(ctx){
   const {supabase,app}=ctx;
-  let queueRows=[],queueSnapshot=null,queueRequest=0,lastFilm=null,filmItems=[],launcherScope='mine';
+  let queueRows=[],queueSnapshot=null,queueRequest=0,lastFilm=null,filmItems=[],launcherScope='mine',pendingZero19TeamRequest=null,pendingZero19AssetRequest=null;
   let filmSettings={mediaId:null,mode:'maximum',gapMm:3,freeRotation:false,angleStep:30,name:'',nameCustom:false};
   let filmPreviewGeneration=0,filmCostPanel=null;
   let detachProductionListener=null;
@@ -49,6 +49,8 @@ export function createProductionModule(ctx){
   const dateLabel=value=>dateOnly(value)?.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})||'Sem entrega';
   const norm=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
   const safe=async(fn,fallback=null)=>{try{return await fn()}catch(error){console.error(error);ctx.toast(error?.message||String(error),'err');return fallback}};
+  function queueZero19TeamRequest(request){pendingZero19TeamRequest={...(request||{})};ctx.nav('/filme');}
+  function queueZero19AssetRequest(request){pendingZero19AssetRequest={...(request||{})};ctx.nav('/filme');}
 
   async function signedSourceUrl(path,expiresIn=900){
     const {data,error}=await supabase.storage.from(PRIVATE_BUCKET).createSignedUrl(path,expiresIn);
@@ -926,8 +928,48 @@ export function createProductionModule(ctx){
       const scheduled=filmCalculationGeneration;
       setTimeout(()=>{if(pageCurrent()&&scheduled===filmCalculationGeneration&&filmItems.length)void calculateFilm(media)},0);
     };
+    const consumeZero19AssetRequest=async()=>{
+      const request=pendingZero19AssetRequest;if(!request)return;
+      pendingZero19AssetRequest=null;
+      const asset=assetMap.get(request.assetId),profile=profiles.find(row=>row.asset_id===request.assetId);
+      if(!asset)throw new Error('A arte deste pedido não está disponível no Montar filme.');
+      if(!profile||!profile.ready_for_print)throw new Error('Defina a medida da arte e marque-a como pronta para impressão antes de montar o filme.');
+      filmItems.push({
+        localId:crypto.randomUUID(),type:'asset',sourceId:asset.id,
+        label:(request.clientName||'Cliente ZERO19')+' • '+(asset.name||'DTF'),
+        quantity:Math.max(1,Number(request.quantity)||1),
+        widthCm:Number(profile.default_width_cm),heightCm:Number(profile.default_height_cm),
+        path:asset.processed_path||asset.original_path,workspaceId:asset.workspace_id,
+        companyName:request.clientName||'Cliente ZERO19',halftone:Boolean(profile.halftone),
+        rotationPolicy:profile.rotation_policy||'none',allowInternalNesting:profile.allow_internal_nesting!==false,
+        officialProjectId:request.projectId,officialOrderRef:request.orderRef||'',
+        externalOrderItemRef:request.personalizationSaleId||'',
+        productionGroupKeys:['order:'+request.projectId],zero19WorkItemId:request.workItemId||null
+      });
+      await refreshItems();ctx.toast('DTF adicionado ao filme e vinculado ao pedido ZERO19.','ok');
+    };
+    const consumeZero19TeamRequest=async()=>{
+      const request=pendingZero19TeamRequest;if(!request)return;
+      pendingZero19TeamRequest=null;
+      const set=readySets.find(candidate=>candidate.id===request.fontSetId);
+      if(!set)throw new Error('A fonte escolhida neste pedido não está mais liberada. Volte à fila ZERO19 e escolha outra.');
+      const settings=customizationDefaults(set),name=String(request.name||'').trim().toUpperCase(),number=String(request.number||'').replace(/\D/g,''),quantity=Math.max(1,Number(request.quantity)||1),groupId=crypto.randomUUID(),items=[];
+      if(name)items.push(await makeFilmLetteringPiece(set,{name,settings,compositionMode:'split',pieceType:'name',groupId}));
+      for(const digit of number)items.push(await makeFilmLetteringPiece(set,{number:digit,settings,compositionMode:'split',pieceType:'digit',groupId}));
+      if(!items.length)throw new Error('O pedido não possui nome nem número para montar no filme.');
+      for(const item of items)Object.assign(item,{
+        localId:crypto.randomUUID(),quantity,
+        officialProjectId:request.projectId,
+        officialOrderRef:request.orderRef||'',
+        externalOrderItemRef:request.personalizationSaleId||'',
+        companyName:request.clientName||'Cliente ZERO19',
+        productionGroupKeys:['order:'+request.projectId],
+        zero19WorkItemId:request.workItemId||null
+      });
+      filmItems.push(...items);await refreshItems();ctx.toast('Nome e número adicionados ao filme e vinculados ao pedido ZERO19.','ok');
+    };
     ctx.bindCommon();const mediaControl=app.querySelector('#filmMedia'),modeControl=app.querySelector('#filmMode'),gapControl=app.querySelector('#filmGap'),nameControl=app.querySelector('#filmName');mediaControl.value=media.some(m=>m.id===filmSettings.mediaId)?filmSettings.mediaId:media[0]?.id||'';filmSettings.mediaId=mediaControl.value;modeControl.value=filmSettings.mode;gapControl.value=String(filmSettings.gapMm).replace('.',',');const refreshAutoName=()=>{if(!filmSettings.nameCustom){filmSettings.name=suggestedFilmName(media);if(nameControl)nameControl.value=filmSettings.name}};refreshAutoName();if(nameControl)nameControl.oninput=()=>{filmSettings={...filmSettings,name:nameControl.value,nameCustom:true};saveFilmDraft()};const invalidate=()=>{filmCostPanel?.invalidate?.();filmCalculationGeneration++;filmPreviewGeneration++;filmSettings={...filmSettings,mediaId:mediaControl.value,mode:modeControl.value,gapMm:Number(gapControl.value.replace(',','.')),freeRotation:freeControl.checked};lastFilm=null;filmCostPanel?.refresh?.();filmDraftNote='';saveFilmDraft();app.querySelector('#filmPreview').innerHTML='<div class="empty">Configuração alterada. Calcule o filme novamente.</div>';app.querySelector('#filmMetrics').innerHTML='';app.querySelector('#filmInspector')?.remove();app.querySelector('#exportFilm').disabled=true;app.querySelector('#saveFilm').disabled=true};mediaControl.onchange=()=>{invalidate();refreshAutoName()};modeControl.onchange=invalidate;gapControl.oninput=invalidate;freeControl.onchange=invalidate;app.querySelector('#addFilmAsset').onclick=()=>safe(()=>pickFilmAsset(profiles,assetMap,refreshItems));app.querySelector('#addOfficialPending').onclick=()=>safe(async()=>{if(!orderRows)await refreshOrders();const openOther=()=>ctx.officialOrders?.openPendingProductionPicker?.({onAdd:async items=>{filmItems.push(...items);await refreshItems()}});if(fontOrderRows.length)return openZero19FontProductionPicker(fontOrderRows,{onAdd:async items=>{filmItems.push(...items);await refreshItems()},onOther:()=>{if((orderRows||[]).some(row=>pendingQuantity(row,filmItems)>0)){ordersSlot.hidden=false;ordersSlot.scrollIntoView({behavior:'smooth',block:'start'})}else openOther()}});if((orderRows||[]).some(row=>pendingQuantity(row,filmItems)>0)){ordersSlot.hidden=false;ordersSlot.scrollIntoView({behavior:'smooth',block:'start'});return}return openOther()});app.querySelector('#addFilmTeam').onclick=()=>safe(()=>pickFilmTeam(readySets,refreshItems));app.querySelector('#calculateFilm').onclick=()=>calculateFilm(media);app.querySelector('#exportFilm').onclick=()=>safe(()=>exportFilm(media,assetMap));app.querySelector('#saveFilm').onclick=()=>saveFilmJob(media);bindItems();bindFilmJobs(media);if(lastFilm){drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false}
-    void refreshOrders();void refreshFilmJobs(media);filmDraftBanner();if(filmDraftDirty)saveFilmDraft();return true;
+    void refreshOrders();void refreshFilmJobs(media);if(pendingZero19TeamRequest)void safe(()=>consumeZero19TeamRequest());if(pendingZero19AssetRequest)void safe(()=>consumeZero19AssetRequest());filmDraftBanner();if(filmDraftDirty)saveFilmDraft();return true;
   }
   async function refreshFilmJobs(media){
     const slot=app.querySelector('[data-film-jobs]');if(!slot)return;
@@ -1382,5 +1424,5 @@ export function createProductionModule(ctx){
     }finally{filmJobSaving=false;if(button?.isConnected){button.disabled=!lastFilm;button.textContent=previousLabel||'Salvar filme'}}
   }
 
-  return {buildQuotePdf,pdfAction,enhanceDashboard,enhanceDashboardCards,enhanceAssetCards,renderQueue,changeOperationalStatus,enhanceWorkspace,enhancePublic,renderTeams,renderFilm,openPrintProfile,folderInReadyTree,askDeliveryDate,loadQueues,resetAccountState,hasPendingFilmDraft,flushFilmDraft};
+  return {buildQuotePdf,pdfAction,enhanceDashboard,enhanceDashboardCards,enhanceAssetCards,renderQueue,changeOperationalStatus,enhanceWorkspace,enhancePublic,renderTeams,renderFilm,openPrintProfile,folderInReadyTree,askDeliveryDate,loadQueues,resetAccountState,hasPendingFilmDraft,flushFilmDraft,queueZero19TeamRequest,queueZero19AssetRequest};
 }
