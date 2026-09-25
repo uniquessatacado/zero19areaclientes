@@ -73,7 +73,7 @@ export function createReliableStorageUploader({
 
   async function standardUpload(path,blob,{contentType,onProgress}){
     const auth=await authHeaders(),url=projectOrigin+'/storage/v1/object/'+encodeURIComponent(bucket)+'/'+encodePath(path);
-    await xhrRequest({method:'POST',url,headers:{...auth,'content-type':contentType||blob.type||'application/octet-stream','x-upsert':'false','cache-control':'3600'},body:blob,timeoutMs:standardTimeoutMs,onProgress,totalSize:blob.size});
+    await xhrRequest({method:'POST',url,headers:{...auth,'content-type':contentType||blob.type||'application/octet-stream','x-upsert':'true','cache-control':'3600'},body:blob,timeoutMs:standardTimeoutMs,onProgress,totalSize:blob.size});
     onProgress?.(blob.size,blob.size);return {path,mode:'standard'};
   }
 
@@ -123,7 +123,13 @@ export function createReliableStorageUploader({
   async function upload(path,blob,{contentType=blob?.type,onProgress=()=>{}}={}){
     if(!(blob instanceof Blob)||!Number.isFinite(blob.size)||blob.size<1)throw new Error('Arquivo inválido para upload.');
     const progress=(loaded,total)=>onProgress({loaded,total,percent:Math.min(100,Math.max(0,Math.round(loaded/total*100)))});
-    return blob.size>TUS_THRESHOLD?resumableUpload(path,blob,{contentType,onProgress:progress}):standardUpload(path,blob,{contentType,onProgress:progress});
+    try{
+      return await standardUpload(path,blob,{contentType,onProgress:progress});
+    }catch(error){
+      if(blob.size<=TUS_THRESHOLD)throw error;
+      onProgress({loaded:0,total:blob.size,percent:0,fallback:'tus'});
+      return resumableUpload(path,blob,{contentType,onProgress:progress});
+    }
   }
 
   return {upload,TUS_THRESHOLD,TUS_CHUNK};
