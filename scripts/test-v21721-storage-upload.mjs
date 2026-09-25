@@ -6,6 +6,7 @@ const auth={getSession:async()=>({data:{session:{access_token:'token-test'}},err
 
 class FakeXHR{
   static requests=[];
+  static failNextStandard=false;
   constructor(){this.headers={};this.upload={};this.responseHeaders={};this.status=0;this.responseText='';FakeXHR.requests.push(this)}
   open(method,url){this.method=method;this.url=url}
   setRequestHeader(name,value){this.headers[name.toLowerCase()]=String(value)}
@@ -16,6 +17,7 @@ class FakeXHR{
       const total=Number(body?.size||0);
       this.upload?.onprogress?.({lengthComputable:true,loaded:Math.floor(total/2),total});
       this.upload?.onprogress?.({lengthComputable:true,loaded:total,total});
+      if(this.method==='POST'&&FakeXHR.failNextStandard){FakeXHR.failNextStandard=false;this.onerror?.();return}
       if(this.method==='PATCH'){
         const start=Number(this.headers['upload-offset']||0);this.status=204;this.responseHeaders['upload-offset']=String(start+total);
       }else{this.status=200;this.responseText='{}'}
@@ -56,7 +58,14 @@ assert.equal(fetchCalls.length,0);
 assert.equal(progress.at(-1),100);
 
 FakeXHR.requests.length=0;fetchCalls.length=0;progress=[];
-await uploader.upload('owner/work/large.png',new Blob([new Uint8Array(20*MB)],{type:'image/png'}),{contentType:'image/png',onProgress:p=>progress.push(p.percent)});
+await uploader.upload('owner/work/large-fast.png',new Blob([new Uint8Array(20*MB)],{type:'image/png'}),{contentType:'image/png',onProgress:p=>progress.push(p.percent)});
+assert.equal(FakeXHR.requests.length,1);
+assert.equal(FakeXHR.requests[0].method,'POST');
+assert.equal(fetchCalls.length,0);
+assert.equal(progress.at(-1),100);
+
+FakeXHR.requests.length=0;fetchCalls.length=0;progress=[];FakeXHR.failNextStandard=true;
+await uploader.upload('owner/work/large-fallback.png',new Blob([new Uint8Array(20*MB)],{type:'image/png'}),{contentType:'image/png',onProgress:p=>progress.push(p.percent)});
 assert.equal(fetchCalls[0].method,'POST');
 assert.equal(fetchCalls[0].url,'https://proj.storage.supabase.co/storage/v1/upload/resumable');
 const patches=FakeXHR.requests.filter(r=>r.method==='PATCH');
@@ -68,4 +77,4 @@ assert.equal(patches[3].headers['upload-offset'],String(18*MB));
 assert.equal(progress.at(-1),100);
 assert.ok(progress.some(v=>v>0&&v<100));
 
-console.log('v2.17.21 storage upload: small binary upload + 20MB TUS chunks/progress passed.');
+console.log('v2.17.22 storage upload: fast direct 20MB upload with resumable fallback passed.');
