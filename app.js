@@ -1217,6 +1217,7 @@ productionModule=createProductionModule({
   onFilmExported:details=>getProductionFinance()?.offerRecord(details),
   enhanceAdviceCards:()=>projectAdvisor?.decorateCards(),
   getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
+  isGarmentStudioEnabled:()=>garmentStudioEnabled,
   openArtMockup:(asset,options)=>artStudio.openMockup(asset,options),openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>garmentStudioEnabled?artStudio.openGarment(asset,options):null,
   openArt3D:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'3d'}):null,openArtPresentation:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'share3d'}):null,openArtBlank:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'blank'}):null,
   prepareDashboard:async()=>{const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
