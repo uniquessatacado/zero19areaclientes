@@ -32,7 +32,7 @@ assert.ok(!preview.includes('Y (cm)'));
 assert.ok(!preview.includes('Aplicar posição'));
 for(const angle of ['0','90','180','270'])assert.match(preview,new RegExp('data-angle-preset="'+angle+'"'));
 assert.match(preview,/Otimizar espaços/);
-assert.match(preview,/data-angle\.onchange/);
+assert.match(preview,/get\('\[data-angle\]'\)\.onchange/);
 
 assert.ok(!picker.includes('<span>Montar camiseta</span>'));
 assert.match(picker,/Biblioteca própria ZERO19/);
