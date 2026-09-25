@@ -27,6 +27,7 @@ assert.match(production,/suggestedFilmName/);
 assert.match(production,/filmExportBase/);
 assert.match(production,/selectedProductionGroups/);
 assert.match(production,/markProduction/);
+assert.match(production,/data-production-group/);
 assert.ok(!production.includes('Preservar a largura inteira do filme'));
 assert.match(production,/trim=true/);
 
