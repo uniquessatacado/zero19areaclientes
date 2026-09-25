@@ -60,7 +60,7 @@
     const switchTo=async target=>{
       const generation=productionAccountGeneration;await ensureStable();if(generation!==productionAccountGeneration)throw new Error('A conta mudou.');
       const store=filmDraftStore;if(!store)throw new Error('Rascunho atual indisponível.');
-      const draft=target||{version:1,ownerId:String(owner()),items:[],layout:null,settings:{...filmSettings}};
+      const draft=target||{version:1,ownerId:String(owner()),items:[],layout:null,settings:{...freshFilmSettings(),mediaId:filmSettings.mediaId}};
       clearTimeout(filmDraftTimer);filmCalculationGeneration++;filmDraftSaving=true;
       try{
         const result=await store.save({items:draft.items,layout:draft.layout,settings:draft.settings});
