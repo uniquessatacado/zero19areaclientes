@@ -27,7 +27,8 @@ assert.ok(finalWorkspaceModalStart>=0&&!finalWorkspaceModal.includes('createDefa
 
 assert.match(actions,/garmentEnabled=handlers\.garmentEnabled!==false/);
 assert.match(production,/garmentEnabled:ctx\.isGarmentStudioEnabled\?\.\(\)===true/);
-assert.match(production,/onGarment:ctx\.isGarmentStudioEnabled\?\.\(\)===true/);
+assert.ok(!production.includes("onGarment:ctx.isGarmentStudioEnabled?.()===true"),'seletor do filme não deve mostrar Montar camiseta');
+assert.match(production,/onMockup:typeof ctx\.openArtMockup==='function'/);
 assert.match(actions,/artwork&&typeof handlers\.openMockup==='function'&&\['mockup','Ver tamanho na camisa'/);
 
 assert.match(studio,/data-size="43" data-back-only hidden/);
