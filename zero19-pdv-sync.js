@@ -1,6 +1,8 @@
-const STAGE_ORDER=['awaiting_art','awaiting_font','ready_production','production','ready_pickup'];
+const STAGE_ORDER=['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
   awaiting_art:'Pendente de subir arte',
+  art_received:'Arte recebida · organizar',
+  awaiting_halftone:'Aguardando halftone',
   awaiting_font:'Pendente de definir fonte',
   ready_production:'Aguardando produção',
   production:'Em produção',
@@ -10,6 +12,8 @@ const STAGE_LABELS={
 };
 const STAGE_HINTS={
   awaiting_art:'O pedido veio do PDV ZERO19 e ainda precisa receber a arte final.',
+  art_received:'O arquivo chegou pelo PDV e precisa ser importado, medido e posicionado antes da produção.',
+  awaiting_halftone:'A arte foi recebida e precisa do tratamento em halftone antes de entrar no filme.',
   awaiting_font:'Nome, número ou frase aguardando a fonte correta antes da impressão.',
   ready_production:'Arte preparada e liberada para entrar no próximo filme.',
   production:'Pedido marcado no filme e em execução na produção.',
@@ -21,7 +25,7 @@ const INSTAGRAM_URL='https://www.instagram.com/'+INSTAGRAM_HANDLE;
 function installStyles(){
   if(document.getElementById('zero19PdvSyncStyles'))return;
   const style=document.createElement('style');style.id='zero19PdvSyncStyles';
-  style.textContent='.z19-sync-strip{margin:18px 0 24px;padding:18px;border:1px solid #27272a;border-radius:22px;background:linear-gradient(145deg,#111113,#171719);box-shadow:0 18px 50px rgba(0,0,0,.18)}.z19-sync-head{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.z19-sync-head h2{margin:2px 0 0;font-size:20px}.z19-sync-head p{margin:4px 0 0;color:#a1a1aa;font-size:13px}.z19-sync-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-counts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}.z19-sync-count{border:1px solid #303036;border-radius:16px;padding:12px;background:#0c0c0e;text-align:left;color:inherit}.z19-sync-count strong{display:block;font-size:24px;line-height:1}.z19-sync-count span{display:block;margin-top:7px;font-size:11px;color:#b8b8c0;line-height:1.25}.z19-sync-count.danger{border-color:#7f1d1d;background:#1c0c0c}.z19-sync-count.warn{border-color:#854d0e;background:#1d1406}.z19-zero19-page{display:grid;gap:18px}.z19-zero19-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.z19-zero19-summary button{min-height:84px;border:1px solid #303036;border-radius:18px;background:#111113;color:inherit;text-align:left;padding:14px;cursor:pointer}.z19-zero19-summary b{display:block;font-size:26px}.z19-zero19-summary span{font-size:11px;color:#aaa}.z19-zero19-section{display:grid;gap:10px}.z19-zero19-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.z19-zero19-section-head h2{margin:0}.z19-zero19-section-head p{margin:4px 0 0;color:#9f9fa8;font-size:13px}.z19-zero19-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.z19-zero19-card{border:1px solid #2d2d32;border-radius:20px;background:#111113;padding:16px;display:grid;gap:12px}.z19-zero19-card.overdue{border-color:#991b1b;box-shadow:inset 0 0 0 1px rgba(239,68,68,.16)}.z19-zero19-card-head{display:flex;justify-content:space-between;gap:12px}.z19-zero19-card h3{margin:0;font-size:18px}.z19-zero19-card small{color:#a1a1aa}.z19-zero19-order{font-size:12px;color:#fb923c;font-weight:800}.z19-zero19-meta{display:flex;gap:7px;flex-wrap:wrap}.z19-zero19-meta span{border:1px solid #303036;border-radius:999px;padding:5px 9px;font-size:11px;color:#c7c7cc}.z19-zero19-items{display:grid;gap:6px}.z19-zero19-item{padding:9px 10px;border-radius:12px;background:#0a0a0c;font-size:12px;color:#c7c7cc}.z19-zero19-item b{color:#fff}.z19-zero19-card-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-overdue{font-size:11px;font-weight:800;color:#fca5a5}.z19-sync-settings{margin-top:12px}.z19-sync-settings-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.z19-transfer-list{display:grid;gap:9px;max-height:55dvh;overflow:auto}.z19-transfer-row{border:1px solid #333;border-radius:14px;padding:12px;text-align:left;background:#121214;color:inherit;cursor:pointer}.z19-transfer-row b,.z19-transfer-row span,.z19-transfer-row small{display:block}.z19-transfer-row span{margin-top:3px}.z19-transfer-row small{margin-top:5px;color:#aaa}.z19-transfer-button{margin-left:auto}.z19-ready-message{white-space:pre-wrap;background:#0b0b0d;border:1px solid #2d2d32;border-radius:14px;padding:12px;font-size:12px;line-height:1.5;color:#d4d4d8}@media(max-width:780px){.z19-sync-head{align-items:flex-start;flex-direction:column}.z19-sync-counts,.z19-zero19-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.z19-zero19-summary button:last-child,.z19-sync-count:last-child{grid-column:1/-1}.z19-zero19-grid{grid-template-columns:1fr}.z19-zero19-card-actions .btn{flex:1 1 44%;justify-content:center}.z19-sync-settings-row{grid-template-columns:1fr}.z19-sync-settings-row .btn{width:100%;justify-content:center}}';
+  style.textContent='.z19-sync-strip{margin:18px 0 24px;padding:18px;border:1px solid #27272a;border-radius:22px;background:linear-gradient(145deg,#111113,#171719);box-shadow:0 18px 50px rgba(0,0,0,.18)}.z19-sync-head{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.z19-sync-head h2{margin:2px 0 0;font-size:20px}.z19-sync-head p{margin:4px 0 0;color:#a1a1aa;font-size:13px}.z19-sync-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.z19-sync-count{border:1px solid #303036;border-radius:16px;padding:12px;background:#0c0c0e;text-align:left;color:inherit}.z19-sync-count strong{display:block;font-size:24px;line-height:1}.z19-sync-count span{display:block;margin-top:7px;font-size:11px;color:#b8b8c0;line-height:1.25}.z19-sync-count.danger{border-color:#7f1d1d;background:#1c0c0c}.z19-sync-count.warn{border-color:#854d0e;background:#1d1406}.z19-zero19-page{display:grid;gap:18px}.z19-zero19-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}.z19-zero19-summary button{min-height:84px;border:1px solid #303036;border-radius:18px;background:#111113;color:inherit;text-align:left;padding:14px;cursor:pointer}.z19-zero19-summary b{display:block;font-size:26px}.z19-zero19-summary span{font-size:11px;color:#aaa}.z19-zero19-section{display:grid;gap:10px}.z19-zero19-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.z19-zero19-section-head h2{margin:0}.z19-zero19-section-head p{margin:4px 0 0;color:#9f9fa8;font-size:13px}.z19-zero19-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.z19-zero19-card{border:1px solid #2d2d32;border-radius:20px;background:#111113;padding:16px;display:grid;gap:12px}.z19-zero19-card.overdue{border-color:#991b1b;box-shadow:inset 0 0 0 1px rgba(239,68,68,.16)}.z19-zero19-card-head{display:flex;justify-content:space-between;gap:12px}.z19-zero19-card h3{margin:0;font-size:18px}.z19-zero19-card small{color:#a1a1aa}.z19-zero19-order{font-size:12px;color:#fb923c;font-weight:800}.z19-zero19-meta{display:flex;gap:7px;flex-wrap:wrap}.z19-zero19-meta span{border:1px solid #303036;border-radius:999px;padding:5px 9px;font-size:11px;color:#c7c7cc}.z19-zero19-items{display:grid;gap:6px}.z19-zero19-item{padding:9px 10px;border-radius:12px;background:#0a0a0c;font-size:12px;color:#c7c7cc}.z19-zero19-item b{color:#fff}.z19-zero19-card-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-overdue{font-size:11px;font-weight:800;color:#fca5a5}.z19-sync-settings{margin-top:12px}.z19-sync-settings-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.z19-transfer-list{display:grid;gap:9px;max-height:55dvh;overflow:auto}.z19-transfer-row{border:1px solid #333;border-radius:14px;padding:12px;text-align:left;background:#121214;color:inherit;cursor:pointer}.z19-transfer-row b,.z19-transfer-row span,.z19-transfer-row small{display:block}.z19-transfer-row span{margin-top:3px}.z19-transfer-row small{margin-top:5px;color:#aaa}.z19-transfer-button{margin-left:auto}.z19-ready-message{white-space:pre-wrap;background:#0b0b0d;border:1px solid #2d2d32;border-radius:14px;padding:12px;font-size:12px;line-height:1.5;color:#d4d4d8}@media(max-width:780px){.z19-sync-head{align-items:flex-start;flex-direction:column}.z19-sync-counts,.z19-zero19-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.z19-zero19-summary button:last-child,.z19-sync-count:last-child{grid-column:1/-1}.z19-zero19-grid{grid-template-columns:1fr}.z19-zero19-card-actions .btn{flex:1 1 44%;justify-content:center}.z19-sync-settings-row{grid-template-columns:1fr}.z19-sync-settings-row .btn{width:100%;justify-content:center}}';
   document.head.appendChild(style);
 }
 function digits(v){return String(v||'').replace(/\D/g,'')}
@@ -39,7 +43,7 @@ function stageFromProject(project,items){
 }
 export function createZero19PdvSync(ctx){
   installStyles();
-  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state}=ctx;
+  const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,offerAfterUpload}=ctx;
   let cache=null,cacheAt=0;
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
@@ -66,7 +70,13 @@ export function createZero19PdvSync(ctx){
   }
   function card(summary){
     const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[];
-    if(stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-open="'+h(w.id)+'">Subir arte</button>');
+    const stageItem=summary.items.find(i=>i.stage===stage)||summary.items[0];
+    if(stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-upload-workspace="'+h(w.id)+'">Subir arte</button>');
+    if(stage==='art_received')actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar e organizar</button>');
+    if(stage==='awaiting_halftone'){
+      if(stageItem?.asset_id){actions.push('<button class="btn" data-z19-open="'+h(w.id)+'">Abrir arte</button>');actions.push('<button class="btn primary" data-z19-halftone-ready="'+h(stageItem.id)+'">Halftone pronto</button>')}
+      else actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar para halftone</button>');
+    }
     if(stage==='awaiting_font'){actions.push('<button class="btn" data-z19-times>Definir fonte</button>');actions.push('<button class="btn primary" data-z19-font-ready="'+h(summary.items.find(i=>i.stage==='awaiting_font')?.id||'')+'">Fonte definida</button>')}
     if(stage==='ready_production')actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
@@ -80,7 +90,7 @@ export function createZero19PdvSync(ctx){
       const data=await load(true),c=counts(data.summaries),overdue=data.summaries.filter(x=>x.overdue).length,hero=app.querySelector('.simple-hero');
       if(!hero)return;
       const section=document.createElement('section');section.className='z19-sync-strip';section.dataset.z19SyncStrip='';
-      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+'Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn primary" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
+      section.innerHTML='<div class="z19-sync-head"><div><div class="eyebrow">PDV ZERO19 ↔ PERSONALIZAÇÕES</div><h2>Fila sincronizada em tempo real</h2><p>'+(overdue?'<b>'+overdue+' pedido(s) com prazo vencido.</b> ':'')+'Pedidos novos do PDV entram aqui automaticamente.</p></div><div class="z19-sync-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-z19-open-queue>Abrir fila</button></div></div><div class="z19-sync-counts">'+STAGE_ORDER.map(stage=>'<button class="z19-sync-count '+(stage==='awaiting_art'&&c[stage]?'danger':stage==='awaiting_font'&&c[stage]?'warn':'')+'" data-z19-open-stage="'+stage+'"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</div>';
       hero.insertAdjacentElement('afterend',section);
       bindRoot(section);
     }catch(error){console.warn('zero19 sync dashboard',error)}
@@ -89,6 +99,10 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-open-queue]').forEach(b=>b.onclick=()=>nav('/zero19-fila'));
     root.querySelectorAll('[data-z19-open-stage]').forEach(b=>b.onclick=()=>{nav('/zero19-fila');sessionStorage.setItem('z19-zero19-stage',b.dataset.z19OpenStage||'')});
     root.querySelectorAll('[data-z19-sync-now]').forEach(b=>b.onclick=()=>syncRecent());
+    root.querySelectorAll('[data-z19-global-upload]').forEach(b=>b.onclick=()=>openGlobalUpload());
+    root.querySelectorAll('[data-z19-upload-workspace]').forEach(b=>b.onclick=()=>startUploadForWorkspace?.(b.dataset.z19UploadWorkspace));
+    root.querySelectorAll('[data-z19-import-source]').forEach(b=>b.onclick=()=>importSourceArtwork(b.dataset.z19ImportSource));
+    root.querySelectorAll('[data-z19-halftone-ready]').forEach(b=>b.onclick=()=>finishHalftone(b.dataset.z19HalftoneReady));
     root.querySelectorAll('[data-z19-open]').forEach(b=>b.onclick=()=>nav('/ambiente/'+encodeURIComponent(b.dataset.z19Open)));
     root.querySelectorAll('[data-z19-times]').forEach(b=>b.onclick=()=>nav('/times'));
     root.querySelectorAll('[data-z19-film]').forEach(b=>b.onclick=()=>nav('/filme'));
@@ -100,9 +114,52 @@ export function createZero19PdvSync(ctx){
   }
   async function renderQueue(){
     const data=await load(true),c=counts(data.summaries),saved=sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
-    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage);return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+rows.length+'</b></div><div class="z19-zero19-grid">'+(rows.length?rows.map(card).join(''):'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-z19-sync-now>Sincronizar antigos</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage);return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+rows.length+'</b></div><div class="z19-zero19-grid">'+(rows.length?rows.map(card).join(''):'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
     bindCommon();bindRoot(app);app.querySelectorAll('[data-z19-jump]').forEach(b=>b.onclick=()=>document.getElementById('z19-stage-'+b.dataset.z19Jump)?.scrollIntoView({behavior:'smooth',block:'start'}));
     if(saved)setTimeout(()=>document.getElementById('z19-stage-'+saved)?.scrollIntoView({behavior:'smooth',block:'start'}),50);
+  }
+  function findWorkItem(data,id){return data.items.find(item=>item.id===id)}
+  async function openGlobalUpload(){
+    const data=await load(true),pending=[];
+    for(const summary of data.summaries)for(const item of summary.items)if(item.stage==='awaiting_art')pending.push({summary,item});
+    const modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Subir arte</div><h2>Para qual pedido?</h2><p>Escolha uma pendência do PDV ZERO19. A arte será salva dentro do cliente correto.</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pending.length?pending.map((row,index)=>'<button class="z19-transfer-row" data-global-upload="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>Prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="modal-footer"><button class="btn close">Fechar</button></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
+    modal.querySelectorAll('[data-global-upload]').forEach(b=>b.onclick=()=>{const row=pending[Number(b.dataset.globalUpload)];modal.remove();startUploadForWorkspace?.(row.summary.workspace.id)});
+  }
+  async function sourceImageSize(blob){
+    if(!String(blob.type||'').startsWith('image/'))return {width:null,height:null};
+    const url=URL.createObjectURL(blob);
+    try{const img=new Image();img.src=url;await img.decode();return {width:img.naturalWidth||null,height:img.naturalHeight||null}}finally{URL.revokeObjectURL(url)}
+  }
+  async function importSourceArtwork(workItemId){
+    const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('Item não encontrado.','err');
+    const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
+    if(item.asset_id)return finishHalftone(item.id);
+    if(!item.source_file_path){startUploadForWorkspace?.(summary.workspace.id);return}
+    try{
+      const downloaded=await supabase.storage.from('personalization-artwork').download(item.source_file_path);if(downloaded.error)throw downloaded.error;
+      const blob=downloaded.data,dims=await sourceImageSize(blob),assetId=crypto.randomUUID(),owner=accountOwnerId(),actor=state().session?.user?.id||owner;
+      const ext=(item.source_file_path.split('.').pop()||'bin').replace(/[^a-z0-9]/gi,'').toLowerCase()||'bin';
+      const path=actor+'/'+summary.workspace.id+'/pdv-import/'+assetId+'/original.'+ext;
+      const uploaded=await supabase.storage.from(bucket).upload(path,blob,{contentType:blob.type||'application/octet-stream',upsert:false});if(uploaded.error)throw uploaded.error;
+      const row={id:assetId,owner_id:owner,workspace_id:summary.workspace.id,project_id:summary.project.id,folder_id:null,name:item.text_value||'Arte do pedido #'+orderNo(summary.project),asset_type:'arte',original_path:path,processed_path:path,mime_type:blob.type||'application/octet-stream',size_bytes:blob.size,width:dims.width,height:dims.height,dpi:300,alpha_trimmed:false,background_removed:false,maximized:false,metadata:{imported_from_zero19_pdv:true,personalization_sale_id:item.personalization_sale_id,needs_halftone:item.stage==='awaiting_halftone',source_file_path:item.source_file_path},created_by:actor,updated_by:actor};
+      const saved=await supabase.from('z19p_assets').insert(row).select('*').single();if(saved.error)throw saved.error;
+      const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner);if(linked.error)throw linked.error;
+      invalidate();
+      if(item.stage==='awaiting_halftone'){toast('Arte importada. Faça o halftone e depois use “Halftone pronto”.','ok');nav('/ambiente/'+summary.workspace.id);return}
+      if(item.without_application){const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();return}
+      await offerAfterUpload?.([saved.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});
+      invalidate();
+    }catch(error){console.error('import zero19 artwork',error);toast(error.message||'Não foi possível importar a arte recebida no PDV.','err')}
+  }
+  async function finishHalftone(workItemId){
+    const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('Item não encontrado.','err');
+    const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return;
+    if(!item.asset_id)return importSourceArtwork(item.id);
+    const asset=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(asset.error)return toast(asset.error.message,'err');
+    if(item.without_application){const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');return renderQueue()}
+    try{await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});invalidate()}catch(error){toast(error.message||'Não foi possível abrir tamanho e posição.','err')}
   }
   async function markFontReady(id){
     if(!id)return;const {error}=await supabase.rpc('z19p_zero19_mark_font_ready',{p_work_item_id:id});if(error)return toast(error.message,'err');invalidate();toast('Fonte liberada. Pedido movido para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
