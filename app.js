@@ -26,7 +26,7 @@ const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
-const APP_VERSION = '2.17.27';
+const APP_VERSION = '2.17.28';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -1194,18 +1194,18 @@ processQueue = async function(m,{mockupMode=false}={}){
   if(uploadQueue.some(q=>q.type==='arte'&&!q.folderId))return toast('Escolha uma pasta para cada arte antes de salvar.','err');
   if(!mockupMode&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id))return toast('Este cliente ainda não possui pedido oficial. Libere temporariamente em Configurações ou sincronize o pedido.','err');
 
-  const uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue],trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':($('#qualityPreset',m)?.value||DEFAULT_QUALITY),btn=$('#processUpload',m),prog=$('#progress',m),status=$('#progressText',m),savedAssets=[];
+  const uploadWorkspace=currentWorkspace,uploadProjects=[...currentProjects],queue=[...uploadQueue],trim=mockupMode?false:$('#optTrim',m).checked,quality=mockupMode?'original':'auto300',btn=$('#processUpload',m),prog=$('#progress',m),status=$('#progressText',m),savedAssets=[];
   btn.disabled=true;prog.classList.remove('hidden');let done=0;
   const stage=text=>{if(status?.isConnected)status.textContent=text};
 
   for(const q of queue){
     try{
-      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,qualityTarget=isMockup?0:(QUALITY_PRESETS[quality]||0);
+      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,widthCm=isMockup?0:Number(String(q.widthCm||'').replace(',','.'))||0,heightCm=isMockup?0:Number(String(q.heightCm||'').replace(',','.'))||0,qualityTarget=0;
       stage(`${mockupMode?'Salvando':'Processando'} ${done+1}/${queue.length}: ${q.name}`);
-      const result=await processImage(q.file,{trim:doTrim,targetMax:qualityTarget,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
+      const result=await processImage(q.file,{trim:doTrim,targetWidthCm:widthCm,targetHeightCm:heightCm,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
       const assetId=crypto.randomUUID(),base=`${session.user.id}/${uploadWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`;
       const officialProject=uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
-      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:qualityTarget||null,upscaled:result.upscaled,processing_engine:result.engine||'native'}};
+      const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:result.targetPixels||null,requested_width_cm:widthCm||null,requested_height_cm:heightCm||null,standalone_halftone_pending:Boolean(q.standaloneHalftone),standalone_halftone:Boolean(q.standaloneHalftone),upscaled:result.upscaled,processing_engine:result.engine||'native'}};
 
       const uploadBytes=q.file.size+result.blob.size,uploadState={original:0,processed:0};
       const updateUploadProgress=(kind,progress)=>{uploadState[kind]=Math.min(kind==='original'?q.file.size:result.blob.size,Number(progress.loaded||0));const totalPercent=Math.min(100,Math.round((uploadState.original+uploadState.processed)/uploadBytes*100)),originalPercent=Math.round(uploadState.original/q.file.size*100),processedPercent=Math.round(uploadState.processed/result.blob.size*100),fileProgress=(done+totalPercent/100)/queue.length*100;stage(`${done+1}/${queue.length} · Original ${originalPercent}% · PNG final ${processedPercent}% · Total ${totalPercent}%`);if(prog.firstElementChild)prog.firstElementChild.style.width=Math.min(100,fileProgress)+'%'};

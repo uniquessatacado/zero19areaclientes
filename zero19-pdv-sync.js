@@ -123,6 +123,7 @@ export function createZero19PdvSync(ctx){
       else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     }
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
+    if(['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production'].includes(stage))actions.push('<button class="btn" data-z19-force-ready="'+h(p.id)+'">Finalizar / pronto</button>');
     if(stage==='ready_pickup'){if(phone)actions.push('<button class="btn whatsapp" data-z19-notify="'+h(p.id)+'">Avisar cliente</button>');actions.push('<button class="btn primary" data-z19-delivered="'+h(p.id)+'">Entregue</button>')}
     if(phone)actions.push('<button class="btn ghost" data-z19-wa="'+h(w.phone||'')+'">WhatsApp</button>');
     return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div><b>'+h(STAGE_LABELS[stage]||stage)+'</b><small>'+h(summary.qty)+' item(ns)</small></div></div><div class="z19-zero19-meta"><span>Prazo '+h(dt(summary.promised))+'</span>'+(summary.overdue?'<span class="z19-sync-overdue">PRAZO VENCIDO</span>':summary.risk?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'<span>'+h(STAGE_HINTS[stage]||'')+'</span></div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
@@ -154,6 +155,7 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-team-film]').forEach(b=>b.onclick=()=>addTeamToFilm(b.dataset.z19TeamFilm));
     root.querySelectorAll('[data-z19-asset-film]').forEach(b=>b.onclick=()=>addAssetToFilm(b.dataset.z19AssetFilm));
     root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready));
+    root.querySelectorAll('[data-z19-force-ready]').forEach(b=>b.onclick=()=>forceReady(b.dataset.z19ForceReady));
     root.querySelectorAll('[data-z19-notify]').forEach(b=>b.onclick=()=>notifyProject(b.dataset.z19Notify));
     root.querySelectorAll('[data-z19-delivered]').forEach(b=>b.onclick=()=>markDelivered(b.dataset.z19Delivered));
     root.querySelectorAll('[data-z19-wa]').forEach(b=>b.onclick=()=>{const d=digits(b.dataset.z19Wa);if(d)window.open('https://wa.me/'+(d.startsWith('55')?d:'55'+d),'_blank','noopener,noreferrer')});
@@ -261,6 +263,13 @@ export function createZero19PdvSync(ctx){
   }
   async function markFontReady(id){
     if(!id)return;const {error}=await supabase.rpc('z19p_zero19_mark_font_ready',{p_work_item_id:id});if(error)return toast(error.message,'err');invalidate();toast('Fonte liberada. Pedido movido para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
+  }
+  async function forceReady(projectId){
+    if(!projectId||!confirm('Marcar este pedido como finalizado/pronto para retirada? Use isto para limpar pedidos antigos que já foram produzidos.'))return;
+    const {error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:'ready_pickup'});
+    if(error)return toast(error.message,'err');
+    invalidate();toast('Pedido finalizado e movido para Pronto para retirada.','ok');
+    if(location.hash.includes('/zero19-fila'))renderQueue();else enhanceDashboard();
   }
   async function markReady(projectId){
     const data=await load(),summary=data.summaries.find(x=>x.project.id===projectId);if(!summary)return;

@@ -368,5 +368,5 @@ export function createOfficialOrderWorkflow(ctx){
     const selected=new Set(selectedGroupKeys||[]),groups=exportGroups(items).filter(group=>selected.has(group.key));if(!groups.length)return {projects:0,placements:0};
     const projectIds=[...new Set(groups.map(group=>group.projectId).filter(Boolean))],placementIds=[...new Set(groups.flatMap(group=>group.placementIds))],{data,error}=await supabase.rpc('z19p_mark_official_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds});if(error)throw error;return data||{projects:0,placements:0};
   }
-  return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows};
+  return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows,pendingFilmItems:(rows,quantities)=>filmItemsFromPending(rows,quantities)};
 }
