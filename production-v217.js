@@ -1072,7 +1072,7 @@ export function createProductionModule(ctx){
       validate:async (placements,moving,validationOptions={})=>{
         if(!current())return null;const snapshot=shownLayout,calculation=filmCalculationGeneration,valid=()=>current()&&shownLayout===snapshot&&calculation===filmCalculationGeneration;
         const settings={filmWidthMm:snapshot.filmWidthMm,mode:snapshot.mode,gapMm:snapshot.gapMm,cellMm:snapshot.cellMm||2,freeRotation:validationOptions.allowFreeRotation===true?true:snapshot.freeRotation,angleStep:snapshot.angleStep};
-        const items=await filmNestingItems();if(!valid())return null;
+        let items=await filmNestingItems();if(validationOptions.allowFreeRotation===true)items=items.map(item=>({...item,rotationPolicy:'free'}));if(!valid())return null;
         let result;
         if(moving)result=await runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:snapshot.lengthMm});
         else{const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.5');if(!valid())return null;result=validateFilmPlacements(items,placements,settings);}
@@ -1083,7 +1083,7 @@ export function createProductionModule(ctx){
       onRepack:async lockedPlacements=>{
         if(!current())return null;const snapshot=shownLayout,calculation=filmCalculationGeneration,valid=()=>current()&&shownLayout===snapshot&&calculation===filmCalculationGeneration;
         const settings={filmWidthMm:snapshot.filmWidthMm,mode:snapshot.mode,gapMm:snapshot.gapMm,cellMm:snapshot.cellMm||2,freeRotation:snapshot.freeRotation,angleStep:snapshot.angleStep,lockedPlacements,baselinePlacements:snapshot.placements};
-        let items=await filmNestingItems();if(validationOptions.allowFreeRotation===true)items=items.map(item=>({...item,rotationPolicy:'free'}));if(!valid())return null;const result=await runNesting(items,settings);return valid()?result:null;
+        const items=await filmNestingItems();if(!valid())return null;const result=await runNesting(items,settings);return valid()?result:null;
       }});
     if(ctx.getCostUI?.()){let slot=app.querySelector('#filmCostSummary');if(!slot){slot=document.createElement('section');slot.id='filmCostSummary';app.querySelector('.film-workspace').insertAdjacentElement('afterend',slot)}filmCostPanel?.destroy();filmCostPanel=ctx.getCostUI().mountFilmCost(slot,{getLayout:()=>lastFilm,getItems:()=>filmItems,getImageUrl:item=>item.previewDataUrl||(item.path?ctx.publicUrl(item.path):null),getCommission:()=>ctx.getFilmCommissions?.(filmItems)})}
   }
