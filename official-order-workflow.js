@@ -61,6 +61,11 @@ function fits(model,surface,width,height){
   const m=surfaceMetrics(model,surface),sleeve=surface.includes('sleeve');
   return width<=m.width*(sleeve?.86:.9)&&height<=m.length*(sleeve?.84:.86);
 }
+function fitsPosition(model,surface,position,width,height){
+  if(!position||!fits(model,surface,width,height))return false;
+  const m=surfaceMetrics(model,surface),halfW=width/m.width/2,halfH=height/m.length/2,x=Number(position.anchor_x),y=Number(position.anchor_y),margin=surface.includes('sleeve')?.06:.04;
+  return x-halfW>=margin&&x+halfW<=1-margin&&y-halfH>=margin&&y+halfH<=1-margin;
+}
 function positionFits(model,surface,width,height,position){
   if(!fits(model,surface,width,height)||!position)return false;
   const m=surfaceMetrics(model,surface),halfW=width/m.width/2,halfH=height/m.length/2,margin=surface.includes('sleeve')?.035:.025,x=Number(position.anchor_x),y=Number(position.anchor_y);
@@ -159,7 +164,7 @@ export function createOfficialOrderWorkflow(ctx){
     document.body.appendChild(modal);draw();return modal;
   }
   async function offerAfterUpload(assets,{workspace=state().currentWorkspace,projects=state().currentProjects||[]}={}){
-    const arts=(assets||[]).filter(a=>a?.asset_type==='arte');for(const asset of arts){if(!document.body.contains(document.body))break;await new Promise(resolve=>{let finished=false;const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop')){clearInterval(watch);if(!finished){finished=true;resolve()}}},180);openPlacementWizard(asset,{workspace,project:projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||projects.find(p=>p.workspace_id===workspace?.id)}).catch(()=>{clearInterval(watch);resolve()})})}
+    const arts=(assets||[]).filter(a=>a?.asset_type==='arte');for(const asset of arts){await new Promise(resolve=>{let finished=false;const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop')){clearInterval(watch);if(!finished){finished=true;resolve()}}},180);openPlacementWizard(asset,{workspace,project:projects.find(p=>p.workspace_id===workspace?.id&&p.official_order_ref)||projects.find(p=>p.workspace_id===workspace?.id)}).catch(()=>{clearInterval(watch);resolve()})})}
   }
   async function pendingRows(){
     const account=owner();if(!account)return [];
