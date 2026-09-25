@@ -712,12 +712,20 @@ export function createProductionModule(ctx){
   }
   async function productionByIds(table,key,ids){const rows=[];for(let start=0;start<ids.length;start+=150)rows.push(...await allProductionRows(table,'*',query=>query.in(key,ids.slice(start,start+150))));return rows}
   let filmDraftOwner=null,filmDraftUser=null,filmDraftStore=null,filmDraftTimer=null,filmDraftLoaded=false,filmDraftSavedAt=null,filmDraftWarning='',filmDraftNote='',filmDraftDirty=false,filmDraftRestoring=null,filmCalculationGeneration=0,filmDraftSaving=false,filmDraftChange=0,filmDraftConflict=false,filmDraftLegacy=null,filmDraftLegacyActive=false,filmDraftWrite=null;
+  let filmPickerMetaOwner=null,filmPickerMetaPromise=null;
   const freshFilmSettings=()=>({mediaId:null,mode:'maximum',gapMm:3,freeRotation:false,angleStep:30});
+  function preloadFilmPickerMeta(){
+    const account=String(owner()||'');
+    if(filmPickerMetaOwner===account&&filmPickerMetaPromise)return filmPickerMetaPromise;
+    filmPickerMetaOwner=account;
+    filmPickerMetaPromise=Promise.all([allProductionRows('z19p_workspaces','id,company_name,client_name,workspace_type'),allProductionRows('z19p_projects','id,workspace_id,title,sequence_no,status_id'),allProductionRows('z19p_folders','id,workspace_id,project_id,parent_id,name')]).catch(error=>{if(filmPickerMetaOwner===account)filmPickerMetaPromise=null;throw error});
+    return filmPickerMetaPromise;
+  }
   function resetAccountState(){
     detachProductionListener?.();detachProductionListener=null;
     productionAccountGeneration++;filmCalculationGeneration++;filmPreviewGeneration++;queueRequest++;
     clearTimeout(filmDraftTimer);filmDraftTimer=null;filmDraftDirty=false;filmDraftRestoring=null;filmDraftOwner=null;filmDraftUser=null;filmDraftStore=null;filmDraftLoaded=false;filmDraftSavedAt=null;filmDraftWarning='';filmDraftNote='';filmDraftSaving=false;filmDraftChange=0;filmDraftConflict=false;filmDraftLegacy=null;filmDraftLegacyActive=false;filmDraftWrite=null;
-    queueRows=[];queueSnapshot=null;launcherScope='mine';lastFilm=null;filmItems=[];filmSettings=freshFilmSettings();filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
+    queueRows=[];queueSnapshot=null;launcherScope='mine';lastFilm=null;filmItems=[];filmSettings=freshFilmSettings();filmPickerMetaOwner=null;filmPickerMetaPromise=null;filmCostPanel?.destroy();filmCostPanel=null;filmMaskCache.clear();
     if(typeof document!=='undefined'){for(const face of document.fonts||[])if(fontCoverageByFamily.has(face.family))document.fonts.delete(face);document.querySelector('[data-film-draft-confirm]')?.remove();}
     fontCache.clear();fontCoverageByFamily.clear();
     if(typeof clearLetteringLayoutCache==='function')clearLetteringLayoutCache();
@@ -816,6 +824,7 @@ export function createProductionModule(ctx){
     const renderCurrent=()=>renderGeneration===filmCalculationGeneration&&renderAccountGeneration===productionAccountGeneration&&renderAccount===String(owner()||'')&&(typeof location==='undefined'||renderRoute===location.hash);
     await restoreFilmDraft();
     if(!renderCurrent())return false;
+    void preloadFilmPickerMeta();
     filmCostPanel?.destroy();filmCostPanel=null;
     const [profilesResult,mediaResult,setsResult]=await Promise.all([allProductionRows('z19p_asset_print_profiles','*',q=>q.eq('ready_for_print',true),'asset_id').then(data=>({data})).catch(error=>({error})),ensureMediaProfiles().then(data=>({data})).catch(error=>({error})),allProductionRows('z19p_customization_sets','*',q=>q.eq('status','ready')).then(data=>({data})).catch(error=>({error}))]);
     if(!renderCurrent())return false;
@@ -826,7 +835,7 @@ export function createProductionModule(ctx){
     if(!renderCurrent())return false;
     if(filmDraftLoaded||filmItems.length){const reconciled=resolveFilmDraftMedia(filmSettings,lastFilm,media);filmSettings=reconciled.settings;lastFilm=reconciled.layout;if(reconciled.changed){filmDraftDirty=true;filmDraftNote=reconciled.warning;}}
     // Saved job payloads are loaded only when opened, never before the editor.
-    app.innerHTML=ctx.shell(`<main class="container film-page"><section class="simple-hero"><div><div class="eyebrow">DTF 300 DPI</div><h1>Montar filme</h1><p>Misture artes e personalizações oficiais; escolha organização normal ou aproveitamento máximo.</p></div></section><section data-film-jobs aria-live="polite"><small>Carregando jobs salvos…</small></section><section class="film-controls"><div class="field"><label>Filme</label><select id="filmMedia">${media.map(m=>`<option value="${m.id}" data-width="${m.usable_width_cm}" data-segment="${m.max_segment_cm}">${h(m.name)}</option>`).join('')}</select></div><div class="field"><label>Modo</label><select id="filmMode"><option value="normal">Normal — corte fácil</option><option value="maximum">Aproveitamento máximo</option></select></div><div class="field"><label>Gap (mm)</label><input id="filmGap" inputmode="decimal" value="3"></div><button class="btn" id="addFilmAsset">＋ Arte de empresa</button><button class="btn" id="addFilmTeam" ${readySets.length?'':'disabled'}>＋ Personalização de time</button><button class="btn primary" id="calculateFilm">Calcular filme</button></section><section class="film-workspace"><aside><h2>Itens</h2><div id="filmItems">${filmItemsHTML()}</div></aside><div><div id="filmMetrics" class="film-metrics"></div><div class="film-preview-shell"><div id="filmPreview" class="film-preview"><div class="empty">Adicione itens e calcule o encaixe.</div></div></div><div class="film-export-actions"><button class="btn primary" id="exportFilm" disabled>Exportar PNG 300 DPI</button><button class="btn" id="saveFilm" disabled>Salvar job</button></div></div></section></main>`,{back:true});
+    app.innerHTML=ctx.shell(`<main class="container film-page"><section class="simple-hero film-hero"><div><div class="eyebrow">DTF 300 DPI</div><h1>Montar filme</h1><p>Monte o filme para gastar o mínimo possível de comprimento. O modo máximo usa os pixels reais da arte quando disponível.</p></div></section><section data-film-jobs aria-live="polite"><small>Carregando filmes salvos…</small></section><section class="film-controls film-primary-controls"><div class="field film-media-field"><label>Filme</label><select id="filmMedia">${media.map(m=>`<option value="${m.id}" data-width="${m.usable_width_cm}" data-segment="${m.max_segment_cm}">${h(m.name)}</option>`).join('')}</select></div><button class="btn film-action film-action-art" id="addFilmAsset">＋ Arte de empresa</button><button class="btn film-action film-action-personalization" id="addFilmTeam" ${readySets.length?'':'disabled'}>＋ Personalização</button><button class="btn primary film-action film-action-update" id="calculateFilm">Atualizar filme</button><div class="field"><label>Modo</label><select id="filmMode"><option value="normal">Normal — corte fácil</option><option value="maximum">Máximo — economizar filme</option></select></div><div class="field"><label>Espaço entre artes (mm)</label><input id="filmGap" inputmode="decimal" value="3"></div></section><section class="film-workspace"><aside class="film-items-panel"><div class="film-panel-title"><div><small>ITENS DO FILME</small><h2>Artes adicionadas</h2></div><span>${filmItems.reduce((sum,item)=>sum+Number(item.quantity||0),0)} un.</span></div><div id="filmItems">${filmItemsHTML()}</div></aside><div class="film-canvas-panel"><div id="filmMetrics" class="film-metrics"></div><div class="film-preview-shell"><div id="filmPreview" class="film-preview"><div class="empty">Adicione itens e use Atualizar filme para organizar o encaixe.</div></div></div><div class="film-export-actions"><button class="btn primary" id="exportFilm" disabled>Exportar PNG 300 DPI</button><button class="btn" id="saveFilm" disabled>Salvar filme</button></div></div></section></main>`,{back:true});
     app.querySelector('#filmGap').closest('.field').insertAdjacentHTML('afterend','<label class="film-free-rotation"><span><input id="filmFreeRotation" type="checkbox"> Otimizar com rotação livre</span><small>Busca adicional a cada 30° · sem mudar as medidas</small></label>');const freeControl=app.querySelector('#filmFreeRotation');freeControl.checked=Boolean(filmSettings.freeRotation);
     const page=app.querySelector('.film-page'),pageCurrent=()=>page.isConnected&&page===app.querySelector('.film-page')&&renderAccountGeneration===productionAccountGeneration&&renderAccount===String(owner()||'')&&(typeof location==='undefined'||renderRoute===location.hash);
     // Keep everyday actions visible; advanced packing settings remain accessible.
@@ -862,6 +871,7 @@ export function createProductionModule(ctx){
     const bindItems=()=>{
       app.querySelectorAll('.film-item-qty').forEach(input=>input.onchange=async()=>{if(!pageCurrent())return;const item=filmItems.find(i=>i.localId===input.dataset.id),quantity=Number(input.value);if(!item)return;if(!Number.isInteger(quantity)||quantity<1||quantity>999){input.value=item.quantity;return ctx.toast('Quantidade deve ser inteira, de 1 a 999.','err')}item.quantity=quantity;await refreshItems()});
       app.querySelectorAll('.edit-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())editFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
+      app.querySelectorAll('.duplicate-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())duplicateFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
       app.querySelectorAll('.remove-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent()){removeCurrentFilmEntry(b.dataset.id,media);drawOrders()}});
     };
     const refreshItems=async()=>{if(!pageCurrent())return;filmCalculationGeneration++;filmPreviewGeneration++;filmCostPanel?.invalidate?.();
@@ -884,10 +894,10 @@ export function createProductionModule(ctx){
     const slot=app.querySelector('[data-film-jobs]');if(!slot)return;
     const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
     const current=()=>slot.isConnected&&slot===app.querySelector('[data-film-jobs]')&&generation===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||location.hash===route);
-    slot.innerHTML='<small>Carregando jobs salvos…</small>';
+    slot.innerHTML='<small>Carregando filmes salvos…</small>';
     try{
       const jobs=await listFilmJobs(supabase,account);if(!current())return;
-      slot.innerHTML=jobs.length?`<details class="saved-film-jobs"><summary>Jobs salvos (${jobs.length})</summary><div>${jobs.map(job=>`<button class="saved-film-job" data-job="${h(job.id)}"><b>${h(job.name)}${job.commit_state==='pending'?' · salvamento incompleto':''}</b><span>${Number(job.film_width_cm)} cm × ${Number(job.calculated_length_cm||0).toFixed(1)} cm • ${new Date(job.updated_at).toLocaleString('pt-BR')}</span></button>`).join('')}</div></details>`:'';
+      slot.innerHTML=jobs.length?`<details class="saved-film-jobs"><summary>Filmes salvos (${jobs.length})</summary><div>${jobs.map(job=>`<button class="saved-film-job" data-job="${h(job.id)}"><b>${h(job.name)}${job.commit_state==='pending'?' · salvamento incompleto':''}</b><span>${Number(job.film_width_cm)} cm × ${Number(job.calculated_length_cm||0).toFixed(1)} cm • ${new Date(job.updated_at).toLocaleString('pt-BR')}</span></button>`).join('')}</div></details>`:'';
       bindFilmJobs(media);
     }catch(error){
       if(!current())return;
@@ -909,7 +919,12 @@ export function createProductionModule(ctx){
       }finally{if(button.isConnected)button.disabled=false;}
     }));
   }
-  function filmItemsHTML(){return filmItems.length?filmItems.map(i=>`<article class="film-item editable-film-item"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}</small></div><button class="btn ghost small remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" max="999" value="${i.quantity}"></label><button class="btn small edit-film-item" data-id="${i.localId}">Alterar tamanho</button></div></article>`).join(''):'<div class="empty mini">Nenhum item.</div>'}
+  function filmItemPreview(item){const url=item.previewDataUrl||(item.path?ctx.publicUrl(item.path):'');return url?`<img src="${h(url)}" alt="" loading="lazy" decoding="async">`:'<span>ARTE</span>'}
+  function filmItemsHTML(){return filmItems.length?filmItems.map(i=>`<article class="film-item editable-film-item"><div class="film-item-thumb">${filmItemPreview(i)}</div><div class="film-item-main"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}</small></div><button class="film-remove-item remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" max="999" value="${i.quantity}"></label><button class="btn small edit-film-item" data-id="${i.localId}">Tamanho</button><button class="btn small duplicate-film-item" data-id="${i.localId}">Duplicar</button></div></div></article>`).join(''):'<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>'}
+  function duplicateFilmItem(item,done){
+    if(!item)return;const copy=structuredClone(item);copy.localId=crypto.randomUUID();copy.quantity=1;const index=filmItems.indexOf(item);filmItems.splice(index<0?filmItems.length:index+1,0,copy);
+    const modal=document.createElement('div');modal.className='modal-backdrop';modal.innerHTML=`<div class="modal compact" role="dialog" aria-modal="true" aria-label="Duplicar item"><div class="modal-head"><div><div class="eyebrow">Duplicar arte</div><h2>${h(item.label)}</h2></div><button class="btn ghost small close">×</button></div><p>Escolha se a cópia mantém a medida atual ou será usada em outro tamanho.</p><div class="modal-footer"><button class="btn close" data-keep>Manter tamanho</button><button class="btn primary" data-resize>Alterar tamanho</button></div></div>`;document.body.appendChild(modal);let settled=false;const finish=async resize=>{if(settled)return;settled=true;modal.remove();if(resize)editFilmItem(copy,done);else await done()};modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>finish(false));modal.querySelector('[data-keep]').onclick=()=>finish(false);modal.querySelector('[data-resize]').onclick=()=>finish(true);
+  }
   function editFilmItem(item,done){
     if(!item)return;
     const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
@@ -921,9 +936,9 @@ export function createProductionModule(ctx){
   async function pickFilmAsset(profiles,assetMap,done){
     const generation=productionAccountGeneration,account=String(owner()||''),route=typeof location==='undefined'?'':location.hash;
     const current=()=>generation===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||location.hash===route);
-    const results=await Promise.all([allProductionRows('z19p_workspaces','id,company_name,client_name,workspace_type'),allProductionRows('z19p_projects','id,workspace_id,title,sequence_no,status_id'),allProductionRows('z19p_folders','id,workspace_id,project_id,parent_id,name')]);
+    const results=await preloadFilmPickerMeta();
     if(!current())return;
-    const picker=openFilmAssetPicker({profiles,assetMap,workspaces:results[0],projects:results[1],folders:results[2],publicUrl:ctx.publicUrl,toast:ctx.toast,onAdd:async(items,{signal}={})=>{if(!current()||signal?.aborted)return;filmItems.push(...items);await done()},onGarment:ctx.isGarmentStudioEnabled?.()===true&&typeof ctx.openArtGarment==='function'?asset=>current()&&ctx.openArtGarment(asset,{onSaved:profile=>current()&&picker.refreshAsset(asset,profile)}):undefined,onMockup:typeof ctx.openArtMockup==='function'?asset=>current()&&ctx.openArtMockup(asset,{onSaved:profile=>current()&&picker.refreshAsset(asset,profile)}):undefined,onEdit:typeof ctx.openArtEditor==='function'?asset=>current()&&ctx.openArtEditor(asset,{onSaved:async updated=>{if(!current())return;const result=await supabase.from('z19p_asset_print_profiles').select('*').eq('asset_id',updated.id).maybeSingle();if(!current())return;if(result.error){ctx.toast('Arte salva. Reabra a seleção para atualizar as medidas.','err');return}picker.refreshAsset(updated,result.data)}}):undefined});return picker;
+    const picker=openFilmAssetPicker({profiles,assetMap,workspaces:results[0],projects:results[1],folders:results[2],publicUrl:ctx.publicUrl,toast:ctx.toast,onAdd:async(items,{signal}={})=>{if(!current()||signal?.aborted)return;filmItems.push(...items);await done()},onMockup:typeof ctx.openArtMockup==='function'?asset=>current()&&ctx.openArtMockup(asset,{onSaved:profile=>current()&&picker.refreshAsset(asset,profile)}):undefined,onEdit:typeof ctx.openArtEditor==='function'?asset=>current()&&ctx.openArtEditor(asset,{onSaved:async updated=>{if(!current())return;const result=await supabase.from('z19p_asset_print_profiles').select('*').eq('asset_id',updated.id).maybeSingle();if(!current())return;if(result.error){ctx.toast('Arte salva. Reabra a seleção para atualizar as medidas.','err');return}picker.refreshAsset(updated,result.data)}}):undefined});return picker;
   }
   function glyphAspect(markup){try{const root=new DOMParser().parseFromString(markup,'image/svg+xml').documentElement,view=(root.getAttribute('viewBox')||'').trim().split(/[ ,]+/).map(Number);if(view.length===4&&view[2]>0&&view[3]>0)return view[2]/view[3];const width=parseFloat(root.getAttribute('width')),height=parseFloat(root.getAttribute('height'));return width>0&&height>0?width/height:.65}catch{return .65}}
   async function pickFilmTeam(sets,done){
@@ -967,7 +982,7 @@ export function createProductionModule(ctx){
       check();return {w,h:height,data};
     }finally{if(canvas)canvas.width=canvas.height=1;}
   }
-  async function filmNestingItems(){return Promise.all(filmItems.map(async item=>({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation&&(item.rotationPolicy||'none')!=='none'?'free':item.rotationPolicy||'none',mask:await maskForItem(item)})))}
+  async function filmNestingItems(){return Promise.all(filmItems.map(async item=>({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation?'free':(item.rotationPolicy&&item.rotationPolicy!=='none'?item.rotationPolicy:'free'),mask:await maskForItem(item)})))}
   async function calculateFilm(media){
     if(!filmItems.length)return ctx.toast('Adicione ao menos um item.','err');
     const button=app.querySelector('#calculateFilm');if(!button)return;
@@ -978,16 +993,16 @@ export function createProductionModule(ctx){
       filmSettings={...filmSettings,mediaId:profile.id,mode,gapMm:gap};
       const items=await filmNestingItems();if(!current())return;
       button.textContent='Calculando encaixe…';
-      const result=await runNesting(items,{filmWidthMm:Number(profile.usable_width_cm)*10,mode,gapMm:gap,cellMm:2,freeRotation:filmSettings.freeRotation,angleStep:filmSettings.angleStep,lockedPlacements:lastFilm?.placements.filter(p=>p.locked)||[],baselinePlacements:lastFilm?.placements||[]});if(!current())return;
+      const result=await runNesting(items,{filmWidthMm:Number(profile.usable_width_cm)*10,mode,gapMm:gap,cellMm:mode==='maximum'?1:2,freeRotation:filmSettings.freeRotation,angleStep:filmSettings.angleStep,lockedPlacements:lastFilm?.placements.filter(p=>p.locked)||[],baselinePlacements:lastFilm?.placements||[]});if(!current())return;
       const previewsReady=await regenerateFilmDraftPreviews();if(!current())return;if(!previewsReady){lastFilm=null;throw new Error(filmDraftNote);}
       lastFilm=result;filmDraftNote='';saveFilmDraft(true);if(result.rotationSearchWarning)ctx.toast(result.rotationSearchWarning,'warn');if(result.nestingSearchWarning)ctx.toast(result.nestingSearchWarning,'warn');
       drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false;
-    }catch(error){if(current()){console.error(error);filmDraftNote='Itens preservados. Não foi possível concluir o encaixe: '+(error.message||String(error));filmDraftBanner();const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.textContent=filmDraftNote;ctx.toast(error.message||String(error),'err')}}finally{if(button.isConnected&&button===app.querySelector('#calculateFilm')&&button.dataset.calculation===String(generation)){button.disabled=false;button.textContent='Calcular filme'}}
+    }catch(error){if(current()){console.error(error);filmDraftNote='Itens preservados. Não foi possível concluir o encaixe: '+(error.message||String(error));filmDraftBanner();const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.textContent=filmDraftNote;ctx.toast(error.message||String(error),'err')}}finally{if(button.isConnected&&button===app.querySelector('#calculateFilm')&&button.dataset.calculation===String(generation)){button.disabled=false;button.textContent='Atualizar filme'}}
   }
   function removeCurrentFilmEntry(id,media,copy){
     const result=removeFilmEntry(filmItems,lastFilm,{id,copy});if(!result.changed)return false;
     filmCalculationGeneration++;filmPreviewGeneration++;filmItems=result.items;lastFilm=result.layout;
-    filmCostPanel?.invalidate?.();filmDraftNote='Peça removida. As demais posições foram preservadas; use Reorganizar livres quando quiser fechar o espaço.';
+    filmCostPanel?.invalidate?.();filmDraftNote='Peça removida. As demais posições foram preservadas; use Otimizar espaços para fechar o vazio.';
     const quantity=[...app.querySelectorAll('.film-item-qty')].find(control=>control.dataset.id===id),item=filmItems.find(entry=>entry.localId===id);
     if(item&&quantity)quantity.value=item.quantity;else quantity?.closest('article')?.remove();
     const host=app.querySelector('#filmItems');if(host&&!filmItems.length)host.innerHTML='<div class="empty mini">Nenhum item.</div>';
@@ -1005,18 +1020,18 @@ export function createProductionModule(ctx){
     const preview=app.querySelector('#filmPreview');if(!preview||!lastFilm)return;const generation=++filmPreviewGeneration,account=String(owner()||''),accountGeneration=productionAccountGeneration,route=typeof location==='undefined'?'':location.hash;
     let shownLayout=lastFilm;
     const current=()=>generation===filmPreviewGeneration&&accountGeneration===productionAccountGeneration&&account===String(owner()||'')&&(typeof location==='undefined'||route===location.hash)&&preview.isConnected&&preview===app.querySelector('#filmPreview')&&lastFilm===shownLayout;
-    const metrics=()=>{const target=app.querySelector('#filmMetrics');if(!current()||!target)return;const pct=value=>Number.isFinite(value)?value.toFixed(1)+'%':'—';target.innerHTML=`<span><small>Filme</small><b>${shownLayout.filmWidthMm/10} cm</b></span><span><small>Comprimento</small><b>${(shownLayout.lengthMm/10).toFixed(1)} cm</b></span><span><small>Metros</small><b>${(shownLayout.lengthMm/1000).toFixed(3)} m</b></span><span><small>Aproveitamento aprox.</small><b>${pct(shownLayout.efficiency)}</b></span><span><small>Desperdício aprox.</small><b>${pct(shownLayout.waste)}</b></span><span><small>Modo</small><b>${shownLayout.mode==='maximum'?'Máximo':'Normal'}</b></span>${shownLayout.metricsNeedRecalculation?'<small>Posições preservadas. Reorganizar atualiza o aproveitamento.</small>':''}`};
+    const metrics=()=>{const target=app.querySelector('#filmMetrics');if(!current()||!target)return;const pct=value=>Number.isFinite(value)?value.toFixed(1)+'%':'—';target.innerHTML=`<span><small>Filme</small><b>${shownLayout.filmWidthMm/10} cm</b></span><span><small>Comprimento</small><b>${(shownLayout.lengthMm/10).toFixed(1)} cm</b></span><span><small>Metros</small><b>${(shownLayout.lengthMm/1000).toFixed(3)} m</b></span><span><small>Aproveitamento aprox.</small><b>${pct(shownLayout.efficiency)}</b></span><span><small>Desperdício aprox.</small><b>${pct(shownLayout.waste)}</b></span><span><small>Modo</small><b>${shownLayout.mode==='maximum'?'Máximo':'Normal'}</b></span>${shownLayout.metricsNeedRecalculation?'<small>Posições preservadas. Use Otimizar espaços para recalcular o aproveitamento.</small>':''}`};
     metrics();mountFilmPreview({element:preview,layout:shownLayout,items:filmItems,publicUrl:ctx.publicUrl,isCurrent:current,
-      validate:async (placements,moving)=>{
+      validate:async (placements,moving,validationOptions={})=>{
         if(!current())return null;const snapshot=shownLayout,calculation=filmCalculationGeneration,valid=()=>current()&&shownLayout===snapshot&&calculation===filmCalculationGeneration;
-        const settings={filmWidthMm:snapshot.filmWidthMm,mode:snapshot.mode,gapMm:snapshot.gapMm,cellMm:snapshot.cellMm||2,freeRotation:snapshot.freeRotation,angleStep:snapshot.angleStep};
+        const settings={filmWidthMm:snapshot.filmWidthMm,mode:snapshot.mode,gapMm:snapshot.gapMm,cellMm:snapshot.cellMm||2,freeRotation:validationOptions.allowFreeRotation===true?true:snapshot.freeRotation,angleStep:snapshot.angleStep};
         const items=await filmNestingItems();if(!valid())return null;
         let result;
         if(moving)result=await runNesting(items,{...settings,operation:'move',placements,moving,lengthMm:snapshot.lengthMm});
         else{const {validateFilmPlacements}=await import('./nesting-core.js?v=2.17.5');if(!valid())return null;result=validateFilmPlacements(items,placements,settings);}
         return valid()?result:null;
       },
-      onChange:layout=>{if(!current()||!layout?.placements)return false;filmCalculationGeneration++;lastFilm=shownLayout=layout;filmDraftNote='';saveFilmDraft();metrics();filmCostPanel?.refresh();return true},
+      onChange:layout=>{if(!current()||!layout?.placements)return false;filmCalculationGeneration++;lastFilm=shownLayout=layout;filmSettings={...filmSettings,freeRotation:Boolean(layout.freeRotation)};const rotationControl=app.querySelector('#filmFreeRotation');if(rotationControl)rotationControl.checked=filmSettings.freeRotation;filmDraftNote='';saveFilmDraft();metrics();filmCostPanel?.refresh();return true},
       onDelete:placement=>{if(!current())return false;return removeCurrentFilmEntry(placement.id,media,placement.copy)},
       onRepack:async lockedPlacements=>{
         if(!current())return null;const snapshot=shownLayout,calculation=filmCalculationGeneration,valid=()=>current()&&shownLayout===snapshot&&calculation===filmCalculationGeneration;
@@ -1223,7 +1238,7 @@ export function createProductionModule(ctx){
       const mediaInput=app.querySelector('#filmMedia');if(mediaInput)mediaInput.value=matching.id;
       if(app.querySelector('#filmMode'))app.querySelector('#filmMode').value=restored.layout.mode;
       if(app.querySelector('#filmGap'))app.querySelector('#filmGap').value=String(restored.layout.gapMm);
-      ctx.toast(revised?'Personalizações revisadas. Calcule o filme novamente antes de exportar.':'Job reaberto a partir das medidas e posições salvas.','ok');return true;
+      ctx.toast(revised?'Personalizações revisadas. Atualize o filme novamente antes de exportar.':'Filme reaberto a partir das medidas e posições salvas.','ok');return true;
     }catch(error){console.error(error);ctx.toast(error.message||'Não foi possível reabrir o job.','err');return false}
     finally{filmJobOpening=false}
   }
