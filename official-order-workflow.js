@@ -118,60 +118,95 @@ export function createOfficialOrderWorkflow(ctx){
   function productCards(project){
     return officialOrderItems(project);
   }
-  async function loadManualGarments(workspaceId){
+  async function blankCatalog(){
+    if(catalogCache)return catalogCache;
+    if(!catalogPromise)catalogPromise=loadBlankShirtCatalog(supabase).then(rows=>(catalogCache=rows)).finally(()=>{catalogPromise=null});
+    return catalogPromise;
+  }
+  async function loadManualGroups(workspaceId){
     if(!workspaceId)return [];
-    const {data,error}=await supabase.from('z19p_manual_garments').select('*').eq('owner_id',owner()).eq('workspace_id',workspaceId).eq('active',true).order('created_at',{ascending:false});
-    if(error)throw error;return data||[];
+    const [groupsResult,garmentsResult]=await Promise.all([
+      supabase.from('z19p_manual_garment_groups').select('*').eq('owner_id',owner()).eq('workspace_id',workspaceId).eq('active',true).order('created_at',{ascending:false}),
+      supabase.from('z19p_manual_garments').select('*').eq('owner_id',owner()).eq('workspace_id',workspaceId).eq('active',true).order('created_at')
+    ]);
+    if(groupsResult.error)throw groupsResult.error;if(garmentsResult.error)throw garmentsResult.error;
+    const map=new Map((groupsResult.data||[]).map(group=>[group.id,{...group,garments:[]}]));
+    for(const garment of garmentsResult.data||[]){if(garment.group_id&&map.has(garment.group_id))map.get(garment.group_id).garments.push(garment)}
+    return [...map.values()].filter(group=>group.garments.length);
   }
-  function manualModelOptions(category){
-    if(category==='infantil')return ['kids'];
-    if(category==='feminina')return ['babylook','normal','oversized'];
-    return ['normal','oversized'];
+  function manualPiecePreview(piece,surface='front',artUrl='',position=null,widthCm=0,heightCm=0){
+    return realMockupPreview(piece,{surface,artUrl,position,widthCm,heightCm,escapeHTML:esc});
   }
-  function manualSizeOptions(category){
-    return category==='infantil'?['2','4','6','8','10','12','14','16']:['PP','P','M','G','GG','G1','G2','G3','G4','G5'];
-  }
-  async function createManualGarment(workspace){
+  function pieceTitle(piece){return [piece.category,piece.garment_model==='oversized'?'Oversized':'Normal',piece.size,piece.color_name].filter(Boolean).join(' · ')}
+  async function editManualPiece(workspace,initial={}){
+    const categories=await blankCatalog();if(!categories.length)throw new Error('Não encontrei camisetas lisas no catálogo ZERO19/Vendus.');
+    let step=0,categoryId=initial.vendus_subcategory_id||categories[0].id,model=initial.garment_model||'normal',size=String(initial.size||''),productId=Number(initial.vendus_product_id||0)||null,quantity=Math.max(1,Number(initial.quantity||1)),busy=false;
     const modal=document.createElement('div');modal.className='manual-garment-backdrop';
-    let step=0,category='masculina',model='normal',size='M',color='black',busy=false;
-    const steps=['Categoria','Modelagem','Tamanho','Cor'];
+    const steps=['Qualidade','Modelagem','Tamanho','Cor','Quantidade'];
     return new Promise(resolve=>{
       const close=value=>{modal.remove();resolve(value||null)};
-      const save=async()=>{if(busy)return;busy=true;draw();try{
-        const colorData=colorInfo(color),name=[category==='masculina'?'Masculina':category==='feminina'?'Feminina':'Infantil',GARMENT_MODELS[model]?.label||model,size,colorData.label].join(' · ');
-        const row={owner_id:owner(),workspace_id:workspace.id,project_id:null,name,category,garment_model:model,size,color,color_name:colorData.label,created_by:user(),updated_by:user()};
-        const {data,error}=await supabase.from('z19p_manual_garments').insert(row).select().single();if(error)throw error;close(data);
-      }catch(error){busy=false;draw();ctx.toast(error.message||'Não foi possível criar a camiseta.','err')}};
+      const data=()=>{
+        const category=categories.find(row=>row.id===categoryId)||categories[0],sizes=[...new Set(category.products.flatMap(product=>product.variants.map(v=>v.size)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR',{numeric:true}));
+        if(!size||!sizes.includes(size))size=sizes[0]||'M';
+        const eligible=category.products.filter(product=>product.variants.some(v=>v.size===size));let product=eligible.find(row=>row.id===productId)||eligible[0]||category.products[0];
+        if(product)productId=product.id;
+        if(!initial.garment_model&&step===0)model=modelForCatalog(category.name,product?.name||'');
+        const variant=product?.variants.find(v=>v.size===size)||product?.variants[0]||null;
+        return {category,sizes,eligible,product,variant};
+      };
+      const finish=()=>{const {category,product,variant}=data();if(!product||!variant)return;const color=colorForCatalog(product.colorName,product.colorHex);close({
+        id:initial.id||null,category:category.name,garment_model:model,size,quantity,
+        color:color.id,color_name:color.name,color_hex:color.hex,
+        vendus_subcategory_id:category.id,vendus_product_id:product.id,vendus_variant_id:variant.id,
+        product_name:product.name,product_image_url:product.image||'',name:[category.name,model==='oversized'?'Oversized':'Normal',size,color.name].join(' · ')
+      })};
       const draw=()=>{
-        const progress=steps.map((label,index)=>'<span class="'+(index===step?'active':index<step?'done':'')+'">'+(index+1)+'<small>'+label+'</small></span>').join('');
+        const {category,sizes,eligible,product}=data(),progress=steps.map((label,index)=>'<span class="'+(index===step?'active':index<step?'done':'')+'">'+(index+1)+'<small>'+label+'</small></span>').join('');
         let body='';
-        if(step===0)body='<div class="manual-choice-grid"><button data-category="masculina" class="'+(category==='masculina'?'active':'')+'"><b>Masculina</b><small>Camiseta adulto</small></button><button data-category="feminina" class="'+(category==='feminina'?'active':'')+'"><b>Feminina</b><small>Baby Look ou camiseta feminina</small></button><button data-category="infantil" class="'+(category==='infantil'?'active':'')+'"><b>Infantil</b><small>Camiseta infantil</small></button></div>';
-        if(step===1)body='<div class="manual-choice-grid">'+manualModelOptions(category).map(id=>'<button data-model="'+id+'" class="'+(model===id?'active':'')+'"><b>'+esc(GARMENT_MODELS[id]?.label||id)+'</b><small>Modelagem da peça</small></button>').join('')+'</div>';
-        if(step===2)body='<div class="manual-size-grid">'+manualSizeOptions(category).map(value=>'<button data-size="'+value+'" class="'+(size===value?'active':'')+'">'+esc(value)+'</button>').join('')+'</div>';
-        if(step===3)body='<div class="manual-color-grid">'+GARMENT_COLORS.map(item=>'<button data-color="'+item.id+'" class="'+(color===item.id?'active':'')+'"><i style="background:'+esc(item.hex)+'"></i><b>'+esc(item.label)+'</b></button>').join('')+'</div>';
-        modal.innerHTML='<section class="manual-garment-page"><header><div><div class="eyebrow">CAMISETA SEM PEDIDO</div><h2>Criar camiseta manual</h2><p>'+esc(workspace.client_name||workspace.company_name||'Cliente')+' · etapa '+(step+1)+' de 4</p></div><button class="btn ghost" data-close>Cancelar</button></header><div class="manual-stepper">'+progress+'</div><main><h3>'+steps[step]+'</h3>'+body+'</main><footer><button class="btn" data-back '+(step===0?'disabled':'')+'>Voltar</button><div class="manual-garment-summary"><b>'+esc([category,GARMENT_MODELS[model]?.label,size,colorInfo(color).label].filter(Boolean).join(' · '))+'</b></div><button class="btn primary" data-next '+(busy?'disabled':'')+'>'+(busy?'Salvando…':step===3?'Criar camiseta':'Continuar')+'</button></footer></section>';
-        modal.querySelector('[data-close]').onclick=()=>close(null);
-        modal.querySelector('[data-back]').onclick=()=>{if(step>0){step--;draw()}};
-        modal.querySelector('[data-next]').onclick=()=>step===3?save():(step++,draw());
-        modal.querySelectorAll('[data-category]').forEach(b=>b.onclick=()=>{category=b.dataset.category;model=manualModelOptions(category)[0];size=manualSizeOptions(category)[0];draw()});
-        modal.querySelectorAll('[data-model]').forEach(b=>b.onclick=()=>{model=b.dataset.model;draw()});
-        modal.querySelectorAll('[data-size]').forEach(b=>b.onclick=()=>{size=b.dataset.size;draw()});
-        modal.querySelectorAll('[data-color]').forEach(b=>b.onclick=()=>{color=b.dataset.color;draw()});
+        if(step===0)body='<div class="manual-catalog-grid">'+categories.map(row=>'<button data-category="'+row.id+'" class="'+(category.id===row.id?'active':'')+'"><b>'+esc(row.name)+'</b><small>'+row.products.length+' cor(es)/produto(s)</small></button>').join('')+'</div>';
+        if(step===1)body='<div class="manual-choice-grid"><button data-model="normal" class="'+(model==='normal'?'active':'')+'"><b>Camiseta normal</b><small>Mockup fotográfico normal</small></button><button data-model="oversized" class="'+(model==='oversized'?'active':'')+'"><b>Oversized</b><small>Mockup fotográfico oversized</small></button></div>';
+        if(step===2)body='<div class="manual-size-grid">'+sizes.map(value=>'<button data-size="'+esc(value)+'" class="'+(size===value?'active':'')+'">'+esc(value)+'</button>').join('')+'</div>';
+        if(step===3)body='<div class="manual-product-grid">'+eligible.map(item=>{const color=colorForCatalog(item.colorName,item.colorHex);return '<button data-product="'+item.id+'" class="'+(product?.id===item.id?'active':'')+'">'+(item.image?'<img src="'+esc(item.image)+'" loading="lazy" decoding="async" alt="">':'')+'<span><i style="background:'+esc(color.hex)+'"></i><b>'+esc(color.name)+'</b><small>'+esc(item.name)+'</small></span></button>'}).join('')+'</div>';
+        if(step===4){const preview=manualPiecePreview({category:category.name,garment_model:model,size,color_name:product?.colorName,color_hex:product?.colorHex,name:product?.name});body='<div class="manual-quantity-step">'+preview+'<label>Quantidade de camisetas<input data-quantity type="number" min="1" max="999" inputmode="numeric" value="'+quantity+'"></label><small>Se duas camisetas são exatamente iguais, use quantidade 2 em vez de cadastrar duas linhas.</small></div>'}
+        modal.innerHTML='<section class="manual-garment-page"><header><div><div class="eyebrow">CAMISETA SEM PEDIDO</div><h2>Montar camiseta do grupo</h2><p>'+esc(workspace.client_name||workspace.company_name||'Cliente')+' · etapa '+(step+1)+' de '+steps.length+'</p></div><button class="btn ghost" data-close>Cancelar</button></header><div class="manual-stepper five">'+progress+'</div><main><h3>'+steps[step]+'</h3>'+body+'</main><footer><button class="btn" data-back '+(step===0?'disabled':'')+'>Voltar</button><div class="manual-garment-summary"><b>'+esc([category.name,model==='oversized'?'Oversized':'Normal',size,product?.colorName].filter(Boolean).join(' · '))+'</b></div><button class="btn primary" data-next '+(busy?'disabled':'')+'>'+(step===steps.length-1?'Usar esta camiseta':'Continuar')+'</button></footer></section>';
+        modal.querySelector('[data-close]').onclick=()=>close(null);modal.querySelector('[data-back]').onclick=()=>{if(step>0){step--;draw()}};modal.querySelector('[data-next]').onclick=()=>step===steps.length-1?finish():(step++,draw());
+        modal.querySelectorAll('[data-category]').forEach(button=>button.onclick=()=>{categoryId=button.dataset.category;productId=null;size='';const d=data();model=modelForCatalog(d.category.name,d.product?.name||'');draw()});
+        modal.querySelectorAll('[data-model]').forEach(button=>button.onclick=()=>{model=button.dataset.model;draw()});modal.querySelectorAll('[data-size]').forEach(button=>button.onclick=()=>{size=button.dataset.size;productId=null;draw()});modal.querySelectorAll('[data-product]').forEach(button=>button.onclick=()=>{productId=Number(button.dataset.product);draw()});
+        modal.querySelector('[data-quantity]')?.addEventListener('input',event=>{quantity=Math.max(1,Math.min(999,parseInt(event.target.value||'1',10)||1))});
       };
       document.body.appendChild(modal);draw();
     });
   }
-  async function chooseManualGarment(workspace){
-    const garments=await loadManualGarments(workspace.id);
-    if(!garments.length)return createManualGarment(workspace);
-    const modal=document.createElement('div');modal.className='manual-garment-backdrop';
+  async function persistManualGroup(workspace,pieces){
+    const account=owner(),actor=user(),groupName='Grupo de camisetas · '+new Date().toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const {data:group,error}=await supabase.from('z19p_manual_garment_groups').insert({owner_id:account,workspace_id:workspace.id,project_id:null,name:groupName,created_by:actor,updated_by:actor}).select().single();if(error)throw error;
+    const rows=pieces.map(piece=>({owner_id:account,workspace_id:workspace.id,project_id:null,group_id:group.id,name:piece.name,category:piece.category,garment_model:piece.garment_model,size:piece.size,color:piece.color,color_name:piece.color_name,color_hex:piece.color_hex,quantity:piece.quantity,vendus_subcategory_id:piece.vendus_subcategory_id,vendus_product_id:piece.vendus_product_id,vendus_variant_id:piece.vendus_variant_id,product_name:piece.product_name,product_image_url:piece.product_image_url,created_by:actor,updated_by:actor}));
+    const inserted=await supabase.from('z19p_manual_garments').insert(rows).select('*');if(inserted.error){await supabase.from('z19p_manual_garment_groups').delete().eq('id',group.id).eq('owner_id',account);throw inserted.error}
+    return {...group,garments:inserted.data||[]};
+  }
+  async function buildManualGroup(workspace,seed=null){
+    const first=await editManualPiece(workspace,seed||{});if(!first)return null;let pieces=[first],modal=document.createElement('div');modal.className='manual-garment-backdrop';
     return new Promise(resolve=>{
       const close=value=>{modal.remove();resolve(value||null)};
-      modal.innerHTML='<section class="manual-garment-page choose-existing"><header><div><div class="eyebrow">CAMISETA SEM PEDIDO</div><h2>Qual camiseta vai receber esta arte?</h2><p>Use a mesma camiseta já criada ou cadastre uma nova.</p></div><button class="btn ghost" data-close>Cancelar</button></header><main><div class="manual-existing-grid">'+garments.map(g=>'<button data-garment="'+g.id+'"><div class="manual-garment-thumb"><img src="'+mockupSvg(g.garment_model,g.color,'front')+'" alt=""></div><span><b>'+esc(g.name)+'</b><small>'+esc([g.category,g.size,g.color_name].filter(Boolean).join(' · '))+'</small></span></button>').join('')+'<button class="create-new" data-new><div class="manual-garment-plus">＋</div><span><b>Criar nova camiseta</b><small>Outra peça para este cliente</small></span></button></div></main></section>';
-      modal.querySelector('[data-close]').onclick=()=>close(null);
-      modal.querySelectorAll('[data-garment]').forEach(b=>b.onclick=()=>close(garments.find(g=>g.id===b.dataset.garment)));
-      modal.querySelector('[data-new]').onclick=async()=>{modal.remove();resolve(await createManualGarment(workspace))};
-      document.body.appendChild(modal);
+      const draw=()=>{modal.innerHTML='<section class="manual-garment-page group-builder"><header><div><div class="eyebrow">GRUPO DE CAMISETAS</div><h2>Quais peças recebem esta estampa?</h2><p>Cadastre peças iguais pela quantidade ou adicione outra camiseta com tamanho/cor/categoria diferente.</p></div><button class="btn ghost" data-cancel>Cancelar</button></header><main><div class="manual-group-pieces">'+pieces.map((piece,index)=>'<article>'+manualPiecePreview(piece)+'<div><b>'+esc(pieceTitle(piece))+'</b><small>Quantidade: '+piece.quantity+'</small><div><button class="btn small" data-edit="'+index+'">Editar</button><button class="btn small" data-duplicate="'+index+'">Duplicar e alterar</button><button class="btn ghost small" data-remove="'+index+'" '+(pieces.length===1?'disabled':'')+'>Remover</button></div></div></article>').join('')+'</div><button class="btn manual-add-shirt" data-add>＋ Adicionar outra camiseta</button></main><footer><span></span><button class="btn primary" data-save>Salvar grupo com '+pieces.reduce((sum,p)=>sum+p.quantity,0)+' camiseta(s)</button></footer></section>';
+        modal.querySelector('[data-cancel]').onclick=()=>close(null);modal.querySelector('[data-add]').onclick=async()=>{modal.remove();const next=await editManualPiece(workspace,pieces.at(-1)||{});if(next)pieces.push(next);document.body.appendChild(modal);draw()};
+        modal.querySelectorAll('[data-edit]').forEach(button=>button.onclick=async()=>{const index=Number(button.dataset.edit);modal.remove();const next=await editManualPiece(workspace,pieces[index]);if(next)pieces[index]=next;document.body.appendChild(modal);draw()});
+        modal.querySelectorAll('[data-duplicate]').forEach(button=>button.onclick=async()=>{const index=Number(button.dataset.duplicate);modal.remove();const next=await editManualPiece(workspace,{...pieces[index],id:null});if(next)pieces.splice(index+1,0,next);document.body.appendChild(modal);draw()});
+        modal.querySelectorAll('[data-remove]').forEach(button=>button.onclick=()=>{pieces.splice(Number(button.dataset.remove),1);draw()});
+        modal.querySelector('[data-save]').onclick=async()=>{const button=modal.querySelector('[data-save]');button.disabled=true;button.textContent='Salvando grupo…';try{close(await persistManualGroup(workspace,pieces))}catch(error){button.disabled=false;button.textContent='Tentar salvar novamente';ctx.toast(error.message||'Não foi possível salvar o grupo.','err')}};
+      };
+      document.body.appendChild(modal);draw();
+    });
+  }
+  async function chooseManualGroup(workspace){
+    const groups=await loadManualGroups(workspace.id);if(!groups.length)return buildManualGroup(workspace);
+    const modal=document.createElement('div');modal.className='manual-garment-backdrop';let active=groups[0].id,selected=new Set(groups[0].garments.map(g=>g.id));
+    return new Promise(resolve=>{
+      const close=value=>{modal.remove();resolve(value||null)};
+      const draw=()=>{const group=groups.find(g=>g.id===active)||groups[0];modal.innerHTML='<section class="manual-garment-page choose-existing"><header><div><div class="eyebrow">GRUPO DE CAMISETAS</div><h2>Usar qual grupo?</h2><p>Marque somente as camisetas que vão receber esta nova estampa.</p></div><button class="btn ghost" data-close>Cancelar</button></header><main><div class="manual-group-tabs">'+groups.map(g=>'<button data-group="'+g.id+'" class="'+(g.id===active?'active':'')+'">'+esc(g.name)+'<small>'+g.garments.reduce((s,p)=>s+p.quantity,0)+' peça(s)</small></button>').join('')+'</div><div class="manual-group-select">'+group.garments.map(piece=>'<label class="'+(selected.has(piece.id)?'active':'')+'"><input type="checkbox" data-piece="'+piece.id+'" '+(selected.has(piece.id)?'checked':'')+'>'+manualPiecePreview(piece)+'<span><b>'+esc(pieceTitle(piece))+'</b><small>Quantidade '+piece.quantity+'</small></span></label>').join('')+'</div><button class="btn" data-new>＋ Criar novo grupo</button></main><footer><span>'+selected.size+' tipo(s) selecionado(s)</span><button class="btn primary" data-use '+(!selected.size?'disabled':'')+'>Usar camisetas selecionadas</button></footer></section>';
+        modal.querySelector('[data-close]').onclick=()=>close(null);modal.querySelectorAll('[data-group]').forEach(button=>button.onclick=()=>{active=button.dataset.group;const next=groups.find(g=>g.id===active);selected=new Set(next?.garments.map(g=>g.id)||[]);draw()});modal.querySelectorAll('[data-piece]').forEach(input=>input.onchange=()=>{input.checked?selected.add(input.dataset.piece):selected.delete(input.dataset.piece);draw()});modal.querySelector('[data-use]').onclick=()=>close({...group,garments:group.garments.filter(g=>selected.has(g.id))});modal.querySelector('[data-new]').onclick=async()=>{modal.remove();resolve(await buildManualGroup(workspace,group.garments[0]||null))};
+      };
+      document.body.appendChild(modal);draw();
     });
   }
   async function generateMockup(asset,choice,position,widthCm,heightCm){
