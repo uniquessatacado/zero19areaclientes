@@ -35,7 +35,7 @@ function render(orderRows,filmItems=[]){
   const slot=new Slot(),calls={quantities:[],navigate:[],added:[],errors:[],refresh:0,refreshItems:0};
   let current=true;
   runInNewContext(renderer,{
-    orderRows,filmItems,ordersSlot:slot,pageCurrent:()=>current,h:escapeHTML,dateLabel:value=>value||'Sem prazo',
+    orderRows,filmItems,fontOrderRows:[],officialPendingRows:[],ordersSlot:slot,app:{querySelector:()=>null},pageCurrent:()=>current,h:escapeHTML,dateLabel:value=>value||'Sem prazo',
     filmOrderRowKey:row=>row.kind==='company_order'?`company:${row.company_order_item_id||row.id||''}`:`quote:${row.quote_item_id||row.id||''}`,
     pendingQuantity:(row,items)=>{assert.notEqual(row.kind,'legacy_review','legacy rows cannot reach quantity calculation');calls.quantities.push(row.quote_item_id);return pendingQuantity(row,items);},
     filmItemFromOrder:(row,quantity)=>{assert.notEqual(row.kind,'legacy_review');calls.added.push(row.quote_item_id);return {localId:'new-item',orderLink:{quoteItemId:row.quote_item_id},quantity};},
