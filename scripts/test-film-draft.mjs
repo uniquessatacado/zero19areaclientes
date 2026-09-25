@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createFilmDraftStore,filmDraftKey,sanitizeFilmDraft,FILM_DRAFT_MAX_BYTES,resolveFilmDraftMedia} from '../film-draft.js';
 const memory=new Map(),calls=[],storage={getItem:key=>memory.get(key)??null,setItem:(key,value)=>{calls.push(['set',key]);memory.set(key,value)},removeItem:key=>{calls.push(['remove',key]);memory.delete(key)}};
 const item={localId:'local',type:'asset',sourceId:'asset',label:'Arte local',path:'owner/asset/original.png',widthCm:10,heightCm:6,quantity:2,rotationPolicy:'free',previewDataUrl:'data:image/png;base64,SHOULD_NOT_PERSIST',mask:{data:new Uint8Array([1])}};
-const settings={mediaId:'film-58',mode:'maximum',gapMm:3,freeRotation:true,angleStep:30},layout={filmWidthMm:580,lengthMm:60,placements:[{id:'local',copy:0,xMm:0,yMm:0,widthMm:100,heightMm:60,sourceWidthMm:100,sourceHeightMm:60,rotation:0,locked:true}]};
+const settings={mediaId:'film-58',mode:'maximum',gapMm:3,freeRotation:true,angleStep:30,name:'Filme 58 cm — Cliente — 25-09 02h33',nameCustom:true},layout={filmWidthMm:580,lengthMm:60,placements:[{id:'local',copy:0,xMm:0,yMm:0,widthMm:100,heightMm:60,sourceWidthMm:100,sourceHeightMm:60,rotation:0,locked:true}]};
 const draft={items:[item],settings,layout},store=createFilmDraftStore({ownerId:'owner-a',storage,now:()=> '2026-09-18T12:00:00.000Z'});
 assert.equal(FILM_DRAFT_MAX_BYTES,8388608);assert.equal(store.load().data,null);
 const saved=store.save(draft);assert.equal(saved.ok,true);assert.equal(saved.savedAt,'2026-09-18T12:00:00.000Z');assert.ok(saved.bytes>0&&saved.bytes<5000);
