@@ -69,8 +69,13 @@ function fitsPosition(model,surface,position,width,height){
 }
 function positionFits(model,surface,width,height,position){
   if(!fits(model,surface,width,height)||!position)return false;
-  const m=surfaceMetrics(model,surface),halfW=width/m.width/2,halfH=height/m.length/2,margin=surface.includes('sleeve')?.035:.025,x=Number(position.anchor_x),y=Number(position.anchor_y);
+  if(surface==='front'||surface==='back')return true;
+  const m=surfaceMetrics(model,surface),halfW=width/m.width/2,halfH=height/m.length/2,margin=.035,x=Number(position.anchor_x),y=Number(position.anchor_y);
   return x-halfW>=margin&&x+halfW<=1-margin&&y-halfH>=margin&&y+halfH<=1-margin;
+}
+function safePosition(model,surface,width,height,position){
+  const m=surfaceMetrics(model,surface),margin=surface.includes('sleeve')?.035:.025,halfW=Math.min(.49,width/m.width/2),halfH=Math.min(.49,height/m.length/2);
+  return {...position,anchor_x:Math.max(margin+halfW,Math.min(1-margin-halfW,Number(position.anchor_x))),anchor_y:Math.max(margin+halfH,Math.min(1-margin-halfH,Number(position.anchor_y)))};
 }
 function surfaceBox(surface){
   if(surface==='left_sleeve')return {x:.055,y:.195,w:.205,h:.285};
