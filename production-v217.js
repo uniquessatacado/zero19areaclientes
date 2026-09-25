@@ -1000,7 +1000,7 @@ export function createProductionModule(ctx){
   }
   const filmMaskCache=createFilmMaskCache({prepare:prepareFilmMask});
   async function maskForItem(item){
-    if(item.halftone||item.allowInternalNesting===false)return null;
+    if(item.halftone)return null;
     const source=item.type==='asset'&&item.path?ctx.publicUrl(item.path):item.type==='team_customization'&&item.previewDataUrl?item.previewDataUrl:null;
     if(!source)return null;
     try{return await filmMaskCache.get(source)}catch(error){if(error?.name==='AbortError')throw error;console.warn('mask',error);return null}
@@ -1028,7 +1028,7 @@ export function createProductionModule(ctx){
       check();return {w,h:height,data};
     }finally{if(canvas)canvas.width=canvas.height=1;}
   }
-  async function filmNestingItems(){return Promise.all(filmItems.map(async item=>({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.allowInternalNesting,rotationPolicy:filmSettings.freeRotation?'free':(item.rotationPolicy&&item.rotationPolicy!=='none'?item.rotationPolicy:'free'),mask:await maskForItem(item)})))}
+  async function filmNestingItems(){return Promise.all(filmItems.map(async item=>({id:item.localId,label:item.label,widthMm:item.widthCm*10,heightMm:item.heightCm*10,quantity:item.quantity,halftone:item.halftone,allowInternalNesting:item.halftone?false:true,rotationPolicy:filmSettings.freeRotation?'free':(item.rotationPolicy&&item.rotationPolicy!=='none'?item.rotationPolicy:'free'),mask:await maskForItem(item)})))}
   async function calculateFilm(media){
     if(!filmItems.length)return ctx.toast('Adicione ao menos um item.','err');
     const button=app.querySelector('#calculateFilm');if(!button)return;
@@ -1082,7 +1082,7 @@ export function createProductionModule(ctx){
       onRepack:async lockedPlacements=>{
         if(!current())return null;const snapshot=shownLayout,calculation=filmCalculationGeneration,valid=()=>current()&&shownLayout===snapshot&&calculation===filmCalculationGeneration;
         const settings={filmWidthMm:snapshot.filmWidthMm,mode:snapshot.mode,gapMm:snapshot.gapMm,cellMm:snapshot.cellMm||2,freeRotation:snapshot.freeRotation,angleStep:snapshot.angleStep,lockedPlacements,baselinePlacements:snapshot.placements};
-        const items=await filmNestingItems();if(!valid())return null;const result=await runNesting(items,settings);return valid()?result:null;
+        let items=await filmNestingItems();if(validationOptions.allowFreeRotation===true)items=items.map(item=>({...item,rotationPolicy:'free'}));if(!valid())return null;const result=await runNesting(items,settings);return valid()?result:null;
       }});
     if(ctx.getCostUI?.()){let slot=app.querySelector('#filmCostSummary');if(!slot){slot=document.createElement('section');slot.id='filmCostSummary';app.querySelector('.film-workspace').insertAdjacentElement('afterend',slot)}filmCostPanel?.destroy();filmCostPanel=ctx.getCostUI().mountFilmCost(slot,{getLayout:()=>lastFilm,getItems:()=>filmItems,getImageUrl:item=>item.previewDataUrl||(item.path?ctx.publicUrl(item.path):null),getCommission:()=>ctx.getFilmCommissions?.(filmItems)})}
   }
