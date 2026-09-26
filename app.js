@@ -26,7 +26,7 @@ const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
-const APP_VERSION = '2.17.35';
+const APP_VERSION = '2.17.36';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -642,7 +642,7 @@ function openAssetActions(a){
   $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.code==='23503'?'Esta arte está vinculada a um filme salvo e deve ser preservada.':error.message,'err');const paths=[...new Set([a.original_path,a.processed_path].filter(Boolean))];if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)toast('Cadastro excluído; o arquivo foi preservado no armazenamento por falha na limpeza.','err')}m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
 }
 
-function openUploadModal({presetType='arte',standaloneHalftone=false}={}){
+function openUploadModal({presetType='arte',standaloneHalftone=false,readyForPrint=false}={}){
   if(presetType==='arte'&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id)){
     toast('Este cliente ainda não possui pedido oficial. Ative “Permitir subir arte em cliente sem pedido” em Configurações para liberar temporariamente.','err');return;
   }
@@ -652,7 +652,7 @@ function openUploadModal({presetType='arte',standaloneHalftone=false}={}){
   async function addFiles(files){
     for(const f of files){
       const preview=URL.createObjectURL(f);
-      uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:false,widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
+      uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:Boolean(readyForPrint),widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
       const item=uploadQueue[uploadQueue.length-1];
       try{const bmp=await createImageBitmap(f);item.aspectRatio=bmp.height>0?bmp.width/bmp.height:0;bmp.close?.()}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
     }
@@ -752,7 +752,7 @@ async function processQueue(m,{mockupMode=false}={}){
     stage('Não foi possível concluir o arquivo. Tente novamente; nenhuma arte nova foi salva.');
     btn.disabled=false;return;
   }
-  stage(`Concluído: ${done} de ${queue.length}. Abrindo tamanho e posição…`);
+  stage(uploadWorkspace?.workspace_type==='client'?`Concluído: ${done} de ${queue.length}. Abrindo posição…`:`Concluído: ${done} de ${queue.length}. Arte salva na biblioteca.`);
   uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));uploadQueue=[];m.remove();
   try{
     if(placementAssets.length&&officialOrders&&uploadWorkspace?.id){
@@ -1280,6 +1280,10 @@ processQueue = async function(m,{mockupMode=false}={}){
       ]);
       stage(`${done+1}/${queue.length} · Uploads concluídos · Salvando no cliente…`);
       const {data:saved,error}=await supabase.from('z19p_assets').insert(assetRow).select('*').single();if(error)throw error;
+      if(q.type==='arte'&&(widthCm>0||heightCm>0)){
+        const ratio=(result.width||1)/(result.height||1),profileWidth=widthCm||(heightCm>0?heightCm*ratio:0),profileHeight=heightCm||(widthCm>0?widthCm/ratio:0),ready=Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null));
+        const profileResult=await supabase.from('z19p_asset_print_profiles').upsert({asset_id:assetId,owner_id:accountOwnerId(),project_id:officialProject?.id||null,default_width_cm:profileWidth,default_height_cm:profileHeight,aspect_ratio:ratio,halftone:Boolean(q.standaloneHalftone),allow_internal_nesting:!q.standaloneHalftone,rotation_policy:q.standaloneHalftone?'none':'free',ready_for_print:ready,created_by:session.user.id,updated_by:session.user.id,updated_at:new Date().toISOString()},{onConflict:'asset_id'});if(profileResult.error){await supabase.from('z19p_assets').delete().eq('id',assetId).eq('owner_id',accountOwnerId());await supabase.storage.from(BUCKET).remove([originalPath,processedPath]);throw profileResult.error;}
+      }
       savedAssets.push(saved||assetRow);done++;prog.firstElementChild.style.width=`${Math.round(done/queue.length*100)}%`;
     }catch(err){
       console.error('upload artwork',err);toast(`Erro em ${q.name}: ${err.message||err}`,'err');
@@ -1291,7 +1295,7 @@ processQueue = async function(m,{mockupMode=false}={}){
     btn.disabled=false;return;
   }
 
-  stage(`Concluído: ${done} de ${queue.length}. Abrindo tamanho e posição…`);
+  stage(uploadWorkspace?.workspace_type==='client'?`Concluído: ${done} de ${queue.length}. Abrindo posição…`:`Concluído: ${done} de ${queue.length}. Arte salva na biblioteca.`);
   uploadQueue.forEach(item=>item.preview&&URL.revokeObjectURL(item.preview));uploadQueue=[];m.remove();
   try{
     if(savedAssets.length&&officialOrders&&uploadWorkspace?.workspace_type==='client'){
@@ -1433,6 +1437,7 @@ productionModule=createProductionModule({
   getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
   isGarmentStudioEnabled:()=>garmentStudioEnabled,
   officialOrders,
+  quickUploadFilmArt:async()=>{await ensureDefaults();const workspace=libraryWorkspaces.library_artes;if(!workspace)throw new Error('Biblioteca de artes não encontrada.');pendingQuickUploadWorkspaceId=workspace.id;pendingQuickUploadMode='film';nav('/ambiente/'+workspace.id)},
   openArtMockup:async(asset,options)=>{if(await officialOrders?.openPlacementPreview?.(asset))return;return artStudio.openMockup(asset,options)},openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>garmentStudioEnabled?artStudio.openGarment(asset,options):null,
   openArt3D:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'3d'}):null,openArtPresentation:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'share3d'}):null,openArtBlank:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'blank'}):null,
   prepareDashboard:async()=>{const stillCurrent=accountReadGuard(true);if(!await loadTeamContext({reuseRoute:true})||!stillCurrent())return;await ensureDefaults();if(!stillCurrent())return;await Promise.all([loadConfig(),loadWorkspaces(),loadProjects()]);},
@@ -1462,8 +1467,8 @@ renderWorkspace=async function(id){
     const projectHtml=projects.length?projects.map(p=>{const date=p.official_order_synced_at?new Date(p.official_order_synced_at).toLocaleString('pt-BR'):'',status=p.official_order_status||'Sincronizado';return `<article class="client-project-row"><div><b>Pedido ${escapeHTML(p.official_order_ref)} · ${escapeHTML(p.title||'Pedido oficial')}</b><small>${date?escapeHTML(date)+' • ':''}${escapeHTML(status)}</small></div><span>Pedido oficial</span></article>`}).join(''):'<div class="empty mini">Nenhum pedido oficial sincronizado ainda.</div>';
     const warning=projects.length?'':`<div class="official-order-page-alert"><i></i><div><strong>Pendente de pedido oficial</strong><span>Este cliente ainda não recebeu um pedido sincronizado do outro sistema. Assim que o pedido oficial chegar, esta pendência desaparece automaticamente.</span></div></div>`;
     banner?.insertAdjacentHTML('afterend',warning+`<section class="client-projects-simple"><div class="section-title-row"><div><div class="eyebrow">Projetos</div><h2>Pedidos do cliente</h2><p>Somente pedidos oficiais sincronizados aparecem aqui.</p></div></div><div class="client-project-list">${projectHtml}</div></section>`);
-    if(pendingQuickUploadWorkspaceId===id){const mode=pendingQuickUploadMode;pendingQuickUploadWorkspaceId=null;pendingQuickUploadMode=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte',standaloneHalftone:mode==='halftone'})},0);}
   }
+  if(pendingQuickUploadWorkspaceId===id){const mode=pendingQuickUploadMode;pendingQuickUploadWorkspaceId=null;pendingQuickUploadMode=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte',standaloneHalftone:mode==='halftone',readyForPrint:mode==='film'})},0);}
   zero19Sync?.enhanceWorkspace?.(currentWorkspace,currentAssets,currentProjects);
   if(ticket)routeViewport.complete(ticket);
 };
