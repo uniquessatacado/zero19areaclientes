@@ -49,7 +49,7 @@ export async function findSpotAlphaBounds(canvas,{signal,onProgress=()=>{}}={}){
   return {x:left,y:top,width:right-left+1,height:bottom-top+1};
 }
 
-export function createSpotWorkerClient({signal,workerFactory=()=>new Worker(new URL('./film-spot-worker.js?v=2.17.9',import.meta.url),{type:'module'}),timeoutMs=60000}={}){
+export function createSpotWorkerClient({signal,curveLut,workerFactory=()=>new Worker(new URL('./film-spot-worker.js?v=2.17.9',import.meta.url),{type:'module'}),timeoutMs=0}={}){
   throwIfSpotCancelled(signal);
   const worker=workerFactory();let pending=null,sequence=0,closed=false;
   const fail=error=>{if(pending){const task=pending;pending=null;clearTimeout(task.timer);task.reject(error)}};
@@ -66,12 +66,12 @@ export function createSpotWorkerClient({signal,workerFactory=()=>new Worker(new 
     if(closed)return Promise.reject(new Error('O conversor já foi encerrado.'));
     if(pending)return Promise.reject(new Error('Somente uma faixa pode ser processada por vez.'));
     return new Promise((resolve,reject)=>{
-      const timer=setTimeout(()=>{fail(new Error('O conversor demorou demais. Cancele e tente novamente.'));dispose()},timeoutMs);
+      const timer=timeoutMs>0?setTimeout(()=>{fail(new Error('O conversor demorou demais. Cancele e tente novamente.'));dispose()},timeoutMs):null;
       pending={kind,id:message.id,resolve,reject,timer};
       try{worker.postMessage(message,transfer)}catch(error){fail(error);dispose()}
     });
   }
-  return {ready:()=>request('init',{type:'init'}),dispose,async convert(rgba){
+  return {ready:()=>{const bytes=curveLut?Uint8Array.from(curveLut):null;return bytes?request('init',{type:'init',curveLut:bytes.buffer},[bytes.buffer]):request('init',{type:'init'})},dispose,async convert(rgba){
     const expected=rgba.byteLength/4*5,id=++sequence;
     const {buffer}=await request('convert',{type:'convert',id,rgba:rgba.buffer},[rgba.buffer]);
     if(!(buffer instanceof ArrayBuffer)||buffer.byteLength!==expected)throw new Error('O conversor retornou uma faixa TIFF incompleta.');
@@ -99,7 +99,7 @@ export async function writeSpotCanvas({canvas,bounds,converter,write,signal,onPr
   return {width:bounds.width,height:bounds.height,bytes:written};
 }
 
-export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,signal,onProgress=()=>{},deviceMemory,workerFactory,picker=globalThis.showSaveFilePicker}){
+export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,signal,curveLut,onProgress=()=>{},deviceMemory,workerFactory,picker=globalThis.showSaveFilePicker}){
   let streaming=typeof picker==='function',handle=null,sink=null,canvas=null,converter=null;
   let parts=[];
   preflightSpotExport({...geometry,streaming,deviceMemory});
@@ -117,7 +117,7 @@ export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,sign
     }
     throwIfSpotCancelled(signal);
     onProgress({stage:'profiles',done:0,total:0});
-    converter=createSpotWorkerClient({signal,workerFactory});await converter.ready();
+    converter=createSpotWorkerClient({signal,curveLut,workerFactory});await converter.ready();
     throwIfSpotCancelled(signal);
     canvas=await renderCanvas({signal,onProgress});
     const alphaBounds=await findSpotAlphaBounds(canvas,{signal,onProgress});

@@ -141,7 +141,7 @@ function expandItems(items){
     const item={...source,widthMm:Number(source.widthMm),heightMm:Number(source.heightMm),originalIndex},quantity=source.quantity==null?1:Number(source.quantity);
     if(!Number.isFinite(item.widthMm)||!Number.isFinite(item.heightMm)||item.widthMm<=0||item.heightMm<=0)throw new Error(`Medida inválida para ${item.label||item.id}.`);
     if(!['none','90','180','free'].includes(item.rotationPolicy||'none'))throw new Error(`Política de rotação inválida para ${item.label||item.id}.`);
-    if(!Number.isInteger(quantity)||quantity<1||quantity>10000||expanded.length+quantity>10000)throw new Error('Informe uma quantidade inteira entre 1 e 10.000 peças por filme.');
+    if(!Number.isSafeInteger(quantity)||quantity<1||!Number.isSafeInteger(expanded.length+quantity))throw new Error('Informe uma quantidade inteira positiva para o filme.');
     for(let copy=0;copy<quantity;copy++)expanded.push({...item,copy});
   }
   expanded.sort((a,b)=>(b.widthMm*b.heightMm)-(a.widthMm*a.heightMm)||String(a.id).localeCompare(String(b.id))||a.copy-b.copy);
@@ -452,7 +452,6 @@ export function buildSafeSegments(placements,lengthMm,maxSegmentMm){
     if(crossing)end=crossing.start>start+EPSILON?crossing.start:crossing.end;
     if(end<=start+EPSILON)throw new Error('Não foi possível criar um corte seguro para o filme.');
     segments.push({start,end});start=end;
-    if(segments.length>10000)throw new Error('Quantidade de segmentos acima do limite seguro.');
   }
   return segments;
 }

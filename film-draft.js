@@ -10,7 +10,7 @@ export function sanitizeFilmDraft(data){
   for(const candidate of data.items){
     if(!candidate||!candidate.localId||ids.has(candidate.localId)||!['asset','team_customization'].includes(candidate.type)||!candidate.sourceId){dropped++;continue;}
     const widthCm=Number(candidate.widthCm),heightCm=Number(candidate.heightCm),quantity=Number(candidate.quantity),policy=candidate.rotationPolicy||'none';
-    if(!Number.isFinite(widthCm)||!Number.isFinite(heightCm)||widthCm<=0||heightCm<=0||widthCm>1000||heightCm>1000||!Number.isInteger(quantity)||quantity<1||quantity>10000||!['none','90','180','free'].includes(policy)){dropped++;continue;}
+    if(!Number.isFinite(widthCm)||!Number.isFinite(heightCm)||widthCm<=0||heightCm<=0||widthCm>1000||heightCm>1000||!Number.isSafeInteger(quantity)||quantity<1||!['none','90','180','free'].includes(policy)){dropped++;continue;}
     const item=stripRuntime(candidate);Object.assign(item,{widthCm,heightCm,quantity,rotationPolicy:policy});items.push(item);ids.add(item.localId);
   }
   if(dropped)warnings.push(`${dropped} ${dropped===1?'item inválido não pôde ser recuperado':'itens inválidos não puderam ser recuperados'}. Os demais itens foram mantidos; recalcule o filme.`);

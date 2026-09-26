@@ -3,7 +3,7 @@ import {composeCmykSpot} from './film-tiff-core.js?v=2.17.9';
 
 // A single export owns this worker. Main thread sends only one strip at a time;
 // cancellation terminates the worker and its entire WASM heap immediately.
-let converter=null,initializing=null,closed=false;
+let converter=null,initializing=null,closed=false,activeCurveLut=null;
 const MAX_RGBA_BYTES=16*1024*1024;
 
 async function initialize(){
@@ -25,6 +25,10 @@ self.onmessage=async event=>{
       closed=true;converter?.close();converter=null;self.close();return;
     }
     if(message.type==='init'){
+      if(message.curveLut!==undefined){
+        if(!(message.curveLut instanceof ArrayBuffer)||message.curveLut.byteLength!==256)throw new Error('Curva CMYK inválida.');
+        activeCurveLut=new Uint8Array(message.curveLut);
+      }
       await initialize();self.postMessage({type:'ready'});return;
     }
     if(message.type!=='convert')throw new Error('Solicitação de exportação TIFF desconhecida.');
@@ -33,7 +37,7 @@ self.onmessage=async event=>{
     const rgba=new Uint8Array(message.rgba),pixels=rgba.length/4,rgb=new Uint8Array(pixels*3);
     for(let i=0,j=0;i<rgba.length;i+=4,j+=3){rgb[j]=rgba[i];rgb[j+1]=rgba[i+1];rgb[j+2]=rgba[i+2];}
     const cmyk=converter.convertRGB(rgb);
-    const result=composeCmykSpot(rgba,cmyk);
+    const result=composeCmykSpot(rgba,cmyk,activeCurveLut||undefined);
     if(!(result instanceof Uint8Array)||result.length!==pixels*5)throw new Error('Saída CMYK + Spot inválida.');
     self.postMessage({type:'converted',id:message.id,buffer:result.buffer},[result.buffer]);
   }catch(error){

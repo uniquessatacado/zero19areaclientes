@@ -38,12 +38,15 @@ function byteArray(value) {
  * RGB values are deliberately ignored here; only original RGBA alpha is used.
  * Inputs are not mutated. The caller can transfer/reuse their buffers afterwards.
  */
-export function composeCmykSpot(rgba, cmyk) {
+export function composeCmykSpot(rgba, cmyk, curveLut = CURVE_INK_LUT) {
   if (!byteArray(rgba) || !byteArray(cmyk)) {
     throw new TypeError('Os pixels RGBA e CMYK devem ser vetores de bytes de 8 bits.');
   }
   if (rgba.length !== cmyk.length || rgba.length % 4 !== 0) {
     throw new RangeError('Os blocos RGBA e CMYK devem ter o mesmo numero de pixels completos.');
+  }
+  if (!curveLut || curveLut.length !== 256) {
+    throw new RangeError('A curva CMYK precisa conter exatamente 256 níveis.');
   }
   const outputBytes = (rgba.length / 4) * 5;
   if (!Number.isSafeInteger(outputBytes) || outputBytes > UINT32_MAX) {
@@ -52,10 +55,10 @@ export function composeCmykSpot(rgba, cmyk) {
   const output = new Uint8Array(outputBytes);
   for (let input = 0, target = 0; input < rgba.length; input += 4, target += 5) {
     const alpha = rgba[input + 3];
-    output[target] = Math.round(CURVE_INK_LUT[cmyk[input]] * alpha / 255);
-    output[target + 1] = Math.round(CURVE_INK_LUT[cmyk[input + 1]] * alpha / 255);
-    output[target + 2] = Math.round(CURVE_INK_LUT[cmyk[input + 2]] * alpha / 255);
-    output[target + 3] = Math.round(CURVE_INK_LUT[cmyk[input + 3]] * alpha / 255);
+    output[target] = Math.round(curveLut[cmyk[input]] * alpha / 255);
+    output[target + 1] = Math.round(curveLut[cmyk[input + 1]] * alpha / 255);
+    output[target + 2] = Math.round(curveLut[cmyk[input + 2]] * alpha / 255);
+    output[target + 3] = Math.round(curveLut[cmyk[input + 3]] * alpha / 255);
     output[target + 4] = 255 - alpha;
   }
   return output;
