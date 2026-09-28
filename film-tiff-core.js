@@ -136,11 +136,13 @@ function validDimension(value) {
  * strip and one continuous image/file. Classic TIFF cannot exceed 32-bit offsets.
  * No Photoshop artist/history/layers or ICC from the private references is copied.
  */
-export function createSpotTiffHeader({ width, height, dpi = 300 } = {}) {
+export function createSpotTiffHeader({ width, height, dpi = 300, colorMode = 'cmyk' } = {}) {
+  if(!['cmyk','rgb'].includes(colorMode))throw new RangeError('Modo de cor TIFF inválido.');
+  const rgb=colorMode==='rgb',channels=rgb?4:5;
   if (!validDimension(width) || !validDimension(height)) {
     throw new RangeError('Largura e altura TIFF devem ser inteiros positivos validos.');
   }
-  const pixelBytes = width * height * 5;
+  const pixelBytes = width * height * channels;
   if (!Number.isSafeInteger(pixelBytes) || pixelBytes > UINT32_MAX) {
     throw new RangeError('O filme excede o limite de 4 GiB do TIFF classico; nao sera dividido nem reduzido.');
   }
@@ -157,12 +159,12 @@ export function createSpotTiffHeader({ width, height, dpi = 300 } = {}) {
     [254, 4, 1, uint32s([0])],
     [256, 4, 1, uint32s([width])],
     [257, 4, 1, uint32s([height])],
-    [258, 3, 5, uint16s([8, 8, 8, 8, 8])],
+    [258, 3, channels, uint16s(Array(channels).fill(8))],
     [259, 3, 1, uint16s([1])],
-    [262, 3, 1, uint16s([5])],
+    [262, 3, 1, uint16s([rgb?2:5])],
     [273, 4, 1, uint32s([0])], // strip offset is filled after the small header is laid out
     [274, 3, 1, uint16s([1])],
-    [277, 3, 1, uint16s([5])],
+    [277, 3, 1, uint16s([channels])],
     [278, 4, 1, uint32s([height])],
     [279, 4, 1, uint32s([pixelBytes])],
     [282, 5, 1, uint32s([resolutionNumerator, 10000])],
@@ -170,8 +172,8 @@ export function createSpotTiffHeader({ width, height, dpi = 300 } = {}) {
     [284, 3, 1, uint16s([1])],
     [296, 3, 1, uint16s([2])],
     [305, 2, software.length, software],
-    [338, 3, 1, uint16s([0])], // unspecified extra sample; IRBs identify it as Spot
-    [34377, 1, resources.length, resources],
+    [338, 3, 1, uint16s([rgb?2:0])], // RGB: unassociated alpha; CMYK: Spot identified by IRBs
+    ...(!rgb?[[34377, 1, resources.length, resources]]:[]),
   ];
   let pixelOffset = 8 + 2 + entries.length * 12 + 4;
   for (const entry of entries) {

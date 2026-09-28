@@ -4,8 +4,11 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
 import vm from 'node:vm';
-const workflow=(await fs.readFile(new URL('../official-order-workflow.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/,'').replaceAll('export ','');
+const preparation=(await fs.readFile(new URL('../print-art-preparation.js',import.meta.url),'utf8')).replaceAll('export ','');
+const workflow=preparation+'\n'+(await fs.readFile(new URL('../official-order-workflow.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'').replaceAll('export ','');
 const queue=await fs.readFile(new URL('../zero19-pdv-sync.js',import.meta.url),'utf8');
+const appSource=await fs.readFile(new URL('../app.js',import.meta.url),'utf8');
+const processing=appSource.slice(appSource.indexOf('async function processImage('),appSource.indexOf('function renderPublicQuotes('));
 const picker=queue.slice(queue.indexOf('  function orderArtworkItems('),queue.indexOf('  async function importSourceArtwork('));
 const styles=(await Promise.all(['styles.css','official-order-workflow.css','ui-polish.css','mobile-stability.css'].map(f=>fs.readFile(new URL('../'+f,import.meta.url),'utf8')))).join('\n');
 const injected=queue.match(/style\.textContent='([^']*)';/)?.[1];
@@ -16,6 +19,7 @@ const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));let socket,id=0;con
 function send(method,params={}){const key=++id;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('CDP timeout '+method)),30000);pending.set(key,{resolve:value=>{clearTimeout(timer);resolve(value)},reject});socket.send(JSON.stringify({id:key,method,params}));});}
 async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(r.exceptionDetails.exception?.description||r.exceptionDetails.text);return r.result.value;}
 const fixture=`
+if(!crypto.randomUUID)crypto.randomUUID=()=> 'test-'+Math.random().toString(36).slice(2);
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const preview='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="360"><rect width="300" height="360" fill="#ddd"/><text x="40" y="180" fill="#111" font-size="30">ARTE TESTE</text></svg>');
 const realMockupPreview=()=>'<div class="manual-real-preview"><img src="'+preview+'" style="max-width:100%;max-height:340px" alt="Prévia de teste"></div>',renderPieceMockup=async()=>{const c=document.createElement('canvas');c.width=50;c.height=60;return c},loadBlankShirtCatalog=async()=>[],colorForCatalog=()=>({id:'black'}),modelForCatalog=()=> 'normal';
@@ -25,10 +29,11 @@ const workspace={id:'workspace',workspace_type:'client'},db={z19p_print_position
 const assets=[{id:'front-art',name:'Peito esquerdo',asset_type:'arte',width:600,height:900,workspace_id:'workspace',project_id:'order',owner_id:'owner',metadata:{personalization_sale_id:'front',pdv_position_code:'front_chest_left',requested_width_cm:9,requested_height_cm:13.5}},{id:'back-art',name:'Costas · meio',asset_type:'arte',width:600,height:900,workspace_id:'workspace',project_id:'order',owner_id:'owner',metadata:{personalization_sale_id:'back',pdv_position_code:'back_center',pdv_width_cm:28}}];
 db.z19p_assets.push(...assets);db.z19p_asset_print_profiles.push({asset_id:'back-art',owner_id:'owner',default_width_cm:35,default_height_cm:52.5});
 function query(table){let mode='select',payload=null,one=false,filters=[],max=Infinity;const q={select(){return q},eq(k,v){filters.push(r=>r[k]===v);return q},is(k,v){filters.push(r=>(r[k]??null)===v);return q},order(){return q},limit(n){max=n;return q},maybeSingle(){one=true;return q},single(){one=true;return q},insert(v){mode='insert';payload=v;return q},update(v){mode='update';payload=v;return q},upsert(v){mode='upsert';payload=v;return q},delete(){mode='delete';return q},then(resolve,reject){return (async()=>{await delay(table==='z19p_print_positions'?420:5);let rows=db[table].filter(r=>filters.every(f=>f(r))).slice(0,max);if(mode==='insert'){db[table].push(payload);rows=[payload]}if(mode==='upsert'){const old=db[table].find(r=>r.asset_id===payload.asset_id);if(old)Object.assign(old,payload);else db[table].push(payload);rows=[old||payload]}if(mode==='update')rows.forEach(r=>Object.assign(r,payload));if(mode==='delete')db[table]=db[table].filter(r=>!rows.includes(r));return {data:one?(rows[0]||null):rows,error:null}})().then(resolve,reject)}};return q}
-const supabase={from:query,storage:{from:()=>({upload:async()=>({error:null}),remove:async()=>({error:null}),createSignedUrl:async()=>({data:{signedUrl:preview}})})}},api=createOfficialOrderWorkflow({supabase,accountOwnerId:()=> 'owner',userId:()=> 'owner',state:()=>({currentWorkspace:workspace,currentProjects:[project]}),publicUrl:()=>preview,bucket:'test',toast:(message,type)=>{if(type==='err')errors.push(message)}});
+assets.forEach(a=>a.original_path=a.id+'.png');
+const supabase={from:query,storage:{from:()=>({download:async()=>({data:new Blob(['image'])}),upload:async()=>({error:null}),remove:async()=>({error:null}),createSignedUrl:async()=>({data:{signedUrl:preview}})})}},api=createOfficialOrderWorkflow({supabase,accountOwnerId:()=> 'owner',userId:()=> 'owner',state:()=>({currentWorkspace:workspace,currentProjects:[project]}),publicUrl:()=>preview,bucket:'test',processPrintImage:async(blob,options)=>({blob,width:600,height:900,engine:'test',upscaled:false}),resolveOrderArtwork:async(projectId,ref)=>db.z19p_assets.find(a=>a.metadata.personalization_sale_id===ref&&a.asset_type==='arte'),toast:(message,type)=>{if(type==='err')errors.push(message)}});
 supabase.rpc=async(name,args)=>{if(name==='z19p_zero19_mark_art_ready'){const a=db.z19p_assets.find(r=>r.id===args.p_asset_id);if(a.metadata.personalization_sale_id!==args.p_personalization_sale_id)return {error:{message:'Wrong item'}};rpcCalls.push(args)}return {data:{},error:null}};
 window.qa={api,assets,workspace,project,db,rpcCalls,errors,done:false};
-qa.task=api.offerAfterUpload(assets,{workspace,projects:[project]}).then(()=>qa.done=true).catch(e=>errors.push(e.message));
+qa.task=api.offerAfterUpload([assets[0]],{workspace,projects:[project],reviewRefs:['front','back']}).then(()=>qa.done=true).catch(e=>errors.push(e.message));
 `;
 async function waitFor(expression){for(let n=0;n<100;n++){if(await evaluate(expression))return;await delay(40)}throw Error('Timeout: '+expression)}
 try{
@@ -42,7 +47,14 @@ try{
    assert.equal(await evaluate('qa.done'),false,'slow DB cannot finish the flow before the modal exists');
    await waitFor("!!document.querySelector('[data-width]')");
    const front=await evaluate(`({width:document.querySelector('[data-width]').value,active:document.querySelector('.official-product-card.active').dataset.product,disabled:document.querySelectorAll('[data-product]:disabled').length,overflow:document.querySelector('.official-placement-page').scrollWidth>innerWidth,open:document.querySelectorAll('.official-placement-backdrop').length})`);
-   assert.equal(front.width,'9');assert.equal(front.active,'front');assert.equal(front.disabled,1);assert.equal(front.overflow,false);assert.equal(front.open,1);
+   assert.equal(front.width,'9');assert.equal(front.active,'front');assert.equal(front.disabled,0);assert.equal(front.overflow,false);assert.equal(front.open,1);
+   await evaluate("document.querySelector('[data-width]').value='10';document.querySelector('[data-width]').dispatchEvent(new Event('change'));document.querySelector('[data-product=back]').click()");
+   await waitFor("document.querySelector('.official-product-card.active')?.dataset.product==='back'");
+   assert.equal(await evaluate("document.querySelector('[data-width]').value"),'35');
+   await evaluate("document.querySelector('[data-product=front]').click()");
+   await waitFor("document.querySelector('.official-product-card.active')?.dataset.product==='front'");
+   assert.equal(await evaluate("document.querySelector('[data-width]').value"),'10','switching preserves unsaved per-art measures');
+   await evaluate("document.querySelector('[data-width]').value='9';document.querySelector('[data-width]').dispatchEvent(new Event('change'))");
    await evaluate("document.querySelector('[data-save]').click()");
    await waitFor("document.querySelector('.official-product-card.active')?.dataset.product==='back'");
    assert.equal(await evaluate("document.querySelector('[data-width]').value"),'35','saved physical size survives next organizer');
@@ -64,6 +76,8 @@ try{
    const pill=await evaluate(`({height:document.querySelector('.z19-deadline-countdown').getBoundingClientRect().height,overflow:document.documentElement.scrollWidth>innerWidth})`);
    assert(pill.height<38,JSON.stringify(pill));assert.equal(pill.overflow,false);
    const cardShot=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,viewport.name+'-cards.png'),Buffer.from(cardShot.data,'base64'));
+   const prepared=await evaluate(`(async()=>{const pxAt300=cm=>Math.round(cm/2.54*300),pica={resize:async(source,out)=>{out.getContext('2d').drawImage(source,0,0,out.width,out.height)}};${processing};const c=document.createElement('canvas');c.width=40;c.height=40;c.getContext('2d').fillRect(10,5,20,30);const blob=await new Promise(r=>c.toBlob(r));const output=await processImage(blob,{trim:true,targetWidthCm:2.54});const bytes=new Uint8Array(await output.blob.arrayBuffer()),view=new DataView(bytes.buffer);return {width:output.width,height:output.height,upscaled:output.upscaled,physicalChunk:new TextDecoder().decode(bytes.slice(37,41)),ppm:view.getUint32(41)}})()`);
+   assert.deepEqual(prepared,{width:300,height:450,upscaled:true,physicalChunk:'pHYs',ppm:11811},'real preparation trims borders, scales to chosen width and writes 300 DPI');
    console.log(JSON.stringify({viewport:viewport.name,front,saved,pill,screenshots:output}));
  }
 }finally{try{if(socket?.readyState===1)await send('Browser.close')}catch{}socket?.close();child.kill()}

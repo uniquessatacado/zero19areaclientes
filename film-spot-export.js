@@ -80,8 +80,8 @@ export function createSpotWorkerClient({signal,curveLut,workerFactory=()=>new Wo
 }
 
 // write() is awaited for every strip: disk backpressure, no queued full-image buffers.
-export async function writeSpotCanvas({canvas,bounds,converter,write,signal,onProgress=()=>{}}){
-  const header=createSpotTiffHeader({width:bounds.width,height:bounds.height,dpi:300});
+export async function writeSpotCanvas({canvas,bounds,converter,write,signal,colorMode='cmyk',onProgress=()=>{}}){
+  const header=createSpotTiffHeader({width:bounds.width,height:bounds.height,dpi:300,colorMode});
   const context=canvas.getContext('2d',{willReadFrequently:true});
   if(!context)throw new Error('Não foi possível ler os pixels do filme.');
   let written=0;throwIfSpotCancelled(signal);
@@ -89,8 +89,8 @@ export async function writeSpotCanvas({canvas,bounds,converter,write,signal,onPr
   for(let y=0;y<bounds.height;y+=ROWS){
     throwIfSpotCancelled(signal);
     const rows=Math.min(ROWS,bounds.height-y),rgba=context.getImageData(bounds.x,bounds.y+y,bounds.width,rows).data;
-    const converted=await converter.convert(rgba);throwIfSpotCancelled(signal);
-    if(converted.byteLength!==bounds.width*rows*5)throw new Error('Tamanho inválido de uma faixa TIFF.');
+    const converted=colorMode==='rgb'?rgba:await converter.convert(rgba);throwIfSpotCancelled(signal);
+    if(converted.byteLength!==bounds.width*rows*(colorMode==='rgb'?4:5))throw new Error('Tamanho inválido de uma faixa TIFF.');
     await write(converted);written+=converted.byteLength;
     onProgress({stage:'convert',done:y+rows,total:bounds.height,bytes:written});
   }
@@ -99,16 +99,17 @@ export async function writeSpotCanvas({canvas,bounds,converter,write,signal,onPr
   return {width:bounds.width,height:bounds.height,bytes:written};
 }
 
-export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,signal,curveLut,onProgress=()=>{},deviceMemory,workerFactory,picker=globalThis.showSaveFilePicker}){
+export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,signal,curveLut,colorMode='cmyk',onProgress=()=>{},deviceMemory,workerFactory,picker=globalThis.showSaveFilePicker}){
+  if(!['cmyk','rgb'].includes(colorMode))throw new Error('Selecione um modo TIFF válido.');
   let streaming=typeof picker==='function',handle=null,sink=null,canvas=null,converter=null;
   let parts=[];
   preflightSpotExport({...geometry,streaming,deviceMemory});
   throwIfSpotCancelled(signal);
-  if(typeof Worker==='undefined'&&!workerFactory)throw new Error('Este navegador não oferece o processamento local necessário ao TIFF. Use Chrome, Edge, Firefox ou Safari atualizado.');
+  if(colorMode==='cmyk'&&typeof Worker==='undefined'&&!workerFactory)throw new Error('Este navegador não oferece o processamento local necessário ao TIFF. Use Chrome, Edge, Firefox ou Safari atualizado.');
   try{
     // Called directly from the click handler, before losing transient user activation.
     if(streaming){
-      try{handle=await picker.call(globalThis,{suggestedName:name,types:[{description:'TIFF CMYK + Cor Spot 1',accept:{'image/tiff':['.tif']}}]})}
+      try{handle=await picker.call(globalThis,{suggestedName:name,types:[{description:colorMode==='rgb'?'TIFF RGB com transparência':'TIFF CMYK + Cor Spot 1',accept:{'image/tiff':['.tif']}}]})}
       catch(error){
         if(error.name==='AbortError')throw error;
         if(!['SecurityError','NotAllowedError','NotSupportedError'].includes(error.name))throw error;
@@ -117,13 +118,13 @@ export async function exportCanvasWithSpot({name,geometry,renderCanvas,trim,sign
     }
     throwIfSpotCancelled(signal);
     onProgress({stage:'profiles',done:0,total:0});
-    converter=createSpotWorkerClient({signal,curveLut,workerFactory});await converter.ready();
+    if(colorMode==='cmyk'){converter=createSpotWorkerClient({signal,curveLut,workerFactory});await converter.ready();}
     throwIfSpotCancelled(signal);
     canvas=await renderCanvas({signal,onProgress});
     const alphaBounds=await findSpotAlphaBounds(canvas,{signal,onProgress});
     const bounds=trim?alphaBounds:{x:0,y:0,width:canvas.width,height:canvas.height};
     if(handle){sink=await handle.createWritable();throwIfSpotCancelled(signal)}
-    const result=await writeSpotCanvas({canvas,bounds,converter,signal,onProgress,write:async bytes=>{if(sink)await sink.write(bytes);else parts.push(bytes)}});
+    const result=await writeSpotCanvas({canvas,bounds,converter,signal,colorMode,onProgress,write:async bytes=>{if(sink)await sink.write(bytes);else parts.push(bytes)}});
     onProgress({stage:'finish',done:0,total:0});throwIfSpotCancelled(signal);
     if(sink){await sink.close();sink=null;return {...result,saved:true,name}}
     const blob=new Blob(parts,{type:'image/tiff'});parts=[];

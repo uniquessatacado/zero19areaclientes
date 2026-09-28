@@ -386,7 +386,9 @@ export function createZero19PdvSync(ctx){
         modal.querySelectorAll('[data-organize]').forEach(button=>button.onclick=async()=>{
           if(busy)return;busy=true;const original=button.textContent;button.textContent='Abrindo arte…';modal.querySelectorAll('button').forEach(b=>b.disabled=true);
           const errorBox=modal.querySelector('[data-error]');errorBox.hidden=true;
-          try{await importSourceArtwork(button.dataset.organize,{single:true});const latest=await load(true);summary=latest.summaries.find(s=>s.project.id===summary.project.id)||summary;draw()}
+          try{const review=await importSourceArtwork(button.dataset.organize,{single:true});const latest=await load(true);summary=latest.summaries.find(s=>s.project.id===summary.project.id)||summary;
+            if(review?.completed&&orderArtworkItems(summary).every(item=>['ready_production','production'].includes(item.stage))){modal.remove();resolve();toast('Revisão concluída. Artes prontas em Aguardando produção.','ok');}
+            else draw();}
           catch(error){errorBox.textContent=error.message||'Não foi possível organizar esta arte.';errorBox.hidden=false;errorBox.scrollIntoView({block:'nearest'});button.textContent=original;modal.querySelectorAll('button').forEach(b=>b.disabled=false)}
           finally{busy=false}
         });
@@ -399,11 +401,19 @@ export function createZero19PdvSync(ctx){
     });
     await closed;
   }
-  async function importSourceArtwork(workItemId,{single=false}={}){
+  async function resolveOrderArtwork(projectId,saleId){
+    const data=await load(true),item=data.items?.find(row=>row.project_id===projectId&&row.personalization_sale_id===saleId)||data.summaries.find(s=>s.project.id===projectId)?.items.find(row=>row.personalization_sale_id===saleId);
+    if(!item||!['art_received','ready_production'].includes(item.stage)||item.without_application)throw new Error('Esta posição ainda não está disponível para organizar. Confira o arquivo e a etapa do pedido.');
+    return importSourceArtwork(item.id,{single:true,prepareOnly:true});
+  }
+  async function importSourceArtwork(workItemId,{single=false,prepareOnly=false}={}){
     const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('Item não encontrado.','err');
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
     if(!single&&orderArtworkItems(summary).length>1)return openOrderArtworkPicker(summary);
-    if(item.asset_id)return finishHalftone(item.id);
+    if(item.asset_id){
+      if(!prepareOnly)return finishHalftone(item.id);
+      const result=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(result.error)throw result.error;return result.data;
+    }
     if(!item.source_file_path){startUploadForWorkspace?.(summary.workspace.id);return}
     try{
       const production=item.metadata?.details?.[0]?.production||{};
@@ -416,10 +426,12 @@ export function createZero19PdvSync(ctx){
       const saved=await supabase.from('z19p_assets').insert(row).select('*').single();if(saved.error)throw saved.error;
       const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner);if(linked.error)throw linked.error;
       invalidate();
+      if(prepareOnly)return saved.data;
       if(item.stage==='awaiting_halftone'){toast('Arte importada. Faça o halftone e depois use “Halftone pronto”.','ok');nav('/ambiente/'+summary.workspace.id);return}
       if(item.without_application){await ensureDtfProfile(item,saved.data);const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);return}
-      await offerAfterUpload?.([saved.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});
+      const review=await offerAfterUpload?.([saved.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true,reviewRefs:orderArtworkItems(summary).filter(row=>!row.without_application&&['art_received','ready_production'].includes(row.stage)).map(row=>row.personalization_sale_id)});
       invalidate();if(productionViewActive())await refreshProductionViewAt(window.scrollY);
+      return review;
     }catch(error){console.error('import zero19 artwork',error);throw error}
   }
   async function finishHalftone(workItemId){
@@ -429,7 +441,7 @@ export function createZero19PdvSync(ctx){
     const asset=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(asset.error)return toast(asset.error.message,'err');
     if(asset.data?.metadata?.personalization_sale_id&&asset.data.metadata.personalization_sale_id!==item.personalization_sale_id)throw new Error('Esta arte está vinculada a outra posição do pedido. O vínculo precisa ser corrigido antes de continuar.');
     if(item.without_application){try{await ensureDtfProfile(item,asset.data)}catch(error){return toast(error.message,'err')}const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');if(productionViewActive())return refreshProductionViewAt(window.scrollY);return}
-    await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});invalidate();if(productionViewActive())await refreshProductionViewAt(window.scrollY);
+    const review=await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true,reviewRefs:orderArtworkItems(summary).filter(row=>!row.without_application&&['art_received','ready_production'].includes(row.stage)).map(row=>row.personalization_sale_id)});invalidate();if(productionViewActive())await refreshProductionViewAt(window.scrollY);return review;
   }
   async function finishStandaloneHalftone(assetId){
     const data=await load(true),asset=(data.standaloneHalftones||[]).find(row=>row.id===assetId);if(!asset)return toast('Halftone avulso não encontrado.','err');
@@ -684,5 +696,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,resolveOrderArtwork};
 }

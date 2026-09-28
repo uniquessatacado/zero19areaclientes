@@ -28,6 +28,8 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Produção diária e prazos
 
+- [~] Revisão 28/09: preparar PNG também ao revisar medidas; navegação entre artes sem trocar seus vínculos; conclusão explícita após revisar todas. Banco de #49322 já mostra duas artes ready_production, mas ambas sem preparação (alpha_trimmed=false). TIFF: separar CMYK e curva; confirmar tratamento do canal branco no modo RGB. Implementação/testes/publicação desta revisão ainda pendentes.
+
 - [x] Incidente organizar artes/prazo 28/09: código, banco e publicação 2.17.43 concluídos no escopo testado (identidade frente/costas, medidas, abertura assíncrona, balões e pausa individual sem bloquear previsão). Duas migrações aplicadas; 17 verificações SQL com rollback e visual isolado desktop/mobile passaram. #49322 reparado sem alterar arquivos, medidas, prazos, estoque ou pagamentos; zero vínculos ativos divergentes. Git Personalizações `01a5004`, Venduss `ff7cb024`; Vercel `dpl_BT5qVsupwP2GNHFXtC95giqRW3U2` READY. Seis arquivos do domínio oficial conferidos por SHA-256 com o build testado. Evidências/limites em `docs/INCIDENTE_ORGANIZACAO_ARTES_2026-09-28.md`; não é conclusão da auditoria geral nem teste de venda/impressão real.
 - [ ] Confirmar com o dono a largura das costas de #49322: PDV original 28 cm, posicionamento posterior 35 cm. **35 cm preservados**, sem reduzir enquanto não houver resposta.
 

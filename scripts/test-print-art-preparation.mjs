@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {preparePrintArt} from '../print-art-preparation.js';
+let downloaded=[],uploaded=[],processed=[],record;
+const source={id:'a',workspace_id:'w',original_path:'original.png',processed_path:'halftone.png',metadata:{personalization_sale_id:'front'}};
+let fail=false;
+const supabase={storage:{from:()=>({download:async path=>{downloaded.push(path);return {data:new Blob(['source'])}}})},from:()=>({update:patch=>({eq(){return this},select(){return this},single:async()=>fail?{error:new Error('denied')}:{data:record={...source,...patch}}})})};
+const options={widthCm:28,heightCm:42,owner:'owner',actor:'staff',bucket:'b',supabase,processImage:async(blob,opts)=>{processed.push(opts);return {blob:new Blob(['png']),width:3307,height:4961,upscaled:true,engine:'pica'}},uploadFile:async path=>uploaded.push(path)};
+const first=await preparePrintArt(source,options);
+assert.equal(first.alpha_trimmed,true);assert.equal(first.dpi,300);assert.equal(first.original_path,'original.png');assert.equal(first.metadata.personalization_sale_id,'front');
+assert.equal(processed[0].trim,true);assert.equal(processed[0].targetWidthCm,28);
+assert.equal(await preparePrintArt(first,options),first);assert.equal(uploaded.length,1,'identical review reuses prepared file');
+await preparePrintArt(first,{...options,widthCm:35,heightCm:52.5});assert.deepEqual(downloaded,['halftone.png','halftone.png'],'never enlarge the previous prepared copy');
+fail=true;await assert.rejects(preparePrintArt(source,options),/denied/);
+await assert.rejects(preparePrintArt(source,{...options,processImage:null}),/indisponível/);
+console.log('Print preparation: trim, physical size, source preservation, retry idempotence, halftone source and database failure passed.');
