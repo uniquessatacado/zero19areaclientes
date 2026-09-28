@@ -32,7 +32,7 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 - [ ] Melhorar mockup da camisa branca realista, letras/números proporcionais e posicionamento, prévia em tempo real no PDV/cliente, `Shift+Enter` inserindo linha onde permitido. Validar medidas oficiais antes de prometer precisão.
 - [ ] Cliente acompanha o pedido inteiro em um link/QR, não cada personalização. Status resumido e ativo (“arte em desenvolvimento” em vez de impressão de inércia), prazo, contato e arquivos; nunca botão interno “Subir arte”. WhatsApp do card com saudação por horário/primeiro nome, QR para abrir no celular e link de acompanhamento.
 - [ ] Cupom da personalização contém código da personalização e do pedido; apenas um QR de acompanhamento por pedido no cupom de venda, sem mensagem “prévia aprovada pelo cliente” indevida.
-- [ ] Cancelamento de pedido no ZERO19 remove trabalho aberto da fila de Personalizações; reabertura/status/entrega sincronizam ambos sem apagar histórico.
+- [~] Cancelamento de pedido do PDV ZERO19: gatilho `z19p_zero19_order_cancellation` e guardas de venda/trabalho/projeto/pausa já estão aplicados; em 28/09, consulta do banco achou zero trabalhos ativos ligados a pedidos ZERO19 cancelados. Histórico é preservado. Ainda testar uma operação controlada de ponta a ponta e conferir reabertura/status/entrega e cancelamento originado no Venduss.
 
 ## Qualidade, dados e publicação
 
