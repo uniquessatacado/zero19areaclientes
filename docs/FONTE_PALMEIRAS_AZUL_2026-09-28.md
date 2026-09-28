@@ -20,4 +20,10 @@ A receita registra `nameReferenceChar`. Novas composições recebem a referênci
 
 Atualizar a página para 2.17.46, abrir o filme existente e clicar em Atualizar filme. Conferir o encaixe maior de JOÃO e exportar novamente. Não reutilizar o PNG/TIFF antigo. A altura informada continua sendo respeitada: se a equipe escolheu 5 cm, a referência será 5 cm; não sobrescrever silenciosamente por 5,5.
 
-Publicação: aguardando confirmação do domínio de produção.
+## Publicação confirmada
+
+- Commit `b4db53390cb353c3087ee31bc74907cceecd5a18` enviado ao GitHub.
+- Vercel `dpl_7d72pgThWS2j8DkDS3nTarCUqghg`, target production, READY, build 23,7 s; alias `https://019-personalizacoes.vercel.app` ativo em 2.17.46.
+- `index.html`, `app.js`, `production-v217.js` e `lettering-layout-v2176.js`: HTTP 200 e SHA-256 iguais ao build local após normalizar CRLF/LF (Git checkout Linux).
+- Upload direto CLI retornou Not authorized; publicação pelo commit Git via API autenticada foi bem-sucedida. Nenhuma proteção de acesso foi removida.
+- Monitoramento de erros do navegador autenticado e impressão física não executados; não equivale à auditoria geral dos sistemas.

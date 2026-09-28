@@ -28,7 +28,7 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Produção diária e prazos
 
-- [~] Palmeiras azul: dono confirmou O de JOÃO como referência de 5,5 cm, J maior proporcional. Fonte/set identificados no banco; corrigida receita com referência O específica, preservando Corinthians/GABRIEL e números. Rascunhos antigos exigem Atualizar filme; aguardando testes com TTF original, build e publicação. Nenhum pedido/banco/exportado alterado.
+- [x] Palmeiras azul: O de JOÃO é referência de 5,5 cm, J proporcional. Publicado 2.17.46 (`b4db533`, Vercel `dpl_7d72pgThWS2j8DkDS3nTarCUqghg` READY); quatro arquivos oficiais conferidos por SHA-256 normalizado LF. Teste Edge com TTF original reproduziu O antigo 3,95679 cm; corrigido 5,5 cm, raster 300 DPI dentro de 0,5 mm. GABRIEL/números preservados. Testes de rascunho/build passaram. Filme aberto exige Atualizar filme e nova exportação; PNG/TIFF já baixados não mudam. Nenhum pedido/banco alterado; impressão física não testada. Ver `docs/FONTE_PALMEIRAS_AZUL_2026-09-28.md`.
 
 - [x] Incidente #49323: correção publicada/testada em 2.17.45 (`84c9661`), Vercel `dpl_AMUPkLYNKwNau2YagPEeWmec63ME` READY; seis arquivos do domínio oficial iguais ao build por SHA-256. Upload fixa pedido/item; arte/fonte independentes; exportação e conclusão individuais; progresso n/total. Três migrações aplicadas, 16 verificações SQL com rollback, builds e organizador/seletor desktop/mobile passaram. SPORTINGBET recuperada para revisão; JOÃO segue aguardando fonte, GABRIEL pronto. Página pública Venduss enviada em `e44ae6ee`, depende de atualizar seu servidor. Limites e evidências: `docs/PRODUCAO_PARCIAL_2026-09-28.md`. Auditoria geral e demais itens continuam pendentes.
 
