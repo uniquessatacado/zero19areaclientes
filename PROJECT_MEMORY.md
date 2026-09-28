@@ -2,6 +2,8 @@
 
 ## v2.17.42 — seleção Venduss no filme e acompanhamento integrado (28/09/2026)
 
+- Publicado: código `8637a37` enviado ao GitHub e Vercel `dpl_58LA2nuZGFFn3qVsUTboZqiBpkeN` READY. Domínio oficial verificado HTTP 200/versão 2.17.42 e seletor corrigido. NovoVenduss `423754cd` enviado ao GitHub, sem implantar o servidor do dono. Builds, tipos e testes correspondentes passaram; pendências autenticadas continuam registradas.
+
 - Causa: seletor consultava fontes e posicionamentos locais, omitindo trabalhos Venduss `ready_production` ainda sem importação. Agora lê trabalhos liberados, mostra prévia/posição e pedidos Venduss/ZERO19, importa só ao selecionar e preserva vínculos reais de produção. Revalida etapa antes de adicionar e não repete trabalho já no filme.
 - Miniaturas pequenas de fonte usam o renderizador real; a exportação mantém a resolução original. Seleção não inicia produção nem altera estoque.
 - Correção após teste do dono: filtrar pedidos pelo conteúdo do rascunho escondia duas fontes ZERO19 e deixava apenas Venduss. Removido esse filtro do contador e da lista de trabalhos ZERO19/Venduss; já adicionados seguem visíveis com indicação e seleção bloqueada contra duplicação. Só saem normalmente quando exportados e marcados no checklist de produção. Miniaturas têm limite inline de 72×72 para impedir tamanho natural mesmo com CSS antigo. Testes `test-film-pending-visibility.mjs` e `pending-film-browser-test.mjs` passaram (desktop/mobile, filme vazio e dois pedidos já adicionados); localhost:8080 confirmado servindo a correção. Nenhum pedido real alterado nesses testes.

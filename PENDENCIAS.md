@@ -44,7 +44,7 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## Qualidade, dados e publicação
 
-- [~] Publicação 2.17.42 solicitada em 28/09: build completo e regressões passaram, incluindo permanência ZERO19/Venduss na fila até confirmação da exportação. Teste visual isolado desktop/mobile passou. Migração de acompanhamento já consta no banco. Preparando commit/push dos dois repositórios e deploy Vercel; confirmar domínio antes de concluir. Inspeção autenticada ponta a ponta segue como pendência separada.
+- [x] Publicação 2.17.42 concluída em 28/09: código `8637a37` no GitHub; NovoVenduss `423754cd` também enviado. Deploy `dpl_58LA2nuZGFFn3qVsUTboZqiBpkeN` READY em produção. Domínio `019-personalizacoes.vercel.app` respondeu HTTP 200 com versão 2.17.42 e JS contendo miniaturas 72px/permanência dos pedidos já no filme. Build completo/regressões passaram localmente e na Vercel; teste visual isolado desktop/mobile passou. Migração de acompanhamento já consta no banco. Inspeção autenticada ponta a ponta e demais pendências deste documento NÃO foram encerradas por esta publicação.
 
 - [ ] Conferir todas as migrações usadas pela interface no banco real e falhas de RPC/Storage. O portal parceiro faltava e foi aplicado; outras áreas exigem inventário de schema e verificação de permissões.
 - [ ] Auditoria técnica completa do anexo enviado pelo dono: rastrear código, banco, segurança/RLS, performance, dependências, código legado e fluxos de ponta a ponta sem reescrever às cegas.
