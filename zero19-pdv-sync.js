@@ -1,6 +1,7 @@
 import {calculateProductionSchedule} from './production-scheduler.js';
 import {createProductionPlanningUI} from './production-planning-ui.js';
 import {filmItemFromLibraryAsset} from './film-picker.js';
+import {orderItemProgress} from './order-item-progress.js';
 const STAGE_ORDER=['awaiting_release','awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
   awaiting_release:'Venduss · pendente de liberação',
@@ -156,6 +157,8 @@ export function createZero19PdvSync(ctx){
     });
     const schedule=calculateProductionSchedule({...sla?.data,production_items:sla?.data?.production_items||items,pauses:sla?.data?.pauses||pauses});
     if(sla.error||pauseResult.error){schedule.nextAvailableAt=null;schedule.newUnitAvailableAt=null;schedule.projects=schedule.projects.map(row=>({...row,predictedAt:null}));schedule.warnings.push('Não foi possível confirmar calendário e pausas. Atualize antes de prometer um prazo.');console.warn('production schedule unavailable',sla.error||pauseResult.error)}
+    const progressByProject=await orderProgress(projectIds);
+    for(const summary of summaries)summary.progress=progressByProject.get(summary.project.id);
     const predictions=new Map(schedule.projects.map(row=>[row.project_id,row]));
     let cumulative=0;
     for(const summary of summaries){
@@ -165,9 +168,16 @@ export function createZero19PdvSync(ctx){
     }
     cache={items,projects,workspaces,summaries,pm,wm,avgMinutes:schedule.estimatedMinutesPerUnit,measuredAvgMinutes:avgMinutes,schedule,holidays,sla:sla?.data||{},reasons,printerPause,pauseSchemaReady:!pauseResult.error&&!reasonsResult.error,zero19Library,standaloneHalftones};cacheAt=Date.now();return cache;
   }
+  async function orderProgress(projectIds){
+    const ids=[...new Set(projectIds.filter(Boolean))];
+    if(!ids.length)return new Map();
+    const {data,error}=await supabase.from('z19p_zero19_work_items').select('id,project_id,stage').eq('owner_id',accountOwnerId()).in('project_id',ids);
+    if(error)throw error;
+    return new Map(ids.map(id=>[id,orderItemProgress((data||[]).filter(item=>item.project_id===id))]));
+  }
   function invalidate(){cache=null;cacheAt=0}
   function productionViewActive(){const path=(location.hash.slice(1).split('?')[0]||'/');return path==='/'||path==='/zero19-fila'}
-  function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
+  function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)for(const stage of new Set(row.items.map(item=>item.stage)))if(out[stage]!=null)out[stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
   function itemLine(item){
     const title=item.text_value||item.garment_name||item.kind||'Personalização',garment=[item.garment_name,item.garment_color,item.garment_size].filter(Boolean).join(' · ');
     const production=item.metadata?.details?.[0]?.production||{};
@@ -177,21 +187,23 @@ export function createZero19PdvSync(ctx){
     const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[],paused=Boolean(summary.pause||summary.printerPause),requiresProduction=!['ready_pickup','delivered','cancelled'].includes(stage);
     const stageItem=summary.items.find(i=>i.stage===stage)||summary.items[0];
     const trackingItem=summary.items.find(item=>item.metadata?.public_tracking_token)||summary.items[0],trackingToken=trackingItem?.metadata?.public_tracking_token,trackingCode=trackingItem?.metadata?.personalization_code;
-    if(stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-upload-workspace="'+h(w.id)+'">Subir arte</button>');
-    if(stage==='art_received')actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar e organizar</button>');
-    if(stage==='awaiting_halftone'){
-      if(stageItem?.asset_id){actions.push('<button class="btn" data-z19-open="'+h(w.id)+'">Abrir arte</button>');actions.push('<button class="btn primary" data-z19-halftone-ready="'+h(stageItem.id)+'">Halftone pronto</button>')}
-      else actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar para halftone</button>');
+    for(const item of summary.items){
+      const label=h(item.text_value||item.garment_name||'Personalização');
+      if(item.stage==='production')actions.push('<button class="btn primary" data-z19-complete-item="'+h(item.id)+'">Concluir · '+label+'</button>');
+      if(item.stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-upload-workspace="'+h(w.id)+'" data-project-id="'+h(p.id)+'" data-work-item-id="'+h(item.id)+'" data-sale-id="'+h(item.personalization_sale_id)+'">Subir arte · '+label+'</button>');
+      if(item.stage==='art_received')actions.push('<button class="btn primary" data-z19-import-source="'+h(item.id)+'">Organizar · '+label+'</button>');
+      if(item.stage==='awaiting_halftone')actions.push('<button class="btn primary" '+(item.asset_id?'data-z19-halftone-ready':'data-z19-import-source')+'="'+h(item.id)+'">'+(item.asset_id?'Halftone pronto':'Importar para halftone')+' · '+label+'</button>');
+      if(item.stage==='awaiting_font')actions.push('<button class="btn primary" data-z19-choose-font="'+h(item.id)+'">Escolher fonte · '+label+'</button>');
+      if(item.stage==='ready_production'&&stage!=='ready_production')actions.push('<button class="btn" '+(['NAME_NUMBER','PHRASE'].includes(String(item.kind).toUpperCase())?'data-z19-team-film="'+h(item.id)+'"':'data-z19-film')+'>Produzir pronta · '+label+'</button>');
     }
-    if(stage==='awaiting_font')actions.push('<button class="btn primary" data-z19-choose-font="'+h(summary.items.find(i=>i.stage==='awaiting_font')?.id||'')+'">Escolher fonte</button>');
     if(stage==='ready_production'){
       const fontSet=stageItem?.metadata?.font_set_id||stageItem?.metadata?.details?.[0]?.production?.font_set_id;
       if(fontSet&&['NAME_NUMBER','PHRASE'].includes(String(stageItem?.kind||'').toUpperCase()))actions.push('<button class="btn primary" data-z19-team-film="'+h(stageItem.id)+'">Adicionar ao filme</button>');
       else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&stageItem?.without_application)actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
       else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     }
-    if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
-    if(['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production'].includes(stage))actions.push('<button class="btn" data-z19-force-ready="'+h(p.id)+'">Finalizar / pronto</button>');
+    if(summary.items.every(item=>item.stage==='production'))actions.push('<button class="btn" data-z19-ready="'+h(p.id)+'">Concluir todas as personalizações</button>');
+    if(['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production'].includes(stage))actions.push('<button class="btn" data-z19-force-ready="'+h(p.id)+'">Finalizar pedido inteiro</button>');
     if(paused)for(let index=0;index<actions.length;index++)actions[index]=actions[index].replace('<button ','<button disabled title="Retome o pedido antes de avançar a produção" ');
     if(requiresProduction)actions.push('<button class="btn '+(summary.pause?'primary':'ghost z19-pause-button')+'" data-z19-pause="'+h(p.id)+'" data-z19-paused="'+(summary.pause?'true':'false')+'">'+(summary.pause?'Retomar pedido':'Parar pedido')+'</button>');
     if(summary.printerPause)actions.push('<button class="btn ghost" data-z19-printer-pause data-z19-paused="true">Encerrar manutenção</button>');
@@ -202,7 +214,7 @@ export function createZero19PdvSync(ctx){
     if(phone&&(trackingToken||trackingCode))actions.push('<button class="btn ghost" data-z19-status-link="'+h(trackingToken||'')+'" data-z19-status-code="'+h(trackingCode||'')+'" data-z19-status-phone="'+h(w.phone||'')+'" data-z19-status-order="'+h(orderNo(p))+'">Enviar acompanhamento</button>');
     const itemCount=Math.max(1,Number(summary.qty)||1),deadline=summary.promised?'<span class="z19-deadline-countdown" data-deadline-countdown="'+h(summary.promised)+'"></span><span>Entrega '+h(dt(summary.promised))+'</span>':'<span>Entrega sem prazo definido</span>';
     const pauseNotice=[summary.pause,summary.printerPause].filter(Boolean).map(pause=>'<div class="z19-order-pause"><strong>'+(pause.scope==='printer'?'Produção parada · impressora em manutenção':'Pedido parado')+' · '+h(pause.reason||'Motivo não registrado')+'</strong><span data-pause-elapsed="'+h(pause.started_at)+'"></span>'+(pause.note&&pause.note!==pause.reason?'<small>'+h(pause.note)+'</small>':'')+'</div>').join('');
-    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue ':'')+(paused?'is-paused':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div class="z19-card-stage" data-stage="'+h(stage)+'"'+(paused?' data-paused="true"':'')+'><b>'+h(paused?'Pedido parado':STAGE_LABELS[stage]||stage)+'</b><small><strong>'+h(itemCount)+'</strong> '+(itemCount===1?'item':'itens')+'</small></div></div>'+pauseNotice+'<div class="z19-zero19-meta">'+deadline+(summary.risk&&!summary.overdue?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'</div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
+    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue ':'')+(paused?'is-paused':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div class="z19-card-stage" data-stage="'+h(stage)+'"'+(paused?' data-paused="true"':'')+'><b>'+h(paused?'Pedido parado':STAGE_LABELS[stage]||stage)+'</b><small><strong>'+h(itemCount)+'</strong> '+(itemCount===1?'item':'itens')+'</small></div></div>'+pauseNotice+'<div class="z19-zero19-meta">'+deadline+(summary.risk&&!summary.overdue?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'</div>'+(summary.progress?.total?'<div style="padding:10px;border-radius:12px;background:#182c29;color:#c7f9df;font-size:12px"><strong>'+h(summary.progress.label)+'</strong><br>'+h(summary.progress.detail)+'</div>':'')+'<div class="z19-zero19-items">'+summary.items.map(item=>itemLine(item)+'<small>'+h(STAGE_LABELS[item.stage]||item.stage)+'</small>').join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
   }
   async function enhanceDashboard(){
     try{
@@ -222,7 +234,7 @@ export function createZero19PdvSync(ctx){
     if(location.hash!==requestedHash||accountOwnerId()!==requestedOwner)return;
     const open=data.summaries.filter(row=>STAGE_ORDER.includes(row.stage)),c=counts(open,data.standaloneHalftones),overdue=open.filter(row=>row.overdue).length,risk=open.filter(row=>row.risk&&!row.overdue).length;
     const standaloneHtml=asset=>'<article class="z19-zero19-card production-home-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>';
-    const visible=()=>open.filter(row=>(homeSelected==='all'||row.stage===homeSelected)&&(!homeQuery||[orderNo(row.project),row.workspace?.client_name,row.workspace?.company_name,row.workspace?.phone,...row.items.map(item=>item.text_value||item.garment_name||'')].join(' ').toLocaleLowerCase('pt-BR').includes(homeQuery)));
+    const visible=()=>open.filter(row=>(homeSelected==='all'||row.items.some(item=>item.stage===homeSelected))&&(!homeQuery||[orderNo(row.project),row.workspace?.client_name,row.workspace?.company_name,row.workspace?.phone,...row.items.map(item=>item.text_value||item.garment_name||'')].join(' ').toLocaleLowerCase('pt-BR').includes(homeQuery)));
     const draw=()=>{const rows=visible(),standalone=homeSelected==='all'||homeSelected==='awaiting_halftone'?data.standaloneHalftones||[]:[],grid=app.querySelector('[data-production-open-grid]');if(!grid)return;grid.innerHTML=rows.map(summary=>card(summary).replace('z19-zero19-card ','z19-zero19-card production-home-card ')).join('')+standalone.map(standaloneHtml).join('')||'<div class="production-home-empty"><b>Nenhuma personalização neste filtro.</b><span>Pedidos com personalização da Loja Zero19 aparecerão aqui automaticamente.</span></div>';app.querySelector('[data-production-result-count]').textContent=String(rows.length+standalone.length);app.querySelectorAll('[data-home-stage-filter]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.homeStageFilter===homeSelected)));bindRoot(grid)};
     const total=open.length+(data.standaloneHalftones||[]).length;
     const localBacklogUnits=open.filter(row=>!['ready_pickup','delivered','cancelled'].includes(row.stage)).reduce((total,row)=>total+Math.max(1,Number(row.qty)||1),0),reportedBacklogUnits=Math.max(0,Number(data.sla?.backlog_quantity)||0),backlogUnits=Math.max(localBacklogUnits,reportedBacklogUnits);
@@ -252,7 +264,7 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-open-stage]').forEach(b=>b.onclick=()=>{nav('/zero19-fila');sessionStorage.setItem('z19-zero19-stage',b.dataset.z19OpenStage||'')});
     root.querySelectorAll('[data-z19-sync-now]').forEach(b=>b.onclick=()=>syncRecent());
     root.querySelectorAll('[data-z19-global-upload]').forEach(b=>b.onclick=()=>openGlobalUpload());
-    root.querySelectorAll('[data-z19-upload-workspace]').forEach(b=>b.onclick=()=>startUploadForWorkspace?.(b.dataset.z19UploadWorkspace));
+    root.querySelectorAll('[data-z19-upload-workspace]').forEach(b=>b.onclick=()=>startUploadForWorkspace?.(b.dataset.z19UploadWorkspace,{projectId:b.dataset.projectId,workItemId:b.dataset.workItemId,personalizationSaleId:b.dataset.saleId}));
     root.querySelectorAll('[data-z19-import-source]').forEach(b=>b.onclick=()=>runArtworkAction(b,()=>importSourceArtwork(b.dataset.z19ImportSource)));
     root.querySelectorAll('[data-z19-halftone-ready]').forEach(b=>b.onclick=()=>runArtworkAction(b,()=>finishHalftone(b.dataset.z19HalftoneReady)));
     root.querySelectorAll('[data-z19-standalone-halftone-ready]').forEach(b=>b.onclick=()=>finishStandaloneHalftone(b.dataset.z19StandaloneHalftoneReady));
@@ -263,6 +275,7 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-team-film]').forEach(b=>b.onclick=()=>addTeamToFilm(b.dataset.z19TeamFilm));
     root.querySelectorAll('[data-z19-asset-film]').forEach(b=>b.onclick=()=>addAssetToFilm(b.dataset.z19AssetFilm));
     root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready,b));
+    root.querySelectorAll('[data-z19-complete-item]').forEach(b=>b.onclick=()=>completeItem(b.dataset.z19CompleteItem,b));
     root.querySelectorAll('[data-z19-force-ready]').forEach(b=>b.onclick=()=>forceReady(b.dataset.z19ForceReady));
     root.querySelectorAll('[data-z19-notify]').forEach(b=>b.onclick=()=>notifyProject(b.dataset.z19Notify));
     root.querySelectorAll('[data-z19-delivered]').forEach(b=>b.onclick=()=>markDelivered(b.dataset.z19Delivered));
@@ -280,7 +293,7 @@ export function createZero19PdvSync(ctx){
     if(loading){app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="production-home-loading" aria-live="polite"><span class="loading"></span><div><b>Abrindo a fila por etapas</b><small>Carregando somente os pedidos em aberto.</small></div></section></main>',{back:true});bindCommon()}
     let data;try{data=await load(true)}catch(error){console.error('production queue',error);app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="production-load-error"><h1>Não foi possível carregar a fila</h1><p>'+h(error?.message||'Falha de conexão')+'</p><button class="btn primary" data-production-retry>Tentar novamente</button></section></main>',{back:true});bindCommon();app.querySelector('[data-production-retry]').onclick=renderQueue;return}
     const c=counts(data.summaries,data.standaloneHalftones),hashQuery=(location.hash.split('?')[1]||''),hashParams=new URLSearchParams(hashQuery),stageParam=hashParams.get('stage')||'',orderParam=hashParams.get('pedido')||'',saved=stageParam||sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
-    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.items.some(item=>item.stage===stage)),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
     bindCommon();bindRoot(app);app.querySelectorAll('[data-z19-jump]').forEach(b=>b.onclick=()=>document.getElementById('z19-stage-'+b.dataset.z19Jump)?.scrollIntoView({behavior:'smooth',block:'start'}));
     if(saved)setTimeout(()=>document.getElementById('z19-stage-'+saved)?.scrollIntoView({behavior:'smooth',block:'start'}),50);
     if(orderParam){history.replaceState(null,'','#/zero19-fila');setTimeout(()=>openGlobalUpload(orderParam),60)}
@@ -310,6 +323,23 @@ export function createZero19PdvSync(ctx){
     bindCommon();app.querySelectorAll('[data-archive-reopen]').forEach(button=>button.onclick=()=>openReopenModal(button.dataset.archiveReopen,{after:renderDelivered}));
   }
   function findWorkItem(data,id){return data.items.find(item=>item.id===id)}
+  async function chooseUploadTarget(workspaceId,context={}){
+    const data=await load(true),rows=data.summaries.filter(s=>s.workspace?.id===workspaceId).flatMap(summary=>summary.items.map(item=>({item,project:summary.project})));
+    let candidates=rows.filter(({item,project})=>!['NAME_NUMBER','PHRASE'].includes(String(item.kind).toUpperCase())&&['awaiting_art','art_received','awaiting_halftone','ready_production'].includes(item.stage)&&(!context.projectId||project.id===context.projectId)&&(!context.workItemId||item.id===context.workItemId)&&(!context.personalizationSaleId||item.personalization_sale_id===context.personalizationSaleId)&&!(context.excludeSaleIds||[]).includes(item.personalization_sale_id));
+    if(!candidates.length){
+      const historical=(state().currentProjects||[]).some(p=>p.workspace_id===workspaceId&&p.official_order_ref);
+      if(!context.projectId&&!historical&&!rows.length)return null;
+      throw new Error('Não há uma personalização de arte disponível neste pedido. Escolha o item correto; nome/número deve usar Escolher fonte.');
+    }
+    if(context.workItemId&&candidates.length===1)return candidates[0];
+    // Generic upload must explicitly choose the order and item, not the first
+    // (possibly cancelled) historical project for this customer.
+    return new Promise((resolve,reject)=>{
+      const modal=document.createElement('div');modal.className='modal-backdrop';modal.style.zIndex='12000';
+      modal.innerHTML='<section class="modal"><div class="modal-head"><div><div class="eyebrow">VINCULAR ARTE</div><h2>Qual personalização receberá este arquivo?</h2><p>Fonte e outras artes do pedido não serão alteradas.</p></div></div><div class="z19-transfer-list">'+candidates.map(({item,project},i)=>'<button class="z19-transfer-row" data-target="'+i+'"><b>Pedido #'+h(orderNo(project))+' · '+h(item.text_value||item.garment_name)+'</b><small>'+h(STAGE_LABELS[item.stage])+'</small></button>').join('')+'</div><div class="modal-footer"><button class="btn" data-cancel>Cancelar</button></div></section>';
+      modal.querySelectorAll('[data-target]').forEach(button=>button.onclick=()=>{modal.remove();resolve(candidates[Number(button.dataset.target)])});modal.querySelector('[data-cancel]').onclick=()=>{modal.remove();reject(new Error('Upload cancelado antes de salvar o arquivo.'))};document.body.appendChild(modal);
+    });
+  }
   async function openGlobalUpload(initialQuery=''){
     await ensureAutomaticSync(true);
     const local=await load(true),modal=document.createElement('div');modal.className='modal-backdrop';
@@ -414,7 +444,7 @@ export function createZero19PdvSync(ctx){
       if(!prepareOnly)return finishHalftone(item.id);
       const result=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(result.error)throw result.error;return result.data;
     }
-    if(!item.source_file_path){startUploadForWorkspace?.(summary.workspace.id);return}
+    if(!item.source_file_path){startUploadForWorkspace?.(summary.workspace.id,{projectId:summary.project.id,workItemId:item.id,personalizationSaleId:item.personalization_sale_id});return}
     try{
       const production=item.metadata?.details?.[0]?.production||{};
       const downloaded=await supabase.storage.from('personalization-artwork').download(item.source_file_path);if(downloaded.error)throw downloaded.error;
@@ -463,7 +493,7 @@ export function createZero19PdvSync(ctx){
     modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Camisa de time</div><h2>Escolher fonte</h2><p>A fonte precisa estar testada e liberada.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Fonte / temporada</label><select data-font-select><option value="">Escolha</option>'+fonts.map(font=>'<option value="'+h(font.id)+'">'+h(font.label)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-font-confirm disabled>Usar esta fonte</button></div></div>';
     document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
     const select=modal.querySelector('[data-font-select]'),button=modal.querySelector('[data-font-confirm]');select.onchange=()=>button.disabled=!select.value;
-    button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida. Pedido liberado para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY)};
+    button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida para esta personalização. As demais pendências do pedido foram mantidas.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY)};
   }
   const vendussImports=new Map();
   async function importVendussOrderAsset(item,summary){
@@ -555,11 +585,19 @@ export function createZero19PdvSync(ctx){
     });
   }
   async function forceReady(projectId){
-    if(!projectId||!await confirmAction({eyebrow:'FINALIZAR PRODUÇÃO',title:'Marcar como pronto?',message:'O pedido sairá da etapa atual e ficará pronto para retirada. Você poderá devolvê-lo ao fluxo se precisar corrigir.',confirmLabel:'Sim, marcar como pronto'}))return;
+    if(!projectId||!await confirmAction({eyebrow:'FINALIZAR PEDIDO INTEIRO',title:'Todas as personalizações estão concluídas?',message:'Esta ação conclui TODAS, inclusive itens que aparecem com pendências. Para concluir apenas uma, use o botão Concluir ao lado dela. Confirme somente se o pedido inteiro já estiver pronto.',confirmLabel:'Sim, todas estão prontas'}))return;
     const {error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:'ready_pickup'});
     if(error)return toast(error.message,'err');
     invalidate();toast('Pedido finalizado e movido para Pronto para retirada.','ok');
     if(productionViewActive())await refreshProductionViewAt(window.scrollY);else enhanceDashboard();
+  }
+  async function completeItem(id,button){
+    if(!await confirmAction({title:'Concluir esta personalização?',message:'Confirme somente se esta personalização já foi produzida. As outras continuarão nas suas etapas.',confirmLabel:'Sim, foi produzida'}))return;
+    const scrollTop=window.scrollY;button.disabled=true;
+    try{
+      const {error}=await supabase.rpc('z19p_zero19_complete_work_item',{p_work_item_id:id});if(error)throw error;
+      invalidate();toast('Personalização concluída. As demais etapas foram preservadas.','ok');await refreshProductionViewAt(scrollTop);
+    }catch(error){toast(error.message,'err');button.disabled=false;}
   }
   async function refreshProductionViewAt(scrollTop){
     if(location.hash.includes('/zero19-fila'))await renderQueue({loading:false});else await renderHome({loading:false});
@@ -696,5 +734,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,resolveOrderArtwork};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress};
 }

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {orderItemProgress} from '../order-item-progress.js';
+const items=[{id:'art',stage:'awaiting_art'},{id:'font',stage:'awaiting_font'},{id:'ready',stage:'ready_production'}];
+let progress=orderItemProgress(items);
+assert.equal(progress.total,3);assert.equal(progress.ready,1);assert.equal(progress.pending,2);assert.equal(progress.percent,0);
+items[2].stage='production';progress=orderItemProgress(items);
+assert.equal(progress.producing,1);assert.equal(progress.percent,0,'export is not completion');
+items[2].stage='ready_pickup';assert.equal(orderItemProgress(items).percent,33);
+items[1].stage='delivered';assert.equal(orderItemProgress(items).percent,67);
+items[0].stage='ready_pickup';assert.equal(orderItemProgress(items).percent,100);
+assert.equal(orderItemProgress([...items,items[0],{id:'cancelled',stage:'cancelled'}]).total,3);
+assert.equal(orderItemProgress([]).percent,0);
+console.log('Partial personalization progress: 0%,33%,67%,100%; cancellation, duplicates and export semantics passed.');
