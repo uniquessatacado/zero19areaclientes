@@ -8,11 +8,11 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 - [x] Tabelas e funções do portal “Empresas parceiras” aplicadas no Supabase; migração corrigida e 12/12 testes PostgreSQL isolados passaram. No banco real, tabelas e RPCs existem.
 - [x] Venduss cadastrada e ativa como primeira parceira no banco; existe mapeamento tenant → workspace/portal. Nenhum outro tenant foi ativado.
-- [~] Interface “Empresas parceiras” deixa de oferecer criação genérica de empresa; código local alterado, ainda falta confirmar no navegador, commit e deploy Vercel.
+- [~] Interface “Empresas parceiras” deixa de oferecer criação genérica de empresa; commit local `a22bee9` criado. Falta confirmar no navegador, enviar ao GitHub (conexão `github.com:443` falhou) e deploy Vercel.
 - [ ] Para outras lojas, só ativar parceria mediante botão autorizado no cadastro do tenant NovoVenduss. O banco já restringe portal ativo a tenant mapeado; falta o fluxo de ativação/gestão.
-- [ ] Ler artes de peças estampadas cadastradas na Venduss, organizá-las por marca/pasta e mostrar miniaturas, PNG privado para baixar e prévia na camisa. Preservar original e medidas reais.
+- [~] Acervo Venduss criado na Personalizações: rota no menu, agrupamento por marca, miniaturas, PNG privado, foto principal da camisa e botão para importar ao filme. Migração de leitura privada aplicada; RPC mostrou 2 artes para o titular e zero sem sessão. Edição/substituição ocorre no Venduss; validar página/filme no navegador com usuário autenticado antes de concluir.
 - [ ] Venda Venduss de peça estampada gera projeto/ordem de produção uma única vez, com idempotência, dados de peça/tamanho/cor/quantidade, arte e prazo; não interromper checkout por falha de integração. Mostrar na fila aguardando produção e no filme.
-- [ ] Estado de separação da camisa lisa no ZERO19 com alerta, folha/checklist e pedido Venduss; sincronizar alteração/cancelamento/conclusão sem consumo duplo de estoque.
+- [~] Separação de camisa lisa no ZERO19: dono informou que já está funcionando. Auditar venda controlada, folha/checklist, cancelamento e consumo de estoque antes de alterar ou duplicar o fluxo.
 - [ ] Na fila “Aguardando produção”, incluir miniaturas das artes sem perder informações/ações atuais.
 
 ## P0 — Produção diária e prazos

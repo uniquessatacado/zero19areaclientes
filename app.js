@@ -21,13 +21,14 @@ import { createCompanyOrderOperations } from './company-order-operations.js?v=2.
 import { createOfficialOrderWorkflow, workspaceOfficialOrderState } from './official-order-workflow.js?v=2.17.17';
 import { createZero19PdvSync } from './zero19-pdv-sync.js?v=2.17.24';
 import { createReliableStorageUploader } from './storage-upload.js?v=2.17.21';
+import { createVendussArtworkArchive } from './venduss-artwork-archive.js?v=2.17.40';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
 const ZERO19_LIBRARY_DESCRIPTION = 'Artes próprias da marca, separadas dos clientes';
-const APP_VERSION = '2.17.39';
+const APP_VERSION = '2.17.40';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -978,7 +979,7 @@ shell = function(content,{back=false}={}){
   const adminMenu=isAdmin()?`<div class="drawer-section"><small>Administração</small><a href="/comercial-admin.html">Gestão comercial</a><a href="/comercial-admin.html?tab=commissions">Comissões</a><button data-nav="/equipe">Equipe</button><button data-nav="/produtividade">Dashboard</button><button data-app-action="settings">Configurações</button></div>`:'';
   const current=route(),active=path=>current===path?'active':'';
   return `<div class="app-shell"><header class="topbar"><button class="nav-menu-trigger" type="button" data-drawer-open aria-label="Abrir menu" aria-controls="appDrawer">&#9776;</button>${back?`<button class="btn ghost small top-back" data-nav="/" aria-label="Voltar ao início">${icon('back')}</button>`:''}<div class="brand" data-nav="/" role="button" tabindex="0" aria-label="Ir para o início">${brandLogoHTML()}</div><div class="top-actions"><span class="app-version-badge" title="Versão do sistema">v${APP_VERSION}</span>${who}${session?`<button class="btn ghost small" id="logoutBtn">${icon('logout')} <span class="label">Sair</span></button>`:''}</div></header>
-    <div class="app-drawer-backdrop" data-drawer-close></div><aside class="app-drawer" id="appDrawer" aria-hidden="true"><div class="drawer-head">${brandLogoHTML('drawer-logo')}<button type="button" data-drawer-close aria-label="Fechar menu">×</button></div><nav><div class="drawer-section"><small>Principal</small><button class="${active('/')}" data-nav="/">Produção</button><button class="${active('/clientes')}" data-nav="/clientes">Todos os clientes</button><button class="${active('/zero19-fila')}" data-nav="/zero19-fila">Fila por etapas</button><button class="${active('/empresas-parceiras')}" data-nav="/empresas-parceiras">Empresas parceiras</button><button class="${active('/links')}" data-nav="/links">Links para compartilhar</button></div><div class="drawer-section"><small>Ferramentas de produção</small>${canViewProductionCosts()?`<button class="${active('/financeiro-impressao')}" data-nav="/financeiro-impressao">Financeiro de impressão · privado</button>`:''}${garmentStudioEnabled?`<button class="${active('/studio')}" data-nav="/studio">Estúdio de mockups</button>`:''}<button class="${active('/filme')}" data-nav="/filme">Montar filme DTF</button><button class="${active('/times')}" data-nav="/times">Times / Personalizações</button></div><div class="drawer-section"><small>Arquivos</small><button data-nav="/biblioteca/artes">Artes</button><button data-nav="/biblioteca/videos">Vídeos</button><button data-nav="/biblioteca/mockups">Mockups</button></div>${adminMenu}</nav><div class="drawer-user">${who}<span>v${APP_VERSION}</span></div></aside>
+    <div class="app-drawer-backdrop" data-drawer-close></div><aside class="app-drawer" id="appDrawer" aria-hidden="true"><div class="drawer-head">${brandLogoHTML('drawer-logo')}<button type="button" data-drawer-close aria-label="Fechar menu">×</button></div><nav><div class="drawer-section"><small>Principal</small><button class="${active('/')}" data-nav="/">Produção</button><button class="${active('/clientes')}" data-nav="/clientes">Todos os clientes</button><button class="${active('/zero19-fila')}" data-nav="/zero19-fila">Fila por etapas</button><button class="${active('/empresas-parceiras')}" data-nav="/empresas-parceiras">Empresas parceiras</button><button class="${active('/links')}" data-nav="/links">Links para compartilhar</button></div><div class="drawer-section"><small>Ferramentas de produção</small>${canViewProductionCosts()?`<button class="${active('/financeiro-impressao')}" data-nav="/financeiro-impressao">Financeiro de impressão · privado</button>`:''}${garmentStudioEnabled?`<button class="${active('/studio')}" data-nav="/studio">Estúdio de mockups</button>`:''}<button class="${active('/filme')}" data-nav="/filme">Montar filme DTF</button><button class="${active('/times')}" data-nav="/times">Times / Personalizações</button></div><div class="drawer-section"><small>Arquivos</small><button class="${active('/acervo-venduss')}" data-nav="/acervo-venduss">Estampas Venduss</button><button data-nav="/biblioteca/artes">Artes</button><button data-nav="/biblioteca/videos">Vídeos</button><button data-nav="/biblioteca/mockups">Mockups</button></div>${adminMenu}</nav><div class="drawer-user">${who}<span>v${APP_VERSION}</span></div></aside>
     ${content}
     <nav class="mobile-bottom-nav${garmentStudioEnabled?' with-studio':''}" aria-label="Navegação principal"><button data-drawer-open><i>&#9776;</i><span>Menu</span></button><button class="main ${active('/')}" data-nav="/"><i>019</i><span>Produção</span></button><button class="${active('/clientes')}" data-nav="/clientes"><i>C</i><span>Clientes</span></button><button class="${active('/biblioteca/artes')}" data-nav="/biblioteca/artes"><i>A</i><span>Artes</span></button><button class="${active('/filme')}" data-nav="/filme"><i>DTF</i><span>Filme</span></button>${garmentStudioEnabled?`<button class="${active('/studio')}" data-nav="/studio"><i>M</i><span>Estúdio</span></button>`:''}<button class="${active('/links')}" data-nav="/links"><i>&#8599;</i><span>Links</span></button></nav></div>`;
 };
@@ -1505,6 +1506,7 @@ const companyOrderOperations=createCompanyOrderOperations({app,supabase,shell,bi
 window.addEventListener('z19:account-changing',()=>{companyPortalAdmin.reset();companyOrderOperations.reset();});
 const routeViewport=createRouteViewportController({getRoute:route,root:app});
 let renderingRoute=false,routeRequested=false;
+const vendussArtworkArchive=createVendussArtworkArchive({supabase,app,shell:(content,options)=>shell(content,options),bindCommon:()=>bindCommon(),accountOwnerId:()=>accountOwnerId(),sessionUserId:()=>session?.user?.id,libraryWorkspace:async()=>{await ensureDefaults();return libraryWorkspaces.library_artes;},nav:path=>nav(path),toast:(message,kind)=>toast(message,kind)});
 async function renderCurrentRoute(){
   const stillCurrent=accountReadGuard(true);
   if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}
@@ -1523,6 +1525,7 @@ async function renderCurrentRoute(){
   if(session&&current==='/times')return productionModule.renderTeams();
   if(session&&current==='/filme')return productionModule.renderFilm();
   if(session&&current==='/empresas-parceiras')return companyPortalAdmin.render();
+  if(session&&current==='/acervo-venduss')return vendussArtworkArchive.render();
   if(session&&current.startsWith('/pedido-empresa/'))return companyOrderOperations.renderPartnerOrder(current.split('/')[2]);
   if(session&&current==='/studio'){if(!garmentStudioEnabled){toast('Montar camiseta e 3D estão desativados em Configurações.','err');return nav('/')}return renderStudioHome({app,shell,bindCommon,artStudio,publicUrl,toast});}
   if(session&&current==='/financeiro-impressao'){
