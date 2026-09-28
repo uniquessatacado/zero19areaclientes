@@ -21,14 +21,14 @@ import { createCompanyOrderOperations } from './company-order-operations.js?v=2.
 import { createOfficialOrderWorkflow, workspaceOfficialOrderState } from './official-order-workflow.js?v=2.17.17';
 import { createZero19PdvSync } from './zero19-pdv-sync.js?v=2.17.24';
 import { createReliableStorageUploader } from './storage-upload.js?v=2.17.21';
-import { createVendussArtworkArchive } from './venduss-artwork-archive.js?v=2.17.41';
+import { createVendussArtworkArchive } from './venduss-artwork-archive.js?v=2.17.42';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
 const ZERO19_LIBRARY_DESCRIPTION = 'Artes próprias da marca, separadas dos clientes';
-const APP_VERSION = '2.17.41';
+const APP_VERSION = '2.17.42';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';
@@ -1446,6 +1446,7 @@ productionModule=createProductionModule({
   getFilmCommissions:items=>fetchFilmCommissions({supabase,owner:accountOwnerId,user:()=>session?.user?.id,isAdmin},items),
   isGarmentStudioEnabled:()=>garmentStudioEnabled,
   officialOrders,
+  zero19Orders:zero19Sync,
   quickUploadFilmArt:async()=>{await ensureDefaults();const workspace=libraryWorkspaces.library_artes;if(!workspace)throw new Error('Biblioteca de artes não encontrada.');pendingQuickUploadWorkspaceId=workspace.id;pendingQuickUploadMode='film';nav('/ambiente/'+workspace.id)},
   openArtMockup:async(asset,options)=>{if(await officialOrders?.openPlacementPreview?.(asset))return;return artStudio.openMockup(asset,options)},openArtEditor:(asset,options)=>artStudio.openEditor(asset,options),openArtGarment:(asset,options)=>garmentStudioEnabled?artStudio.openGarment(asset,options):null,
   openArt3D:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'3d'}):null,openArtPresentation:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'share3d'}):null,openArtBlank:asset=>garmentStudioEnabled?artStudio.openGarment(asset,{initialAction:'blank'}):null,

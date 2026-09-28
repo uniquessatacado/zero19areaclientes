@@ -1,5 +1,13 @@
 # 019 Personalizações — Memória canônica
 
+## v2.17.42 — seleção Venduss no filme e acompanhamento integrado (28/09/2026)
+
+- Causa: seletor consultava fontes e posicionamentos locais, omitindo trabalhos Venduss `ready_production` ainda sem importação. Agora lê trabalhos liberados, mostra prévia/posição e pedidos Venduss/ZERO19, importa só ao selecionar e preserva vínculos reais de produção. Revalida etapa antes de adicionar e não repete trabalho já no filme.
+- Miniaturas pequenas de fonte usam o renderizador real; a exportação mantém a resolução original. Seleção não inicia produção nem altera estoque.
+- Correção após teste do dono: filtrar pedidos pelo conteúdo do rascunho escondia duas fontes ZERO19 e deixava apenas Venduss. Removido esse filtro do contador e da lista de trabalhos ZERO19/Venduss; já adicionados seguem visíveis com indicação e seleção bloqueada contra duplicação. Só saem normalmente quando exportados e marcados no checklist de produção. Miniaturas têm limite inline de 72×72 para impedir tamanho natural mesmo com CSS antigo. Testes `test-film-pending-visibility.mjs` e `pending-film-browser-test.mjs` passaram (desktop/mobile, filme vazio e dois pedidos já adicionados); localhost:8080 confirmado servindo a correção. Nenhum pedido real alterado nesses testes.
+- NovoVenduss recebe página Acompanhar produção no topo do menu; RPC autenticada por tenant e atualização automática com consulta periódica de segurança. CPF recupera indicação salva no servidor e conflito verifica par CPF/WhatsApp, sem devolver CPF/telefone privado.
+- Migrações aplicadas e testes de CPF/consulta administrativa no banco passaram. Publicação desta versão só deve ser marcada após build, Git e domínio conferidos. Teste visual autenticado continua limitado pela conexão do navegador.
+
 ## v2.17.39 — lotes por etapa, checkout e acompanhamento (28/09/2026)
 
 - Planejador compartilhado byte a byte com Novo Vendus: toda a fila ativa conta; preparo pendente reserva tempo; só medidas confirmadas na mesma etapa/progresso compartilham impressão/forno. Peças sem medidas não ganham economia especulativa.

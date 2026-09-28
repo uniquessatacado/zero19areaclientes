@@ -632,7 +632,7 @@ export function createProductionModule(ctx){
     });
   }
 
-  async function makeFilmLetteringPiece(set,{name='',number='',settings,compositionMode='split',pieceType='unified',groupId}={}){
+  async function makeFilmLetteringPiece(set,{name='',number='',settings,compositionMode='split',pieceType='unified',groupId,previewTargetPx=1600}={}){
     const defaults=customizationDefaults(set),cleanName=String(name||'').trim().toUpperCase(),cleanNumber=String(number||'').trim();
     const item={
       type:'team_customization',customizationKind:'lettering',sourceId:set.id,quantity:1,
@@ -650,7 +650,7 @@ export function createProductionModule(ctx){
     item.sizeOverride=['nameHeightCm','numberHeightCm','gapCm','nameTrackingCm','digitSpacingCm'].some(key=>Math.abs(Number(settings[key])-Number(defaults[key]))>.0001);
     const directGlyph=pieceType==='digit'&&cleanNumber.length===1?(item.glyphs||[]).find(glyph=>glyph.glyph_key===cleanNumber&&glyph.svg_markup):null;
     if(directGlyph){item.previewDataUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(sanitizeSvg(directGlyph.svg_markup));item.previewQualityVersion=3;return item;}
-    const previewTargetPx=1600,scale=Math.max(1,Math.min(64,previewTargetPx/item.widthCm,previewTargetPx/item.heightCm)),canvas=document.createElement('canvas');
+    const scale=Math.max(1,Math.min(64,previewTargetPx/item.widthCm,previewTargetPx/item.heightCm)),canvas=document.createElement('canvas');
     canvas.width=Math.max(1,Math.ceil(item.widthCm*scale));canvas.height=Math.max(1,Math.ceil(item.heightCm*scale));
     const context=canvas.getContext('2d');if(!context)throw new Error('Seu navegador não conseguiu preparar a prévia desta personalização.');
     await drawTeamCustomization(context,item,0,0,canvas.width,canvas.height);item.previewDataUrl=canvas.toDataURL('image/png');item.previewQualityVersion=2;
@@ -898,12 +898,12 @@ export function createProductionModule(ctx){
     const controls=app.querySelector('.film-controls');controls.after(advanced);
     for(const node of [app.querySelector('#filmMode').closest('.field'),app.querySelector('#filmGap').closest('.field'),freeControl.closest('.film-free-rotation')])advanced.querySelector('div').append(node);
     const ordersSlot=document.createElement('section');ordersSlot.className='film-order-pending';ordersSlot.dataset.filmOrders='';ordersSlot.hidden=true;controls.before(ordersSlot);
-    let orderRows=null,fontOrderRows=[],officialPendingRows=[],ordersRequest=0;
+    let orderRows=null,fontOrderRows=[],officialPendingRows=[],vendussPendingRows=[],ordersRequest=0;
     const production=createFilmProduction({supabase,isCurrent:pageCurrent});
     const drawOrders=()=>{
       if(!pageCurrent()||!orderRows)return;
       const linkedRows=orderRows.filter(row=>row.kind!=='legacy_review'),legacyRows=orderRows.filter(row=>row.kind==='legacy_review');
-      const remaining=linkedRows.filter(row=>pendingQuantity(row,filmItems)>0),count=remaining.reduce((sum,row)=>sum+pendingQuantity(row,filmItems),0),fontCount=(typeof fontOrderRows==='undefined'?[]:fontOrderRows).reduce((sum,row)=>sum+Math.max(1,Number(row.quantity)||1),0),officialCount=(typeof officialPendingRows==='undefined'?[]:officialPendingRows).length,pendingButton=app.querySelector('#addOfficialPending'),totalPending=count+fontCount+officialCount;if(pendingButton)pendingButton.innerHTML='◷ Aguardando produção <b style="margin-left:6px;border-radius:999px;padding:2px 7px;background:#ff6428;color:#111">'+totalPending+'</b>';
+      const remaining=linkedRows.filter(row=>pendingQuantity(row,filmItems)>0),count=remaining.reduce((sum,row)=>sum+pendingQuantity(row,filmItems),0),availableVenduss=vendussPendingRows,vendussAssetIds=new Set(availableVenduss.map(row=>row.asset_id).filter(Boolean)),fontCount=fontOrderRows.length,officialCount=officialPendingRows.filter(row=>!vendussAssetIds.has(row.asset?.id)).length,pendingButton=app.querySelector('#addOfficialPending'),totalPending=remaining.length+fontCount+officialCount+availableVenduss.length;if(pendingButton)pendingButton.innerHTML='◷ Aguardando produção <b style="margin-left:6px;border-radius:999px;padding:2px 7px;background:#ff6428;color:#111">'+totalPending+'</b>';
       ordersSlot.innerHTML=`<div class="film-order-heading"><div><b>${count?`${count} estampa(s) liberada(s) para montar`:'Nenhum saldo vinculado fora desta montagem'}</b><small>Pedidos e solicitações de empresas liberados para impressão. O saldo muda após gerar PNG ou TIFF.</small></div><button class="btn small" data-refresh-orders>Atualizar</button></div>${remaining.length?`<details open><summary>Escolher pedidos (${remaining.length} artes)</summary><div class="film-order-list">${remaining.map(row=>`<article><div><b>${h(row.company_name)}</b><span>${h(row.asset_name||row.label)}</span>${row.kind==='company_order'?`<small>${h(row.project_title||'Pedido da empresa')} · ${h(row.product_name||'Produto')} · ${h(row.size||'')}${row.color?' · '+h(row.color):''}</small>`:''}<small>${Number(row.width_cm)} × ${Number(row.height_cm)} cm · faltam ${pendingQuantity(row,filmItems)} · entrega ${h(dateLabel(row.delivery_date))}</small></div><label>Quantidade<input type="number" min="1" max="${pendingQuantity(row,filmItems)}" value="${pendingQuantity(row,filmItems)}" inputmode="numeric" data-order-qty="${h(filmOrderRowKey(row))}"></label><button class="btn primary small" data-add-order="${h(filmOrderRowKey(row))}">Adicionar</button></article>`).join('')}</div></details>`:''}${legacyRows.length?`<details class="film-legacy-review"><summary>Pedidos antigos para conferir (${legacyRows.length})</summary><p>Estes pedidos precisam de conferência dos vínculos de arte final e das quantidades por estampa. Não há vínculo automático nem quantidade presumida. Abrir o pedido não altera os valores do orçamento.</p><div class="film-legacy-list">${legacyRows.map(row=>`<article><div><b>${h(row.company_name||'Cliente')}</b><span>${h(row.project_title||'Pedido anterior')}</span><small>Entrega ${h(dateLabel(row.delivery_date))}</small></div><button class="btn small" data-review-legacy-order="${h(row.workspace_id)}">Abrir pedido</button></article>`).join('')}</div></details>`:''}`;
       ordersSlot.querySelector('[data-refresh-orders]').onclick=()=>void refreshOrders();
       ordersSlot.querySelectorAll('[data-review-legacy-order]').forEach(button=>button.onclick=()=>{
@@ -918,7 +918,7 @@ export function createProductionModule(ctx){
         filmItems.push(filmItemFromOrder(row,quantity));void refreshItems();drawOrders();
       });
     };
-    const refreshOrders=async()=>{const request=++ordersRequest;ordersSlot.innerHTML='<small>Conferindo pedidos liberados…</small>';try{const [rows,fonts,officialRows]=await Promise.all([production.pending(),loadZero19FontProductionRows(readySets),ctx.officialOrders?.pendingRows?.()||Promise.resolve([])]);if(!pageCurrent()||request!==ordersRequest)return;orderRows=rows||[];fontOrderRows=fonts||[];officialPendingRows=officialRows||[];drawOrders()}catch(error){if(!pageCurrent()||request!==ordersRequest)return;ordersSlot.innerHTML=`<p role="status">${h(error.message)} Sua montagem continua disponível.</p><button class="btn small">Tentar novamente</button>`;ordersSlot.querySelector('button').onclick=()=>void refreshOrders()}};
+    const refreshOrders=async()=>{const request=++ordersRequest;try{const [rows,fonts,officialRows,vendussRows]=await Promise.all([production.pending(),loadZero19FontProductionRows(readySets),ctx.officialOrders?.pendingRows?.()||[],ctx.zero19Orders?.pendingVendussFilmRows?.()||[]]);if(!pageCurrent()||request!==ordersRequest)return false;orderRows=rows||[];fontOrderRows=fonts||[];officialPendingRows=officialRows||[];vendussPendingRows=vendussRows||[];drawOrders();return true;}catch(error){if(pageCurrent()&&request===ordersRequest)ctx.toast('Não foi possível atualizar os pedidos: '+(error.message||error),'err');return false;}};
     // Removed automatically with the page, not a growing global listener per visit.
     detachProductionListener=()=>{};
     const bindItems=()=>{
@@ -987,51 +987,62 @@ export function createProductionModule(ctx){
     };
 
     const openUnifiedPendingPicker=async()=>{
-      if(!orderRows)await refreshOrders();
+      if(!await refreshOrders())return;
+      if(!pageCurrent())return;
+      const vendussRows=vendussPendingRows;
+      if(!pageCurrent())return;
+      const vendussAssets=new Set(vendussRows.map(row=>row.asset_id).filter(Boolean));
       const genericRows=(orderRows||[]).filter(row=>row.kind!=='legacy_review'&&pendingQuantity(row,filmItems)>0);
-      const fontRows=[...(fontOrderRows||[])];
-      const placedRows=[...(officialPendingRows||[])];
-      if(!genericRows.length&&!fontRows.length&&!placedRows.length){ctx.toast('Nada aguardando produção agora.','ok');return}
-
-      const selectedGeneric=new Set(genericRows.map(row=>filmOrderRowKey(row)));
-      const selectedFonts=new Set(fontRows.map(row=>row.id));
-      const selectedPlaced=new Set(placedRows.map(row=>row.placement?.id).filter(Boolean));
-      const genericQty=new Map(genericRows.map(row=>[filmOrderRowKey(row),pendingQuantity(row,filmItems)]));
-      const placedQty=new Map(placedRows.map(row=>[row.placement?.id,Math.max(1,Number(row.garment?.quantity||row.placement?.metadata?.order_quantity||1))]));
-      const modal=document.createElement('div');modal.className='modal-backdrop';let busy=false;
-
-      const rowLabel=row=>row.workspace?.company_name||row.workspace?.client_name||row.company_name||'Cliente';
-      const draw=()=>{
-        const genericHtml=genericRows.map(row=>{const key=filmOrderRowKey(row),max=pendingQuantity(row,filmItems);return '<label class="z19-transfer-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center"><input type="checkbox" data-pending-generic="'+h(key)+'" '+(selectedGeneric.has(key)?'checked':'')+'><span><b>'+h(row.company_name||'Cliente')+'</b><span>'+h(row.asset_name||row.label||'Arte')+'</span><small>'+Number(row.width_cm)+' × '+Number(row.height_cm)+' cm · faltam '+max+' · entrega '+h(dateLabel(row.delivery_date))+'</small></span><input style="width:72px" type="number" min="1" max="'+max+'" value="'+genericQty.get(key)+'" data-pending-generic-qty="'+h(key)+'"></label>'}).join('');
-        const fontHtml=fontRows.map(row=>{const project=row.project||{},orderRef=project.official_order_payload?.display_id||project.official_order_ref||String(project.id||'').slice(0,8),company=row.workspace?.company_name||row.workspace?.client_name||'Cliente',prod=row.metadata?.details?.[0]?.production||{},detail=[prod.top_text,prod.number].filter(Boolean).join(' · ');return '<label class="z19-transfer-row" style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center"><input type="checkbox" data-pending-font="'+h(row.id)+'" '+(selectedFonts.has(row.id)?'checked':'')+'><span><b>'+h(company)+' · Pedido #'+h(orderRef)+'</b><span>'+h(detail||row.text_value||'Nome/número')+'</span><small>'+h(row.metadata?.font_name||row.set?._path||'Fonte definida')+' · '+Math.max(1,Number(row.quantity)||1)+' peça(s)</small></span></label>'}).join('');
-        const placedHtml=placedRows.map(row=>{const id=row.placement?.id,detail=[row.garment?.product_name||row.placement?.garment_category,row.placement?.garment_color_name,row.placement?.garment_size,row.placement?.position_code].filter(Boolean).join(' · ');return '<label class="z19-transfer-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center"><input type="checkbox" data-pending-placed="'+h(id)+'" '+(selectedPlaced.has(id)?'checked':'')+'><span><b>'+h(rowLabel(row))+'</b><span>'+h(row.asset?.name||'Arte posicionada')+'</span><small>'+h(detail)+' · '+Number(row.placement?.width_cm||0).toLocaleString('pt-BR',{maximumFractionDigits:2})+' × '+Number(row.placement?.height_cm||0).toLocaleString('pt-BR',{maximumFractionDigits:2})+' cm</small></span><input style="width:72px" type="number" min="1" value="'+placedQty.get(id)+'" data-pending-placed-qty="'+h(id)+'"></label>'}).join('');
-        const selectedCount=selectedGeneric.size+selectedFonts.size+selectedPlaced.size;
-        modal.innerHTML='<div class="modal wide"><div class="modal-head"><div><div class="eyebrow">AGUARDANDO PRODUÇÃO</div><h2>Selecionar itens para o filme</h2><p>Marque somente o que você quer colocar neste filme. Nada muda para Em produção até a exportação e o checklist final.</p></div><button class="btn ghost small close">×</button></div><div style="display:grid;gap:16px;max-height:65dvh;overflow:auto">'+(genericHtml?'<section><b>Pedidos liberados</b><div class="z19-transfer-list" style="margin-top:8px">'+genericHtml+'</div></section>':'')+(fontHtml?'<section><b>Nome / número com fonte definida</b><div class="z19-transfer-list" style="margin-top:8px">'+fontHtml+'</div></section>':'')+(placedHtml?'<section><b>Artes já posicionadas</b><div class="z19-transfer-list" style="margin-top:8px">'+placedHtml+'</div></section>':'')+'</div><div class="modal-footer"><span style="margin-right:auto">'+selectedCount+' item(ns) selecionado(s)</span><button class="btn close">Cancelar</button><button class="btn primary" data-add-pending '+(!selectedCount?'disabled':'')+'>Adicionar selecionados ao filme</button></div></div>';
-        modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>!busy&&modal.remove());
-        modal.querySelectorAll('[data-pending-generic]').forEach(input=>input.onchange=()=>{input.checked?selectedGeneric.add(input.dataset.pendingGeneric):selectedGeneric.delete(input.dataset.pendingGeneric);draw()});
-        modal.querySelectorAll('[data-pending-font]').forEach(input=>input.onchange=()=>{input.checked?selectedFonts.add(input.dataset.pendingFont):selectedFonts.delete(input.dataset.pendingFont);draw()});
-        modal.querySelectorAll('[data-pending-placed]').forEach(input=>input.onchange=()=>{input.checked?selectedPlaced.add(input.dataset.pendingPlaced):selectedPlaced.delete(input.dataset.pendingPlaced);draw()});
-        modal.querySelectorAll('[data-pending-generic-qty]').forEach(input=>input.onchange=()=>{const key=input.dataset.pendingGenericQty,row=genericRows.find(row=>filmOrderRowKey(row)===key),max=pendingQuantity(row,filmItems),qty=Math.max(1,Math.min(max,Math.floor(Number(input.value)||1)));genericQty.set(key,qty);input.value=String(qty)});
-        modal.querySelectorAll('[data-pending-placed-qty]').forEach(input=>input.onchange=()=>{const id=input.dataset.pendingPlacedQty,qty=Math.max(1,Math.floor(Number(input.value)||1));placedQty.set(id,qty);input.value=String(qty)});
-        modal.querySelector('[data-add-pending]').onclick=async()=>{
-          if(busy)return;busy=true;const button=modal.querySelector('[data-add-pending]');button.disabled=true;button.textContent='Adicionando…';
-          try{
-            const items=[];
-            for(const row of genericRows){const key=filmOrderRowKey(row);if(selectedGeneric.has(key))items.push(filmItemFromOrder(row,genericQty.get(key)))}
-            for(const row of fontRows)if(selectedFonts.has(row.id))items.push(...await zero19FontFilmItems(row));
-            const selectedPlacedRows=placedRows.filter(row=>selectedPlaced.has(row.placement?.id));
-            if(selectedPlacedRows.length){
-              const prepared=ctx.officialOrders?.pendingFilmItems?.(selectedPlacedRows,placedQty)||[];
-              items.push(...prepared);
-            }
-            if(!items.length)throw new Error('Selecione ao menos um item.');
-            filmItems.push(...items);modal.remove();await refreshItems();drawOrders();
-          }catch(error){busy=false;ctx.toast(error.message||String(error),'err');draw()}
-        };
+      const fontRows=fontOrderRows||[];
+      const placedRows=(officialPendingRows||[]).filter(row=>!vendussAssets.has(row.asset?.id));
+      const entries=[
+        ...vendussRows.map(row=>{const p=row.metadata?.details?.[0]?.production||{};return {key:'venduss:'+row.id,kind:'venduss',row,title:'VENDUSS #'+(p.venduss_display_id||'')+' · ZERO19 #'+orderNoForPicker(row.summary?.project),detail:row.text_value||'Estampa',note:[row.garment_color,row.garment_size,p.position_label].filter(Boolean).join(' · '),image:row._artworkPreview,quantity:Math.max(1,Number(row.quantity)||1)};}),
+        ...fontRows.map(row=>{const p=row.metadata?.details?.[0]?.production||{};return {key:'font:'+row.id,kind:'font',row,title:(row.workspace?.client_name||row.workspace?.company_name||'Cliente')+' · Pedido #'+orderNoForPicker(row.project),detail:[p.top_text,p.number].filter(Boolean).join(' · ')||row.text_value,note:row.metadata?.font_name||row.set?._path||'Fonte definida',quantity:Math.max(1,Number(row.quantity)||1)};}),
+        ...placedRows.map(row=>({key:'placed:'+row.placement.id,kind:'placed',row,title:row.companyName||row.workspace?.client_name||row.workspace?.company_name||'Pedido #'+orderNoForPicker(row.project),detail:row.asset?.name||'Arte posicionada',note:[row.placement?.position_code,row.placement?.garment_color_name,row.placement?.garment_size].filter(Boolean).join(' · '),image:row.asset&&(row.asset.thumbnail_path||row.asset.processed_path||row.asset.original_path)?ctx.publicUrl(row.asset.thumbnail_path||row.asset.processed_path||row.asset.original_path):null,quantity:Math.max(1,Number(row.garment?.quantity||row.placement?.metadata?.order_quantity)||1)})),
+        ...genericRows.map(row=>({key:'generic:'+filmOrderRowKey(row),kind:'generic',row,title:row.company_name||'Pedido liberado',detail:row.asset_name||row.label,note:row.project_title||'',image:row.processed_path||row.original_path?ctx.publicUrl(row.processed_path||row.original_path):null,quantity:pendingQuantity(row,filmItems)}))
+      ];
+      if(!entries.length)return ctx.toast('Nada aguardando produção agora.','ok');
+      function orderNoForPicker(project){return project?.official_order_payload?.display_id||project?.official_order_ref||String(project?.id||'').slice(0,8);}
+      for(const entry of entries)entry.alreadyInFilm=['venduss','font'].includes(entry.kind)&&filmItems.some(item=>item.zero19WorkItemId===entry.row.id);
+      const selected=new Set(entries.filter(entry=>!entry.alreadyInFilm).map(entry=>entry.key)),modal=document.createElement('div');
+      modal.className='modal-backdrop';let busy=false;
+      modal.innerHTML='<div class="modal wide film-pending-modal" style="display:flex;flex-direction:column;width:min(900px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:hidden" role="dialog" aria-modal="true" aria-labelledby="film-pending-title"><div class="modal-head"><div><div class="eyebrow">AGUARDANDO PRODUÇÃO</div><h2 id="film-pending-title">Selecionar itens para o filme</h2><p>Confira arte, posição e pedido. A produção só inicia após exportar e confirmar o checklist.</p></div><button class="btn ghost small close" aria-label="Fechar">×</button></div><div class="film-pending-list" style="display:grid;gap:10px;min-height:0;overflow-y:auto;overflow-x:hidden">'+entries.map((entry,index)=>'<label style="display:grid;grid-template-columns:20px 72px minmax(0,1fr);gap:10px;align-items:center;padding:10px" class="film-pending-row '+(entry.kind==='venduss'?'is-venduss':'')+'"><input type="checkbox" data-entry="'+index+'" checked><span class="film-pending-preview" style="display:flex;width:72px;height:72px;min-width:0;overflow:hidden" data-preview="'+index+'">'+(entry.image?'<img width="72" height="72" style="display:block;width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain" src="'+h(entry.image)+'" alt="Prévia da estampa" loading="lazy">':'<small>'+(entry.kind==='font'?'Preparando prévia…':'Prévia indisponível')+'</small>')+'</span><span class="film-pending-copy" style="display:grid;gap:4px;min-width:0;overflow-wrap:anywhere"><b>'+h(entry.title)+'</b><span>'+h(entry.detail||'Arte')+'</span><small>'+h(entry.note)+'</small><strong>'+entry.quantity+' peça(s)</strong></span></label>').join('')+'</div><p role="alert" class="film-pending-error" hidden></p><div class="modal-footer"><span data-selected-count style="margin-right:auto"></span><button class="btn close">Cancelar</button><button class="btn primary" data-add-pending>Adicionar selecionados ao filme</button></div></div>';
+      entries.forEach((entry,index)=>{if(!['generic','placed'].includes(entry.kind))return;const field=document.createElement('input');field.type='number';field.min='1';field.max=String(entry.quantity);field.value=String(entry.quantity);field.setAttribute('aria-label','Quantidade de '+entry.detail);field.style.cssText='width:84px;min-height:40px';field.onchange=()=>{entry.quantity=Math.max(1,Math.min(Number(field.max),Math.floor(Number(field.value)||1)));field.value=String(entry.quantity);};modal.querySelectorAll('.film-pending-copy')[index].appendChild(field);});
+      entries.forEach((entry,index)=>{if(!entry.alreadyInFilm)return;const input=modal.querySelector('[data-entry="'+index+'"]');input.checked=false;input.disabled=true;const status=document.createElement('strong');status.textContent='Já adicionado neste filme · aguardando produção';status.style.cssText='color:#91e5be;font-size:12px';modal.querySelectorAll('.film-pending-copy')[index].appendChild(status);});
+      const button=modal.querySelector('[data-add-pending]'),updateCount=()=>{const added=entries.filter(entry=>entry.alreadyInFilm).length;modal.querySelector('[data-selected-count]').textContent=selected.size+' item(ns) selecionado(s)'+(added?' · '+added+' já neste filme':'');button.disabled=busy||!selected.size;};
+      const close=()=>{if(!busy)modal.remove();};
+      modal.querySelectorAll('.close').forEach(node=>node.onclick=close);
+      modal.onkeydown=event=>{if(event.key==='Escape')close();};
+      modal.querySelectorAll('[data-entry]').forEach(input=>input.onchange=()=>{const entry=entries[Number(input.dataset.entry)];if(entry.alreadyInFilm)return;input.checked?selected.add(entry.key):selected.delete(entry.key);updateCount();});
+      const showPreviewFailure=img=>{const label=document.createElement('small');label.textContent='Prévia indisponível';img.replaceWith(label);};
+      modal.querySelectorAll('img').forEach(img=>img.onerror=()=>showPreviewFailure(img));
+      button.onclick=async()=>{
+        if(busy||!pageCurrent())return;busy=true;updateCount();button.textContent='Preparando artes…';
+        modal.querySelectorAll('input').forEach(input=>input.disabled=true);
+        try{
+          const items=[];
+          for(const entry of entries.filter(entry=>selected.has(entry.key))){
+            if(entry.kind==='venduss')items.push(await ctx.zero19Orders.prepareVendussFilmItem(entry.row.id));
+            else if(entry.kind==='font')items.push(...await zero19FontFilmItems(entry.row));
+            else if(entry.kind==='placed')items.push(...(ctx.officialOrders?.pendingFilmItems?.([entry.row],new Map([[entry.row.placement.id,entry.quantity]]))||[]));
+            else items.push(filmItemFromOrder(entry.row,entry.quantity));
+          }
+          if(!pageCurrent())throw new Error('A página ou a conta mudou. Abra a seleção novamente.');
+          if(!items.length)throw new Error('Nenhuma arte disponível para adicionar.');
+          filmItems.push(...items);modal.remove();await refreshItems();drawOrders();
+        }catch(error){const alert=modal.querySelector('[role="alert"]');alert.hidden=false;alert.textContent=error.message||String(error);alert.scrollIntoView({block:'nearest'});}
+        finally{busy=false;button.textContent='Adicionar selecionados ao filme';modal.querySelectorAll('input').forEach(input=>input.disabled=input.hasAttribute('data-entry')&&entries[Number(input.dataset.entry)].alreadyInFilm);updateCount();}
       };
-      document.body.appendChild(modal);draw();
+      document.body.appendChild(modal);updateCount();
+      // Small sequential previews reuse the real font renderer without blocking selection.
+      void (async()=>{for(let index=0;index<entries.length;index++){
+        const entry=entries[index];if(entry.kind!=='font')continue;if(!modal.isConnected||!pageCurrent())break;
+        const preview=modal.querySelector('[data-preview="'+index+'"]');
+        try{const p=entry.row.metadata?.details?.[0]?.production||{},item=await makeFilmLetteringPiece(entry.row.set,{name:p.top_text||'',number:p.number||'',settings:customizationDefaults(entry.row.set),compositionMode:'unified',previewTargetPx:260});
+          if(!modal.isConnected)break;const img=document.createElement('img');img.width=72;img.height=72;img.style.cssText='display:block;width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain';img.src=item.previewDataUrl;img.alt='Nome e número na fonte do pedido';img.onerror=()=>showPreviewFailure(img);preview.replaceChildren(img);
+        }catch{preview.textContent='Prévia indisponível';}
+      }})();
     };
-
     ctx.bindCommon();const mediaControl=app.querySelector('#filmMedia'),modeControl=app.querySelector('#filmMode'),gapControl=app.querySelector('#filmGap'),nameControl=app.querySelector('#filmName');mediaControl.value=media.some(m=>m.id===filmSettings.mediaId)?filmSettings.mediaId:media[0]?.id||'';filmSettings.mediaId=mediaControl.value;modeControl.value=filmSettings.mode;gapControl.value=String(filmSettings.gapMm).replace('.',',');const refreshAutoName=()=>{if(!filmSettings.nameCustom){filmSettings.name=suggestedFilmName(media);if(nameControl)nameControl.value=filmSettings.name}};refreshAutoName();if(nameControl)nameControl.oninput=()=>{filmSettings={...filmSettings,name:nameControl.value,nameCustom:true};saveFilmDraft()};const invalidate=()=>{filmCostPanel?.invalidate?.();filmCalculationGeneration++;filmPreviewGeneration++;filmSettings={...filmSettings,mediaId:mediaControl.value,mode:modeControl.value,gapMm:Number(gapControl.value.replace(',','.')),freeRotation:freeControl.checked};lastFilm=null;filmCostPanel?.refresh?.();filmDraftNote='';saveFilmDraft();app.querySelector('#filmPreview').innerHTML='<div class="empty">Configuração alterada. Calcule o filme novamente.</div>';app.querySelector('#filmMetrics').innerHTML='';app.querySelector('#filmInspector')?.remove();app.querySelector('#exportFilm').disabled=true;app.querySelector('#saveFilm').disabled=true};mediaControl.onchange=()=>{invalidate();refreshAutoName()};modeControl.onchange=invalidate;gapControl.oninput=invalidate;freeControl.onchange=invalidate;app.querySelector('#addFilmAsset').onclick=()=>safe(()=>pickFilmAsset(profiles,assetMap,refreshItems));app.querySelector('#quickUploadFilmAsset').onclick=()=>safe(()=>ctx.quickUploadFilmArt?.());app.querySelector('#addOfficialPending').onclick=()=>safe(()=>openUnifiedPendingPicker());app.querySelector('#addFilmTeam').onclick=()=>safe(()=>pickFilmTeam(readySets,refreshItems));app.querySelector('#calculateFilm').onclick=()=>calculateFilm(media);app.querySelector('#exportFilm').onclick=()=>safe(()=>exportFilm(media,assetMap));app.querySelector('#saveFilm').onclick=()=>saveFilmJob(media);bindItems();bindFilmJobs(media);if(lastFilm){drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false}
     void refreshOrders();void refreshFilmJobs(media);if(pendingZero19TeamRequest)void safe(()=>consumeZero19TeamRequest());if(pendingZero19AssetRequest)void safe(()=>consumeZero19AssetRequest());filmDraftBanner();if(filmDraftDirty)saveFilmDraft();return true;
   }

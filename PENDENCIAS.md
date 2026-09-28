@@ -6,6 +6,11 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Integração real com Venduss
 
+- [x] Correção local do seletor (28/09): miniaturas 72×72 e lista responsiva; dois pedidos ZERO19 já adicionados ao filme permanecem visíveis junto com Venduss, identificados como já adicionados e sem duplicação. Contador mantém os três enquanto estão aguardando. Teste visual isolado desktop/celular em quatro cenários passou; teste de confirmação exportada verifica que só os pedidos marcados mudam. Publicação desta revisão ainda pendente.
+
+- [~] Pedido atual 28/09: incluir os trabalhos Venduss `ready_production` no seletor unificado do filme, com miniatura/posição/identificação Venduss, sem duplicar artes já adicionadas. Conferir liberação → fila → filme; a consulta do modal omitia artes sem posicionamento/importação local.
+- [~] Nova página Venduss no topo do sidebar para acompanhar separação ZERO19 e produção Personalizações em atualização automática; mostrar etapas independentes e vínculo com pedido original. Trabalho coordenado com NovoVenduss.
+
 - [~] Integração automática Venduss → ZERO19 → Personalizações ATIVADA em 28/09 após autorização explícita para novas vendas e pedidos abertos. Migração principal e complementos de revisão, recebimento/reversão e retentativa APLICADOS. Testes isolados e `scripts/venduss-bridge-live-rollback.sql` passaram no banco real (checkout, estoque uma vez, liberação, custo/lucro zero, repasse/caixa/reversão, agendamento/alerta, edição após separação, cancelamento), todos desfeitos com ROLLBACK. Sincronizados dois pedidos reais abertos (entrou outro durante o trabalho): Venduss #49215 → ZERO19 #49394, R$94; #49390 → #49393, R$29. Lucro zero, R$123 a receber, nenhuma movimentação física adicional e zero erros de sincronização. #49390 recebeu liberação manual real às 11:37 UTC e sua estampa ficou `ready_production`. Retentativa automática a cada minuto. Falta inspeção visual autenticada, uso real do filme e acompanhamento das próximas operações.
 - [x] Corrigido acervo → filme no código: antes só navegava. Agora importa/reutiliza o PNG e adiciona o item real sem criar vínculo com pedido inexistente. Testes de arte nova/reutilizada/substituída, falha/limpeza e formato do item passaram, assim como o build. Falta publicação/checagem visual autenticada (não confundir com validação de produção).
 
@@ -38,6 +43,8 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 - [~] Cancelamento de pedido do PDV ZERO19: gatilho `z19p_zero19_order_cancellation` e guardas de venda/trabalho/projeto/pausa já estão aplicados; em 28/09, consulta do banco achou zero trabalhos ativos ligados a pedidos ZERO19 cancelados. Histórico é preservado. Ainda testar uma operação controlada de ponta a ponta e conferir reabertura/status/entrega e cancelamento originado no Venduss.
 
 ## Qualidade, dados e publicação
+
+- [~] Publicação 2.17.42 solicitada em 28/09: build completo e regressões passaram, incluindo permanência ZERO19/Venduss na fila até confirmação da exportação. Teste visual isolado desktop/mobile passou. Migração de acompanhamento já consta no banco. Preparando commit/push dos dois repositórios e deploy Vercel; confirmar domínio antes de concluir. Inspeção autenticada ponta a ponta segue como pendência separada.
 
 - [ ] Conferir todas as migrações usadas pela interface no banco real e falhas de RPC/Storage. O portal parceiro faltava e foi aplicado; outras áreas exigem inventário de schema e verificação de permissões.
 - [ ] Auditoria técnica completa do anexo enviado pelo dono: rastrear código, banco, segurança/RLS, performance, dependências, código legado e fluxos de ponta a ponta sem reescrever às cegas.

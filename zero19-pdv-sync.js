@@ -1,5 +1,6 @@
 import {calculateProductionSchedule} from './production-scheduler.js';
 import {createProductionPlanningUI} from './production-planning-ui.js';
+import {filmItemFromLibraryAsset} from './film-picker.js';
 const STAGE_ORDER=['awaiting_release','awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
   awaiting_release:'Venduss · pendente de liberação',
@@ -449,6 +450,26 @@ export function createZero19PdvSync(ctx){
     vendussImports.set(item.id,task);
     try{return await task;}finally{vendussImports.delete(item.id);}
   }
+  async function pendingVendussFilmRows(){
+    const data=await load(true);
+    return data.items.filter(item=>item.stage==='ready_production'&&item.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks').map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
+  }
+  async function prepareVendussFilmItem(workItemId){
+    const owner=accountOwnerId(),item=(await pendingVendussFilmRows()).find(row=>row.id===workItemId);
+    if(!item)throw new Error('O pedido Venduss não está mais aguardando produção. Atualize a seleção.');
+    const assetId=item.asset_id||await importVendussOrderAsset(item,item.summary);
+    const [asset,profile,current]=await Promise.all([
+      supabase.from('z19p_assets').select('*').eq('id',assetId).eq('owner_id',owner).single(),
+      supabase.from('z19p_asset_print_profiles').select('*').eq('asset_id',assetId).eq('owner_id',owner).single(),
+      supabase.from('z19p_zero19_work_items').select('stage').eq('id',item.id).eq('owner_id',owner).single()
+    ]);
+    if(asset.error||profile.error||current.error)throw asset.error||profile.error||current.error;
+    if(owner!==accountOwnerId()||current.data.stage!=='ready_production')throw new Error('A liberação ou a conta mudou. Abra a seleção novamente.');
+    const production=item.metadata?.details?.[0]?.production||{},companyName='Venduss #'+(production.venduss_display_id||orderNo(item.summary.project));
+    return {...filmItemFromLibraryAsset(asset.data,profile.data,{quantity:item.quantity,companyName}),
+      officialProjectId:item.project_id,officialOrderRef:orderNo(item.summary.project),
+      externalOrderItemRef:item.personalization_sale_id,productionGroupKeys:['order:'+item.project_id],zero19WorkItemId:item.id};
+  }
   async function addAssetToFilm(workItemId){
     const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('DTF não encontrado.','err');
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
@@ -628,5 +649,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem};
 }
