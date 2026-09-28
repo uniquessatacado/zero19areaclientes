@@ -31,6 +31,13 @@ update orders set status='SEPARADO' where id=p_order_id; end$$;
 `);
 await db.exec(await fs.readFile(new URL('../supabase/migrations/20260928104733_venduss_order_release_bridge.sql',import.meta.url),'utf8'));
 await db.exec('alter table public.orders add column amount_paid numeric default 0');
+await db.exec('alter table public.orders add column pickup_due_at timestamptz; alter table public.personalization_sales add column pickup_at timestamptz,add column estimated_ready_at timestamptz; alter table public.z19p_projects add column promised_at timestamptz; alter table public.z19p_zero19_work_items add column asset_id uuid,add column metadata jsonb');
+await db.exec(await fs.readFile(new URL('../supabase/migrations/20260928111419_venduss_bridge_revision_safety.sql',import.meta.url),'utf8'));
+// Local stubs only for unrelated cash/cron infrastructure; real cash RPC is
+// exercised by venduss-bridge-live-rollback.sql against the deployed schema.
+await db.exec(`create schema cron; create function cron.schedule(text,text,text) returns integer language sql as $$select 1$$;
+create function public.confirm_manual_order_payment(uuid,uuid,text,text,integer,uuid,text) returns jsonb language plpgsql as $$declare v_order public.orders%rowtype; v_next_status text; begin v_next_status := CASE when true then 'RECEBIDO' else 'SEPARADO' end; return '{}'::jsonb; end$$;`);
+await db.exec(await fs.readFile(new URL('../supabase/migrations/20260928112756_venduss_bridge_activation_control.sql',import.meta.url),'utf8'));
 await db.exec('update venduss_fulfillment_private.settings set enabled=true');
 await db.exec(`
 insert into tenants values('${id(1)}','Venduss','venduss','19999999999'),('${id(2)}','ZERO19','zero19','19888888888');
@@ -74,7 +81,21 @@ assert.equal(Number((await one(`select total_amount from orders where id='${mirr
 assert.equal((await one('select count(*) n from personalization_sales')).n,1,'Editing uses same personalization');
 await db.exec(`update products set cost_price=99 where id=1; update orders set updated_at=now() where id='${id(6)}';`);
 assert.equal(Number((await one(`select total_amount from orders where id='${mirrorId}'`)).total_amount),64.20,'Original agreed cost survives a later catalog cost change');
+await db.exec(`select complete_order_separation('${mirrorId}'); update orders set payment_status='PAGO' where id='${id(6)}'; update order_items set quantity=4 where id='${id(7)}';`);
+link=await one('select * from venduss_order_integration');
+assert.equal(link.revision_pending,true,'Changes after separation require review');
+assert.equal(link.released_at,null,'A paid customer order must not bypass revision review');
+await db.exec(`select venduss_release_order('${id(6)}','Conferi a nova quantidade');`);
+assert.equal((await one('select revision_pending from venduss_order_integration')).revision_pending,false);
+await db.exec(`update orders set amount_paid=100,payment_status='PAGO' where id='${mirrorId}'; update order_items set quantity=6 where id='${id(7)}';`);
+assert.equal((await one(`select payment_status from orders where id='${mirrorId}'`)).payment_status,'PARCIAL','An increased supplier total reopens only the outstanding amount');
 await assert.rejects(db.exec(`select order_stock_cancel('${mirrorId}');`),/original na Venduss/);
+await db.exec(`delete from venduss_shared_print_artworks; update orders set updated_at=now() where id='${id(6)}';`);
+assert.notEqual((await one('select status from personalization_sales')).status,'CANCELLED','Removing a catalog file must not erase an existing order artwork snapshot');
+await db.exec(`update order_items set excluido='T' where id='${id(7)}';`);
+assert.equal((await one(`select status from orders where id='${mirrorId}'`)).status,'CANCELADO');
+await db.exec(`update order_items set excluido='F' where id='${id(7)}';`);
+assert.notEqual((await one(`select status from orders where id='${mirrorId}'`)).status,'CANCELADO','Restoring a source item recovers the same supplier order');
 await db.exec(`update orders set status='CANCELADO' where id='${id(6)}';`);
 assert.equal((await one(`select status from orders where id='${mirrorId}'`)).status,'CANCELADO');
 await assert.rejects(db.exec(`select venduss_release_order('${id(6)}','Teste');`),/cancelado/);
@@ -86,5 +107,6 @@ const failed=await one(`select * from venduss_order_integration where source_ord
 assert.match(failed.sync_error,/custo/);
 assert.equal(failed.supplier_order_id,null,'Failed subtransaction leaves no partial supplier order');
 assert.ok(failed.attempts<=3);
+assert.equal((await one(`select venduss_integration_state from orders where id='${id(8)}'`)).venduss_integration_state,'pending','Failed integration remains visible in the source order list');
 await db.close();
 console.log('Venduss bridge DB: pending, force release, idempotence, edits, cost snapshot, cancellation, no stock movement, recoverable failure passed.');
