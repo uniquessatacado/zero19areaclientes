@@ -1,7 +1,8 @@
 import {calculateProductionSchedule} from './production-scheduler.js';
 import {createProductionPlanningUI} from './production-planning-ui.js';
-const STAGE_ORDER=['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
+const STAGE_ORDER=['awaiting_release','awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
+  awaiting_release:'Venduss · pendente de liberação',
   awaiting_art:'Pendente de subir arte',
   art_received:'Arte recebida · organizar',
   awaiting_halftone:'Aguardando halftone',
@@ -13,6 +14,7 @@ const STAGE_LABELS={
   cancelled:'Cancelado'
 };
 const STAGE_HINTS={
+  awaiting_release:'Aguardando pagamento confirmado ou liberação antecipada pela Venduss. Não separar nem produzir ainda.',
   awaiting_art:'O pedido veio do PDV ZERO19 e ainda precisa receber a arte final.',
   art_received:'O arquivo chegou pelo PDV e precisa ser importado, medido e posicionado antes da produção.',
   awaiting_halftone:'A arte foi recebida e precisa do tratamento em halftone antes de entrar no filme.',
@@ -119,6 +121,12 @@ export function createZero19PdvSync(ctx){
     const firstError=wi.error||libraryResult.error;if(firstError)throw firstError;
     let items=wi.data||[];const saleIds=[...new Set(items.map(row=>row.personalization_sale_id).filter(Boolean))];
     if(saleIds.length){const source=await supabase.from('personalization_sales').select('id,public_tracking_token,personalization_code').in('id',saleIds);if(!source.error){const sourceMap=new Map((source.data||[]).map(row=>[row.id,row]));items=items.map(item=>({...item,metadata:{...(item.metadata||{}),public_tracking_token:sourceMap.get(item.personalization_sale_id)?.public_tracking_token||item.metadata?.public_tracking_token,personalization_code:sourceMap.get(item.personalization_sale_id)?.personalization_code||item.metadata?.personalization_code}}))}}
+    const vendussPaths=[...new Set(items.filter(item=>item.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks').map(item=>item.source_file_path).filter(Boolean))];
+    if(vendussPaths.length){
+      const previews=await supabase.storage.from('venduss-print-artworks').createSignedUrls(vendussPaths,600);
+      const previewMap=new Map((previews.data||[]).map(row=>[row.path,row.signedUrl]));
+      items=items.map(item=>({...item,_artworkPreview:previewMap.get(item.source_file_path)||null}));
+    }
     const projectIds=[...new Set(items.map(row=>row.project_id).filter(Boolean))];
     const pr=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds).order('source_order_created_at',{ascending:false,nullsFirst:false}):{data:[],error:null};
     if(pr.error)throw pr.error;
@@ -161,7 +169,8 @@ export function createZero19PdvSync(ctx){
   function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
   function itemLine(item){
     const title=item.text_value||item.garment_name||item.kind||'Personalização',garment=[item.garment_name,item.garment_color,item.garment_size].filter(Boolean).join(' · ');
-    return '<div class="z19-zero19-item"><b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+'</div>';
+    const production=item.metadata?.details?.[0]?.production||{};
+    return '<div class="z19-zero19-item">'+(item._artworkPreview?'<img src="'+h(item._artworkPreview)+'" loading="lazy" alt="Estampa do pedido" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:8px;float:left;margin:0 10px 8px 0">':'')+'<b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+(production.position_label?'<br><strong>Posição: '+h(production.position_label)+'</strong>':'')+(production.venduss_display_id?'<br>VENDUSS #'+h(production.venduss_display_id):'')+'</div>';
   }
   function card(summary){
     const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[],paused=Boolean(summary.pause||summary.printerPause),requiresProduction=!['ready_pickup','delivered','cancelled'].includes(stage);
@@ -177,7 +186,7 @@ export function createZero19PdvSync(ctx){
     if(stage==='ready_production'){
       const fontSet=stageItem?.metadata?.font_set_id||stageItem?.metadata?.details?.[0]?.production?.font_set_id;
       if(fontSet&&['NAME_NUMBER','PHRASE'].includes(String(stageItem?.kind||'').toUpperCase()))actions.push('<button class="btn primary" data-z19-team-film="'+h(stageItem.id)+'">Adicionar ao filme</button>');
-      else if(stageItem?.asset_id&&stageItem?.without_application)actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar DTF ao filme</button>');
+      else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&stageItem?.without_application)actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
       else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     }
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
@@ -408,14 +417,51 @@ export function createZero19PdvSync(ctx){
     const select=modal.querySelector('[data-font-select]'),button=modal.querySelector('[data-font-confirm]');select.onchange=()=>button.disabled=!select.value;
     button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida. Pedido liberado para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY)};
   }
+  const vendussImports=new Map();
+  async function importVendussOrderAsset(item,summary){
+    if(vendussImports.has(item.id))return vendussImports.get(item.id);
+    const task=(async()=>{
+      const owner=accountOwnerId(),actor=state().session?.user?.id,assetId=crypto.randomUUID(),production=item.metadata?.details?.[0]?.production||{};
+      const path=owner+'/'+summary.workspace.id+'/venduss-order/'+assetId+'/prepared.png';
+      let uploaded=false,saved=false;
+      const checkAccount=()=>{if(owner!==accountOwnerId()||actor!==state().session?.user?.id)throw new Error('A conta mudou. Abra o pedido novamente.');};
+      try{
+        const downloaded=await supabase.storage.from('venduss-print-artworks').download(item.source_file_path);if(downloaded.error)throw downloaded.error;
+        checkAccount();const blob=downloaded.data,dims=await sourceImageSize(blob);
+        const result=await supabase.storage.from(bucket).upload(path,blob,{contentType:'image/png',upsert:false});if(result.error)throw result.error;uploaded=true;checkAccount();
+        const asset={id:assetId,owner_id:owner,workspace_id:summary.workspace.id,project_id:summary.project.id,name:item.text_value||'Estampa Venduss',asset_type:'arte',original_path:path,processed_path:path,mime_type:'image/png',size_bytes:blob.size,width:dims.width,height:dims.height,dpi:300,alpha_trimmed:true,created_by:actor,updated_by:actor,metadata:{venduss_order_id:production.venduss_order_id,personalization_sale_id:item.personalization_sale_id,print_position_code:production.position_code,print_position_label:production.position_label,source_file_path:item.source_file_path}};
+        const insert=await supabase.from('z19p_assets').insert(asset);if(insert.error)throw insert.error;saved=true;
+        await ensureDtfProfile(item,asset);checkAccount();
+        const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner).is('asset_id',null).select('asset_id').maybeSingle();if(linked.error)throw linked.error;
+        if(!linked.data){
+          await supabase.from('z19p_assets').delete().eq('id',assetId);saved=false;
+          await supabase.storage.from(bucket).remove([path]);uploaded=false;
+          const current=await supabase.from('z19p_zero19_work_items').select('asset_id').eq('id',item.id).single();if(current.error||!current.data?.asset_id)throw current.error||new Error('Atualize o pedido e tente novamente.');
+          return current.data.asset_id;
+        }
+        invalidate();return assetId;
+      }catch(error){
+        if(saved)await supabase.from('z19p_assets').delete().eq('id',assetId);
+        if(uploaded)await supabase.storage.from(bucket).remove([path]);
+        throw error;
+      }
+    })();
+    vendussImports.set(item.id,task);
+    try{return await task;}finally{vendussImports.delete(item.id);}
+  }
   async function addAssetToFilm(workItemId){
     const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('DTF não encontrado.','err');
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return toast('Pedido não encontrado.','err');
-    if(!item.asset_id)return toast('Este DTF ainda não possui arte vinculada.','err');
+    if(item.stage!=='ready_production')return toast('Este pedido ainda não está liberado para entrar no filme.','err');
+    let assetId=item.asset_id;
+    if(!assetId&&item.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'){
+      try{assetId=await importVendussOrderAsset(item,summary);}catch(error){return toast(error.message||'Não foi possível preparar a estampa Venduss.','err');}
+    }
+    if(!assetId)return toast('Este DTF ainda não possui arte vinculada.','err');
     queueAssetToFilm?.({
       workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
       personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
-      assetId:item.asset_id,quantity:item.quantity||1
+      assetId,quantity:item.quantity||1
     });
   }
   async function addTeamToFilm(workItemId){

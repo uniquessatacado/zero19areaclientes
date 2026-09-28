@@ -1506,7 +1506,7 @@ const companyOrderOperations=createCompanyOrderOperations({app,supabase,shell,bi
 window.addEventListener('z19:account-changing',()=>{companyPortalAdmin.reset();companyOrderOperations.reset();});
 const routeViewport=createRouteViewportController({getRoute:route,root:app});
 let renderingRoute=false,routeRequested=false;
-const vendussArtworkArchive=createVendussArtworkArchive({supabase,app,shell:(content,options)=>shell(content,options),bindCommon:()=>bindCommon(),accountOwnerId:()=>accountOwnerId(),sessionUserId:()=>session?.user?.id,libraryWorkspace:async()=>{await ensureDefaults();return libraryWorkspaces.library_artes;},nav:path=>nav(path),toast:(message,kind)=>toast(message,kind)});
+const vendussArtworkArchive=createVendussArtworkArchive({supabase,app,shell:(content,options)=>shell(content,options),bindCommon:()=>bindCommon(),accountOwnerId:()=>accountOwnerId(),sessionUserId:()=>session?.user?.id,libraryWorkspace:async()=>{await ensureDefaults();return libraryWorkspaces.library_artes;},queueAssetToFilm:request=>productionModule.queueLibraryAssetRequest(request),toast:(message,kind)=>toast(message,kind)});
 async function renderCurrentRoute(){
   const stillCurrent=accountReadGuard(true);
   if(dashboardAgingTimer){clearInterval(dashboardAgingTimer);dashboardAgingTimer=null;}

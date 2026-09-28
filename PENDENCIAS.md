@@ -6,6 +6,9 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Integração real com Venduss
 
+- [~] Regra confirmada pelo dono em 28/09: acervo automático via produto, sem usar o portal manual antigo; pedido de custo ZERO19 a receber da Venduss; liberar separação/produção após pagamento ou botão administrativo com motivo; recebimento com forma/caixa e agendamento/alerta. Migração `20260928104733_venduss_order_release_bridge.sql` em desenvolvimento e testada em PostgreSQL isolado, ainda NÃO aplicada/ativada. Validar edição após produção iniciada, estoque/cancelamento, guardas e banco real antes de ativar. Telas de liberação/repasse/alerta no NovoVenduss e estágio pendente/miniaturas/entrada da estampa no filme em desenvolvimento.
+- [x] Corrigido acervo → filme no código: antes só navegava. Agora importa/reutiliza o PNG e adiciona o item real sem criar vínculo com pedido inexistente. Testes de arte nova/reutilizada/substituída, falha/limpeza e formato do item passaram, assim como o build. Falta publicação/checagem visual autenticada (não confundir com validação de produção).
+
 - [x] Tabelas e funções do portal “Empresas parceiras” aplicadas no Supabase; migração corrigida e 12/12 testes PostgreSQL isolados passaram. No banco real, tabelas e RPCs existem.
 - [x] Venduss cadastrada e ativa como primeira parceira no banco; existe mapeamento tenant → workspace/portal. Nenhum outro tenant foi ativado.
 - [~] Interface “Empresas parceiras” deixa de oferecer criação genérica de empresa; commit local `a22bee9` criado. Falta confirmar no navegador, enviar ao GitHub (conexão `github.com:443` falhou) e deploy Vercel.

@@ -1,16 +1,18 @@
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 
-export function createVendussArtworkArchive({supabase, app, shell, bindCommon, accountOwnerId, sessionUserId, libraryWorkspace, nav, toast}) {
+export function createVendussArtworkArchive({supabase, app, shell, bindCommon, accountOwnerId, sessionUserId, libraryWorkspace, queueAssetToFilm, toast}) {
   const bucket = supabase.storage.from('venduss-print-artworks');
   let rows = [];
   let signed = new Map();
+  let renderGeneration = 0;
 
   async function render() {
+    const generation = ++renderGeneration;
     app.innerHTML = shell('<main class="container venduss-archive"><header class="venduss-archive-head"><div><small>VEN DUSS × ZERO19</small><h1>Acervo de estampas Venduss</h1><p>Artes de impressão vinculadas às peças estampadas. Arquivos privados, organizados por marca.</p></div><button class="btn" data-nav="/">Voltar</button></header><div id="vendussArchiveBody" class="venduss-archive-loading">Carregando estampas…</div></main>', {back:true});
     bindCommon();
     const {data, error} = await supabase.rpc('z19p_list_partner_artworks');
     const body = document.getElementById('vendussArchiveBody');
-    if (!body) return;
+    if (!body || generation !== renderGeneration) return;
     if (error) { body.innerHTML = `<p role="alert" class="venduss-archive-error">Não foi possível abrir o acervo: ${esc(error.message)}</p>`; return; }
     rows = data || [];
     signed = new Map();
@@ -18,6 +20,7 @@ export function createVendussArtworkArchive({supabase, app, shell, bindCommon, a
       const {data: link} = await bucket.createSignedUrl(row.prepared_path, 600);
       if (link?.signedUrl) signed.set(row.product_id, link.signedUrl);
     }));
+    if (!body.isConnected || generation !== renderGeneration) return;
     const brands = [...new Set(rows.map(row => row.brand_name || 'Sem marca'))].sort((a,b) => a.localeCompare(b,'pt-BR'));
     body.innerHTML = rows.length ? `<div class="venduss-archive-tools"><label for="vendussArchiveSearch">Buscar peça ou marca</label><input id="vendussArchiveSearch" type="search" placeholder="Ex.: oversized, Corinthians…"><span>${rows.length} estampa(s)</span></div><div id="vendussArchiveGroups">${brands.map(brand => groupHTML(brand, rows.filter(row => (row.brand_name || 'Sem marca') === brand))).join('')}</div>` : '<div class="venduss-archive-empty">Ainda não há estampas vinculadas. A arte cadastrada no Venduss aparecerá aqui automaticamente.</div>';
     body.querySelector('#vendussArchiveSearch')?.addEventListener('input', event => {
@@ -67,30 +70,38 @@ export function createVendussArtworkArchive({supabase, app, shell, bindCommon, a
     let savedAssetId = null;
     try {
       const ownerId = accountOwnerId();
+      const userId = sessionUserId();
+      const assertAccount = () => {
+        if (!ownerId || !userId || ownerId !== accountOwnerId() || userId !== sessionUserId()) throw new Error('A conta mudou durante a importação. Abra o acervo novamente.');
+      };
+      assertAccount();
       const workspace = await libraryWorkspace();
+      assertAccount();
       if (!workspace?.id) throw new Error('Biblioteca de artes não disponível.');
       const existing = await supabase.from('z19p_assets').select('id,metadata').eq('workspace_id',workspace.id).contains('metadata',{venduss_product_id:row.product_id}).order('created_at',{ascending:false}).limit(1).maybeSingle();
       if (existing.error) throw existing.error;
-      if (existing.data?.id && existing.data.metadata?.venduss_prepared_path === row.prepared_path) { nav('/filme'); return; }
+      const enqueue = assetId => { assertAccount(); queueAssetToFilm({assetId,quantity:1,companyName:'Venduss'}); };
+      if (existing.data?.id && existing.data.metadata?.venduss_prepared_path === row.prepared_path) { enqueue(existing.data.id); return; }
       const {data: blob, error: downloadError} = await bucket.download(row.prepared_path);
       if (downloadError || !blob) throw downloadError || new Error('PNG indisponível.');
+      assertAccount();
       const id = crypto.randomUUID();
       const base = `${ownerId}/${workspace.id}/root/${id}`;
       const original = `${base}/original.png`, processed = `${base}/processed.png`;
       for (const path of [original,processed]) {
+        assertAccount();
         const {error} = await supabase.storage.from('z19p-assets').upload(path,blob,{contentType:'image/png',upsert:false});
         if (error) throw error;
         uploaded.push(path);
       }
-      const userId = sessionUserId();
+      assertAccount();
       const asset = {id,owner_id:ownerId,workspace_id:workspace.id,name:`Venduss · ${row.brand_name} · ${row.product_name} #${row.product_id}`,asset_type:'arte',original_path:original,processed_path:processed,mime_type:'image/png',size_bytes:blob.size,width:row.pixel_width,height:row.pixel_height,dpi:300,alpha_trimmed:true,background_removed:false,maximized:false,created_by:userId,updated_by:userId,metadata:{venduss_product_id:row.product_id,venduss_tenant_id:row.tenant_id,venduss_prepared_path:row.prepared_path,brand_name:row.brand_name,print_position_code:row.print_position_code,print_position_label:row.print_position_label,print_ready_intent:true,requested_width_cm:row.width_cm,requested_height_cm:row.height_cm}};
       const saved = await supabase.from('z19p_assets').insert(asset);
       if (saved.error) throw saved.error;
       savedAssetId = id;
       const profile = await supabase.from('z19p_asset_print_profiles').upsert({asset_id:id,owner_id:ownerId,default_width_cm:row.width_cm,default_height_cm:row.height_cm,aspect_ratio:Number(row.width_cm)/Number(row.height_cm),halftone:false,allow_internal_nesting:true,rotation_policy:'free',ready_for_print:true,created_by:userId,updated_by:userId,updated_at:new Date().toISOString()},{onConflict:'asset_id'});
       if (profile.error) throw profile.error;
-      toast('Arte Venduss disponível no filme DTF.','ok');
-      nav('/filme');
+      enqueue(id);
     } catch (error) {
       if (savedAssetId) await supabase.from('z19p_assets').delete().eq('id',savedAssetId);
       if (uploaded.length) await supabase.storage.from('z19p-assets').remove(uploaded);

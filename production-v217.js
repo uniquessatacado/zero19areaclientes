@@ -1,5 +1,5 @@
 import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.5';
-import {openFilmAssetPicker} from './film-picker.js?v=2.17.5';
+import {openFilmAssetPicker,filmItemFromLibraryAsset} from './film-picker.js?v=2.17.5';
 import {mountFilmPreview} from './film-preview.js?v=2.17.5';
 import {removeFilmEntry} from './film-edit-core.js?v=2.17.9';
 import {createFilmMaskCache} from './film-mask-cache.js?v=2.17.10';
@@ -52,6 +52,7 @@ export function createProductionModule(ctx){
   const safe=async(fn,fallback=null)=>{try{return await fn()}catch(error){console.error(error);ctx.toast(error?.message||String(error),'err');return fallback}};
   function queueZero19TeamRequest(request){pendingZero19TeamRequest={...(request||{})};ctx.nav('/filme');}
   function queueZero19AssetRequest(request){pendingZero19AssetRequest={...(request||{})};ctx.nav('/filme');}
+  function queueLibraryAssetRequest(request){pendingZero19AssetRequest={assetId:request.assetId,quantity:request.quantity,companyName:request.companyName,libraryOnly:true};ctx.nav('/filme');}
 
   async function signedSourceUrl(path,expiresIn=900){
     const {data,error}=await supabase.storage.from(PRIVATE_BUCKET).createSignedUrl(path,expiresIn);
@@ -946,6 +947,10 @@ export function createProductionModule(ctx){
       const asset=assetMap.get(request.assetId),profile=profiles.find(row=>row.asset_id===request.assetId);
       if(!asset)throw new Error('A arte deste pedido não está disponível no Montar filme.');
       if(!profile||!profile.ready_for_print)throw new Error('Defina a medida da arte e marque-a como pronta para impressão antes de montar o filme.');
+      if(request.libraryOnly){
+        filmItems.push(filmItemFromLibraryAsset(asset,profile,request));
+        await refreshItems();ctx.toast('Estampa do acervo adicionada ao filme. Confira a quantidade antes de imprimir.','ok');return;
+      }
       filmItems.push({
         localId:crypto.randomUUID(),type:'asset',sourceId:asset.id,
         label:(request.clientName||'Cliente ZERO19')+' • '+(asset.name||'DTF'),
@@ -1506,5 +1511,5 @@ export function createProductionModule(ctx){
     }finally{filmJobSaving=false;if(button?.isConnected){button.disabled=!lastFilm;button.textContent=previousLabel||'Salvar filme'}}
   }
 
-  return {buildQuotePdf,pdfAction,enhanceDashboard,enhanceDashboardCards,enhanceAssetCards,renderQueue,changeOperationalStatus,enhanceWorkspace,enhancePublic,renderTeams,renderFilm,openPrintProfile,folderInReadyTree,askDeliveryDate,loadQueues,resetAccountState,hasPendingFilmDraft,flushFilmDraft,queueZero19TeamRequest,queueZero19AssetRequest};
+  return {buildQuotePdf,pdfAction,enhanceDashboard,enhanceDashboardCards,enhanceAssetCards,renderQueue,changeOperationalStatus,enhanceWorkspace,enhancePublic,renderTeams,renderFilm,openPrintProfile,folderInReadyTree,askDeliveryDate,loadQueues,resetAccountState,hasPendingFilmDraft,flushFilmDraft,queueZero19TeamRequest,queueZero19AssetRequest,queueLibraryAssetRequest};
 }

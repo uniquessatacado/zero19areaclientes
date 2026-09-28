@@ -49,6 +49,16 @@ export function filmItemFromSelection(entry, selection = {}) {
   };
 }
 
+/** A library import is not an order: never attach production/order identifiers. */
+export function filmItemFromLibraryAsset(asset, profile, request = {}) {
+  const [entry] = buildFilmAssetCatalogue({
+    profiles: [profile], assetMap: [asset],
+    workspaces: [{id: asset?.workspace_id, workspace_type: 'library', company_name: request.companyName || 'Biblioteca'}]
+  });
+  if (!entry) throw new Error('A arte precisa de um PNG e medidas válidas liberadas para impressão.');
+  return filmItemFromSelection(entry, {quantity: request.quantity});
+}
+
 /** Opens a local selection draft. Nothing is added or persisted until onAdd succeeds. */
 export function openFilmAssetPicker({profiles = [], assetMap = new Map(), workspaces = [], projects = [], folders = [], publicUrl = path => path, previewUrl = null, onAdd, onGarment, onMockup, onEdit, toast} = {}) {
   const catalogue = buildFilmAssetCatalogue({profiles, assetMap, workspaces, projects, folders});
