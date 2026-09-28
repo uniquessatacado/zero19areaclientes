@@ -41,4 +41,12 @@
 
 - Não foi executada uma venda real nem impressão/exportação real para testar esta correção. Navegador autenticado da equipe não está conectado; visual validado em página isolada + permissões e vínculos no banco real.
 - Auditoria Supabase ainda indica riscos preexistentes fora deste patch, incluindo RLS desativado em `orders` e tabelas TAIVEND. Não ativar RLS indiscriminadamente durante operação: mapear consumidores/policies antes. [Orientação do auditor](https://supabase.com/docs/guides/database/database-linter?lint=0007_policy_exists_rls_disabled).
-- Publicação desta versão: registrar confirmação de Git/Vercel após o deploy. Não confundir estes cinco problemas com conclusão de todo o backlog.
+- Não confundir estes cinco problemas com conclusão de todo o backlog.
+
+## Publicação confirmada
+
+- Personalizações: commit de código `01a50046f76ddbcc42305beb8faf1a80b9519b44`, enviado para `origin/main`.
+- Venduss: commit de código `ff7cb0245a3e857c12d1d938da01eddd0b614286`, enviado para `origin/main`. Publicação no servidor Venduss continua sob o fluxo próprio do dono; não foi afirmado deploy de venduss.com.
+- Vercel: Personalizações **2.17.43**, produção **READY**, deployment `dpl_BT5qVsupwP2GNHFXtC95giqRW3U2`, criado em 28/09/2026 às 13:14 BRT.
+- URL: https://019-personalizacoes.vercel.app — HTTP 200. SHA-256 de `index.html`, `app.js`, `official-order-workflow.js`, `zero19-pdv-sync.js`, `production-scheduler.js` e `styles.css` iguais ao build local testado.
+- Verificação de erros: suíte completa no build remoto passou; não houve sessão autenticada de produção para inspecionar erros de operação do navegador. Nenhuma venda/exportação real gerada para este teste.
