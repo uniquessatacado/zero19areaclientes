@@ -21,7 +21,7 @@
 - `scripts/artwork-organizer-browser-qa.mjs`: desktop 1280×800 e mobile 390×844, troca frente/costas sem perder rascunho, vínculos separados, salvamento sem duplicar posicionamento; processador real corta amostra 40×40 para 20×30 e gera 300×450 px com pHYs=11811.
 - `scripts/tiff-options-browser-qa.mjs`: desktop/mobile, exportação real dos três modos, CMYK via worker/WASM; RGB não inicia worker. Sem overflow no modal, callback financeiro único em fixture.
 - `scripts/artwork-identity-live-rollback.sql`: 11 verificações passaram no banco para titular/equipe, vínculo correto e rejeição de troca frente/costas. ROLLBACK integral; sem estoque/pagamentos.
-- Build completo e publicação: registrar resultado após implantação.
+- Build completo passou localmente e na Vercel. Código `dc9c79936fc54ec014b23f83b865a93f6cdd50dd` no GitHub; produção 2.17.44, deployment `dpl_BcQhfZ5ohkpyQjgRzQGecQXPTtUz` READY. Domínio `019-personalizacoes.vercel.app`: HTTP 200 e SHA-256 idêntico ao build para index.html, app.js, official-order-workflow.js, zero19-pdv-sync.js, print-art-preparation.js, production-v217.js, film-spot-export.js e film-tiff-core.js.
 
 ## Limites
 
