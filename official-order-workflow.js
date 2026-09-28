@@ -334,7 +334,7 @@ export function createOfficialOrderWorkflow(ctx){
     ]);
     for(const result of [ar,pr,wr,gr,mr,pfr])if(result.error)throw result.error;
     const am=new Map((ar.data||[]).map(a=>[a.id,a])),pm=new Map((pr.data||[]).map(p=>[p.id,p])),wm=new Map((wr.data||[]).map(w=>[w.id,w])),gm=new Map((gr.data||[]).map(g=>[g.id,g])),mm=new Map((mr.data||[]).map(m=>[m.id,m])),pfm=new Map((pfr.data||[]).map(p=>[p.asset_id,p]));
-    return placements.map(p=>({placement:p,asset:am.get(p.asset_id),mockup:am.get(p.mockup_asset_id),project:pm.get(p.project_id),workspace:wm.get(p.workspace_id),group:gm.get(p.manual_garment_group_id),garment:mm.get(p.manual_garment_id),profile:pfm.get(p.asset_id)})).filter(row=>row.asset&&(row.project?.official_order_ref||row.group||row.garment));
+    return placements.map(p=>({placement:p,asset:am.get(p.asset_id),mockup:am.get(p.mockup_asset_id),project:pm.get(p.project_id),workspace:wm.get(p.workspace_id),group:gm.get(p.manual_garment_group_id),garment:mm.get(p.manual_garment_id),profile:pfm.get(p.asset_id)})).filter(row=>row.asset&&row.project?.official_order_status!=='cancelled'&&(row.project?.official_order_ref||row.group||row.garment));
   }
   function productionGroupKey(row){return row.project?.official_order_ref?'order:'+row.project.id:row.group?.id?'manual:'+row.group.id:row.garment?.id?'shirt:'+row.garment.id:'workspace:'+row.placement.workspace_id}
   function pendingQuantity(row){return Math.max(1,Number(row.garment?.quantity||row.placement.metadata?.order_quantity||1))}

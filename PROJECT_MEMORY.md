@@ -1,5 +1,63 @@
 # 019 Personalizações — Memória canônica
 
+## v2.17.39 — lotes por etapa, checkout e acompanhamento (28/09/2026)
+
+- Planejador compartilhado byte a byte com Novo Vendus: toda a fila ativa conta; preparo pendente reserva tempo; só medidas confirmadas na mesma etapa/progresso compartilham impressão/forno. Peças sem medidas não ganham economia especulativa.
+- Tempos editáveis por arte, metro, corte/poliamida, ciclos A3 e prensagem por lado. Identidade da camisa persistida para não cobrar vários elementos do mesmo lado como várias prensagens.
+- Pausas mantêm a carga de trabalho e impedem promessa definitiva sem retomada. Intervalos sobrepostos de pausa individual/manutenção descontados uma única vez na média.
+- Motivos: criar/editar/excluir da lista com histórico preservado. Card parado destaca motivo e cronômetro sem alterar tamanho do card.
+- Snapshot autenticado aceita membros do PDV e perfis ativos da conta Personalizações; nega outras identidades.
+- Sincronização usa uma implementação canônica, trava por cliente/pedido e recalcula sequência apenas em mudança efetiva de workspace; não remove duplicatas históricas.
+- Migrações de relógio, parâmetros, autorização e sync aplicadas no Supabase, com testes de rollback. Nada fica aguardando aplicação manual.
+- Novo Vendus: checkout atômico/idempotente, validação de nome corrigida, recuperação após resposta perdida, frete preservado na atualização de estoque. Cupom com um QR por pedido; tracking apenas por token, sem financeiro/telefone/caminhos privados; fonte oficial via endpoint restrito ao pedido.
+- Os prazos são estimativas de capacidade, não confirmação de arte/aprovação/produção; alterações de etapa recalculam o restante.
+- Prioridade explícita: normal novo entra depois da capacidade existente; cliente aguardando na loja reserva seu fluxo antes da fila; prazo manual encaixa pela entrega e sinaliza impacto. Não muda promessas de outros pedidos. Header inclui reserva adicional de 30 minutos para nova unidade; PDV simula os itens reais da sacola.
+- Novo prazo usa RPC atômica `z19p_reschedule_order`, atualizando todo o pedido e sua prioridade.
+- Cancelamento integrado na origem `orders.status=CANCELADO`: sales, work items, projetos e pausas encerrados; guards impedem reativação enquanto a origem continuar cancelada. Backfill corrigiu 7 pedidos inconsistentes sem alterar estoque/pagamento; verificação remota retornou zero vínculos ativos de pedidos cancelados. Migration `20260928005804_zero19_cancel_order_integration.sql` aplicada.
+- Publicação: verificar commit e versão servida antes de declarar deploy concluído; Novo Vendus servidor segue sob responsabilidade do usuário.
+
+## v2.17.38 — relógio produtivo e recuperação do fluxo (27/09/2026)
+
+- Home mostra a mesma média por camisa e o próximo prazo disponível usados pelo PDV.
+- A média parte de 30 min/camisa e só aprende com pedidos iniciados após a implantação; conta segunda a sábado, 10h–18h, exclui domingos, feriados e pausas.
+- Pausa por pedido, manutenção geral da impressora, motivos editáveis e feriados cadastráveis.
+- Finalizar e entregar usam modal próprio; os cards são atualizados sem recarregar manualmente e a posição da tela é preservada.
+- Prontos podem voltar ao fluxo escolhendo a etapa; entregues têm histórico próprio e também podem ser reabertos.
+- Cartões enviam por WhatsApp um único link de acompanhamento do pedido.
+- QR no Novo Vendus foi unificado por pedido e a tela pública destaca um único andamento geral.
+- Curva CMYK abre em área grande com comparação antes/depois.
+- O financeiro aguarda o cálculo do filme e aceita o custo parcial conhecido quando a configuração está incompleta.
+- Build candidato: **v2.17.38**. Migração compartilhada: `20260927193000_zero19_production_clock_v21738.sql`.
+- Migração aplicada na base remota com autorização do usuário; acesso e gravação validados.
+
+## v2.17.37 — início operacional e carregamento resiliente (27/09/2026)
+
+### Objetivo
+- Tornar a página inicial uma fila clara de produção, mostrando somente personalizações abertas da Loja ZERO19.
+- Separar o diretório geral de clientes na rota `/clientes`.
+- Reduzir o tempo de abertura e impedir que uma consulta auxiliar derrube o editor de Filme.
+
+### Mudanças
+- A rota `/` abre diretamente a produção sincronizada, com filtros por etapa, busca e próxima ação.
+- Pedidos `delivered` e `cancelled` não aparecem na página inicial.
+- A consulta inicial busca somente work items em etapas abertas e resolve apenas os projetos/clientes relacionados; a lista completa de clientes só é carregada sob demanda ao transferir uma arte.
+- A sincronização automática roda em segundo plano; o botão Atualizar mantém a sincronização explícita.
+- Home e fila exibem carregamento imediato e erro recuperável com nova tentativa.
+- Em `/filme`, falha ou lentidão em `z19p_customization_glyphs` virou aviso recuperável; o editor continua abrindo.
+- Navegação e cartões foram reorganizados para desktop/mobile, inclusive com ajuste para sete atalhos quando o Estúdio estiver habilitado.
+- A paleta passou de vermelho/laranja pesado para grafite azulado; atraso usa apenas um indicador lateral e selo, sem pintar o cartão inteiro.
+- `Marcar como pronto` aguarda o RPC, recarrega o cartão na etapa correta, preserva filtro/busca e restaura a posição exata da rolagem antes de abrir o aviso ao cliente.
+- Toda navegação interna mostra resposta visual imediata no topo enquanto a validação obrigatória de acesso e a próxima tela carregam.
+- Alterações de fonte, halftone, conclusão e entrega também atualizam home/fila sem trocar de rota nem perder a posição.
+
+### Banco e integração
+- Nenhuma migration nova nesta versão.
+- O contrato existente ZERO19 → Personalizações foi preservado; o Novo Vendus só deve mudar diante de divergência comprovada no contrato.
+
+### Verificação
+- Versão candidata: **v2.17.37**.
+- Executar `npm run build`, smoke local e validar o domínio canônico antes de considerar publicada.
+
 ## v2.17.12 — portal de empresas parceiras (EM IMPLEMENTAÇÃO)
 
 - Pedido de 21/09/2026: página exclusiva sem login/senha para Venduss Atacado, responsável Jean Caui e WhatsApp em branco. Solicitar produção escolhendo produtos cadastrados, tamanhos, quantidades e arte por item; acompanhar todos os pedidos e mudanças de status.

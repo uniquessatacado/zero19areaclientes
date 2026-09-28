@@ -23,8 +23,9 @@ export function buildFilmAssetCatalogue({profiles = [], assetMap = new Map(), wo
     if (!asset || asset.asset_type !== 'arte' || profile.ready_for_print !== true || !(widthCm > 0 && heightCm > 0) || !Number.isFinite(widthCm + heightCm) || seen.has(asset.id)) return [];
     const path = asset.processed_path || asset.original_path;
     if (!path) return [];
-    seen.add(asset.id);
     const workspace = workspaceMap.get(asset.workspace_id), project = projectMap.get(asset.project_id), folder = folderMap.get(asset.folder_id);
+    if(project?.official_order_source==='zero19_pdv'&&project.official_order_status==='cancelled')return [];
+    seen.add(asset.id);
     const companyName = workspace?.company_name || workspace?.client_name || asset.company_name || 'Biblioteca sem empresa vinculada';
     const clientName = workspace?.client_name || '';
     const projectName = project?.title || (project?.sequence_no ? `Projeto ${project.sequence_no}` : '');

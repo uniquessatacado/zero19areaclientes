@@ -1,3 +1,5 @@
+import {calculateProductionSchedule} from './production-scheduler.js';
+import {createProductionPlanningUI} from './production-planning-ui.js';
 const STAGE_ORDER=['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
   awaiting_art:'Pendente de subir arte',
@@ -32,30 +34,33 @@ function installStyles(){
 function digits(v){return String(v||'').replace(/\D/g,'')}
 function h(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function dt(v){if(!v)return 'Sem prazo';const d=new Date(v);if(!Number.isFinite(d.getTime()))return 'Sem prazo';return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}
+function slotDt(v){if(!v)return 'Sem prazo';const d=new Date(v);if(!Number.isFinite(d.getTime()))return 'Sem prazo';const weekday=d.toLocaleDateString('pt-BR',{weekday:'long'});return weekday.charAt(0).toUpperCase()+weekday.slice(1)+', '+d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
 function orderNo(project){const value=project?.official_order_payload?.display_id;return value?String(value):String(project?.official_order_ref||'').slice(0,8)}
 function notifyMessage(name){
   const first=String(name||'cliente').trim().split(/\s+/)[0]||'cliente';
   return 'Olá, '+first+'! 😊 Seu produto na ZERO19 está pronto para retirada.\n\nEstamos abertos das 9h às 18h, de segunda a sábado.\n\nSe desejar algum vídeo ou foto do produto, é só solicitar que podemos enviar agora.\n\nUma ajuda que faz muita diferença para a gente: quando pegar seu produto, se puder marcar a @'+INSTAGRAM_HANDLE+' nos Stories e contar como ficou a qualidade, ficamos muito felizes. Seu feedback ajuda a ZERO19 a melhorar cada vez mais o serviço.\n\nSiga a gente no Instagram: '+INSTAGRAM_URL+'\n\nQualquer dúvida, estamos à disposição.';
 }
-function normalizeBusinessTime(source){
+function normalizeBusinessTime(source,holidays=[]){
   const date=new Date(source);
+  const closed=new Set((holidays||[]).map(value=>String(value).slice(0,10)));
   while(true){
-    if(date.getDay()===0){date.setDate(date.getDate()+1);date.setHours(10,0,0,0);continue}
+    const key=[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');
+    if(date.getDay()===0||closed.has(key)){date.setDate(date.getDate()+1);date.setHours(10,0,0,0);continue}
     const minutes=date.getHours()*60+date.getMinutes();
     if(minutes<600){date.setHours(10,0,0,0);return date}
     if(minutes>=1080){date.setDate(date.getDate()+1);date.setHours(10,0,0,0);continue}
     return date;
   }
 }
-function addBusinessMinutes(source,minutes){
-  let date=normalizeBusinessTime(source),remaining=Math.max(0,Number(minutes)||0);
+function addBusinessMinutes(source,minutes,holidays=[]){
+  let date=normalizeBusinessTime(source,holidays),remaining=Math.max(0,Number(minutes)||0);
   while(remaining>.001){
-    date=normalizeBusinessTime(date);const end=new Date(date);end.setHours(18,0,0,0);
+    date=normalizeBusinessTime(date,holidays);const end=new Date(date);end.setHours(18,0,0,0);
     const available=Math.max(0,(end-date)/60000);
     if(remaining<=available){date=new Date(date.getTime()+remaining*60000);remaining=0;break}
     remaining-=available;date=new Date(end);date.setDate(date.getDate()+1);date.setHours(10,0,0,0);
   }
-  return normalizeBusinessTime(date);
+  return normalizeBusinessTime(date,holidays);
 }
 function stageFromProject(project,items){
   if(project?.official_order_status&&STAGE_LABELS[project.official_order_status])return project.official_order_status;
@@ -65,7 +70,25 @@ function stageFromProject(project,items){
 export function createZero19PdvSync(ctx){
   installStyles();
   const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,startStandaloneHalftone,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
-  let cache=null,cacheAt=0,lastAutoSyncAt=0,autoSyncPromise=null;
+  let cache=null,cacheAt=0,lastAutoSyncAt=0,autoSyncPromise=null,homeSelected='all',homeQuery='',countdownTimer=null,liveTimer=null,liveBusy=false;
+  const planningUI=createProductionPlanningUI({supabase,load,toast,onSaved:async()=>{invalidate();if(productionViewActive())await refreshProductionViewAt(window.scrollY)}});
+  function ensureLiveRefresh(){
+    if(liveTimer)return;
+    liveTimer=window.setInterval(async()=>{
+      if(liveBusy||document.hidden||!accountOwnerId()||!productionViewActive()||document.querySelector('.modal-backdrop')||/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||''))return;
+      liveBusy=true;try{await refreshProductionViewAt(window.scrollY)}catch(error){console.warn('production refresh',error)}finally{liveBusy=false}
+    },15000);
+  }
+  function countdownLabel(value){
+    const deadline=new Date(value),difference=deadline.getTime()-Date.now();if(!Number.isFinite(deadline.getTime()))return {label:'Sem prazo',tone:'none'};
+    const totalMinutes=difference>=0?Math.ceil(difference/60000):Math.floor(Math.abs(difference)/60000),days=Math.floor(totalMinutes/1440),hours=Math.floor(totalMinutes%1440/60),minutes=totalMinutes%60,time=(days?days+'d ':'')+String(hours).padStart(2,'0')+'h '+String(minutes).padStart(2,'0')+'min';
+    return difference<0?{label:'Vencido há '+time,tone:'overdue'}:difference<=24*60*60*1000?{label:'Faltam '+time,tone:'urgent'}:{label:'Faltam '+time,tone:'normal'};
+  }
+  function updateDeadlineCountdowns(root=document){
+    root.querySelectorAll('[data-deadline-countdown]').forEach(element=>{const result=countdownLabel(element.dataset.deadlineCountdown);element.textContent=result.label;element.dataset.tone=result.tone});
+    root.querySelectorAll('[data-pause-elapsed]').forEach(element=>{const started=new Date(element.dataset.pauseElapsed).getTime(),minutes=Number.isFinite(started)?Math.floor(Math.max(0,Date.now()-started)/60000):0;const days=Math.floor(minutes/1440),hours=Math.floor(minutes%1440/60);element.textContent='Parado há '+days+'d '+String(hours).padStart(2,'0')+'h '+String(minutes%60).padStart(2,'0')+'min'});
+  }
+  function ensureCountdownTimer(){if(countdownTimer)return;updateDeadlineCountdowns();countdownTimer=window.setInterval(()=>updateDeadlineCountdowns(),1000)}
   async function ensureAutomaticSync(force=false){
     const now=Date.now();
     if(!force&&now-lastAutoSyncAt<60000)return;
@@ -84,17 +107,26 @@ export function createZero19PdvSync(ctx){
   }
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
-    await ensureAutomaticSync(false);
     if(!force&&cache&&Date.now()-cacheAt<12000)return cache;
-    const [wi,pr,ws,sla]=await Promise.all([
-      supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
-      supabase.from('z19p_projects').select('*').eq('owner_id',owner).eq('official_order_source','zero19_pdv').order('source_order_created_at',{ascending:false,nullsFirst:false}),
-      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).order('created_at',{ascending:false}),
-      supabase.rpc('zero19_personalization_ops_snapshot',{p_tenant_id:ZERO19_TENANT_ID})
+    void ensureAutomaticSync(false);
+    const [wi,sla,libraryResult,pauseResult,reasonsResult]=await Promise.all([
+      supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).in('stage',STAGE_ORDER).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
+      supabase.rpc('zero19_personalization_ops_snapshot',{p_tenant_id:ZERO19_TENANT_ID}),
+      supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).eq('workspace_type','library_zero19').limit(1),
+      supabase.from('z19p_production_pauses').select('id,project_id,scope,reason_id,note,started_at').eq('owner_id',owner).is('ended_at',null),
+      supabase.from('z19p_pause_reasons').select('*').eq('owner_id',owner).order('sort_order').order('name')
     ]);
-    const err=wi.error||pr.error||ws.error;if(err)throw err;
-    const projects=pr.data||[],workspaces=ws.data||[],items=wi.data||[],pm=new Map(projects.map(x=>[x.id,x])),wm=new Map(workspaces.map(x=>[x.id,x])),groups=new Map();
-    const zero19Library=workspaces.find(w=>w.workspace_type==='library_zero19')||null;
+    const firstError=wi.error||libraryResult.error;if(firstError)throw firstError;
+    let items=wi.data||[];const saleIds=[...new Set(items.map(row=>row.personalization_sale_id).filter(Boolean))];
+    if(saleIds.length){const source=await supabase.from('personalization_sales').select('id,public_tracking_token,personalization_code').in('id',saleIds);if(!source.error){const sourceMap=new Map((source.data||[]).map(row=>[row.id,row]));items=items.map(item=>({...item,metadata:{...(item.metadata||{}),public_tracking_token:sourceMap.get(item.personalization_sale_id)?.public_tracking_token||item.metadata?.public_tracking_token,personalization_code:sourceMap.get(item.personalization_sale_id)?.personalization_code||item.metadata?.personalization_code}}))}}
+    const projectIds=[...new Set(items.map(row=>row.project_id).filter(Boolean))];
+    const pr=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds).order('source_order_created_at',{ascending:false,nullsFirst:false}):{data:[],error:null};
+    if(pr.error)throw pr.error;
+    const projects=pr.data||[],workspaceIds=[...new Set(projects.map(row=>row.workspace_id).filter(Boolean))],zero19Library=libraryResult.data?.[0]||null;
+    const ws=workspaceIds.length?await supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).in('id',workspaceIds):{data:[],error:null};
+    if(ws.error)throw ws.error;
+    const workspaces=[...(ws.data||[])];if(zero19Library&&!workspaces.some(row=>row.id===zero19Library.id))workspaces.push(zero19Library);
+    const pm=new Map(projects.map(x=>[x.id,x])),wm=new Map(workspaces.map(x=>[x.id,x])),groups=new Map();
     let standaloneHalftones=[];
     if(zero19Library){
       const halftones=await supabase.from('z19p_assets').select('*').eq('owner_id',owner).eq('workspace_id',zero19Library.id).eq('asset_type','arte').order('created_at',{ascending:true});
@@ -102,30 +134,39 @@ export function createZero19PdvSync(ctx){
       standaloneHalftones=(halftones.data||[]).filter(asset=>asset.metadata?.standalone_halftone_pending===true);
     }
     for(const item of items){if(!groups.has(item.project_id))groups.set(item.project_id,[]);groups.get(item.project_id).push(item)}
-    const avgMinutes=Math.max(1,Number(sla?.data?.avg_minutes_per_shirt)||30),summaries=projects.map(project=>{
+    const allReasons=reasonsResult.error?[]:reasonsResult.data||[],reasonNames=new Map(allReasons.map(row=>[row.id,row.name])),reasons=allReasons.filter(row=>row.active);
+    const pauses=(pauseResult.error?[]:pauseResult.data||[]).map(row=>({...row,reason:reasonNames.get(row.reason_id)||row.note||'Motivo não registrado'})),pauseByProject=new Map(pauses.filter(row=>row.scope==='order').map(row=>[row.project_id,row])),printerPause=pauses.find(row=>row.scope==='printer')||sla?.data?.printer_pause||null;
+    const measuredAverage=Number(sla?.data?.avg_minutes_per_shirt),avgMinutes=Number.isFinite(measuredAverage)&&measuredAverage>=1&&measuredAverage<=240?measuredAverage:30,holidays=Array.isArray(sla?.data?.holidays)?sla.data.holidays:[],summaries=projects.map(project=>{
       const rows=groups.get(project.id)||[],workspace=wm.get(project.workspace_id)||null,stage=stageFromProject(project,rows),qty=rows.reduce((s,x)=>s+Math.max(1,Number(x.quantity)||1),0),promised=project.promised_at||rows.map(x=>x.promised_at).filter(Boolean).sort()[0]||null;
-      return {project,workspace,items:rows,stage,qty,promised,overdue:promised&&new Date(promised).getTime()<Date.now()&&!['ready_pickup','delivered','cancelled'].includes(stage)};
+      const requiresProduction=!['ready_pickup','delivered','cancelled'].includes(stage);
+      return {project,workspace,items:rows,stage,qty,promised,pause:requiresProduction?pauseByProject.get(project.id)||null:null,printerPause:requiresProduction?printerPause:null,overdue:promised&&new Date(promised).getTime()<Date.now()&&requiresProduction};
     }).filter(x=>x.items.length).sort((a,b)=>{
+      if(a.overdue!==b.overdue)return a.overdue?-1:1;
       const ap=a.promised?new Date(a.promised).getTime():Number.POSITIVE_INFINITY,bp=b.promised?new Date(b.promised).getTime():Number.POSITIVE_INFINITY;
       if(ap!==bp)return ap-bp;return new Date(a.project.source_order_created_at||a.project.created_at||0)-new Date(b.project.source_order_created_at||b.project.created_at||0);
     });
+    const schedule=calculateProductionSchedule({...sla?.data,production_items:sla?.data?.production_items||items,pauses:sla?.data?.pauses||pauses});
+    if(sla.error||pauseResult.error){schedule.nextAvailableAt=null;schedule.newUnitAvailableAt=null;schedule.projects=schedule.projects.map(row=>({...row,predictedAt:null}));schedule.warnings.push('Não foi possível confirmar calendário e pausas. Atualize antes de prometer um prazo.');console.warn('production schedule unavailable',sla.error||pauseResult.error)}
+    const predictions=new Map(schedule.projects.map(row=>[row.project_id,row]));
     let cumulative=0;
     for(const summary of summaries){
       if(['ready_pickup','delivered','cancelled'].includes(summary.stage))continue;
-      cumulative+=Math.max(1,summary.qty);summary.predicted=addBusinessMinutes(new Date(),cumulative*avgMinutes);
-      summary.risk=Boolean(summary.promised&&summary.predicted.getTime()>new Date(summary.promised).getTime());
+      cumulative+=Math.max(1,summary.qty);const prediction=predictions.get(summary.project.id);summary.predicted=prediction?.predictedAt?new Date(prediction.predictedAt):null;
+      summary.risk=Boolean(summary.promised&&summary.predicted&&summary.predicted.getTime()>new Date(summary.promised).getTime());
     }
-    cache={items,projects,workspaces,summaries,pm,wm,avgMinutes,zero19Library,standaloneHalftones};cacheAt=Date.now();return cache;
+    cache={items,projects,workspaces,summaries,pm,wm,avgMinutes:schedule.estimatedMinutesPerUnit,measuredAvgMinutes:avgMinutes,schedule,holidays,sla:sla?.data||{},reasons,printerPause,pauseSchemaReady:!pauseResult.error&&!reasonsResult.error,zero19Library,standaloneHalftones};cacheAt=Date.now();return cache;
   }
   function invalidate(){cache=null;cacheAt=0}
+  function productionViewActive(){const path=(location.hash.slice(1).split('?')[0]||'/');return path==='/'||path==='/zero19-fila'}
   function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)if(out[row.stage]!=null)out[row.stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
   function itemLine(item){
     const title=item.text_value||item.garment_name||item.kind||'Personalização',garment=[item.garment_name,item.garment_color,item.garment_size].filter(Boolean).join(' · ');
     return '<div class="z19-zero19-item"><b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+'</div>';
   }
   function card(summary){
-    const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[];
+    const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[],paused=Boolean(summary.pause||summary.printerPause),requiresProduction=!['ready_pickup','delivered','cancelled'].includes(stage);
     const stageItem=summary.items.find(i=>i.stage===stage)||summary.items[0];
+    const trackingItem=summary.items.find(item=>item.metadata?.public_tracking_token)||summary.items[0],trackingToken=trackingItem?.metadata?.public_tracking_token,trackingCode=trackingItem?.metadata?.personalization_code;
     if(stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-upload-workspace="'+h(w.id)+'">Subir arte</button>');
     if(stage==='art_received')actions.push('<button class="btn primary" data-z19-import-source="'+h(stageItem?.id||'')+'">Importar e organizar</button>');
     if(stage==='awaiting_halftone'){
@@ -141,9 +182,17 @@ export function createZero19PdvSync(ctx){
     }
     if(stage==='production')actions.push('<button class="btn primary" data-z19-ready="'+h(p.id)+'">Marcar como pronto</button>');
     if(['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production'].includes(stage))actions.push('<button class="btn" data-z19-force-ready="'+h(p.id)+'">Finalizar / pronto</button>');
-    if(stage==='ready_pickup'){if(phone)actions.push('<button class="btn whatsapp" data-z19-notify="'+h(p.id)+'">Avisar cliente</button>');actions.push('<button class="btn primary" data-z19-delivered="'+h(p.id)+'">Entregue</button>')}
-    if(phone)actions.push('<button class="btn ghost" data-z19-wa="'+h(w.phone||'')+'">WhatsApp</button>');
-    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div><b>'+h(STAGE_LABELS[stage]||stage)+'</b><small>'+h(summary.qty)+' item(ns)</small></div></div><div class="z19-zero19-meta"><span>Prazo '+h(dt(summary.promised))+'</span>'+(summary.overdue?'<span class="z19-sync-overdue">PRAZO VENCIDO</span>':summary.risk?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'<span>'+h(STAGE_HINTS[stage]||'')+'</span></div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
+    if(paused)for(let index=0;index<actions.length;index++)actions[index]=actions[index].replace('<button ','<button disabled title="Retome o pedido antes de avançar a produção" ');
+    if(requiresProduction)actions.push('<button class="btn '+(summary.pause?'primary':'ghost z19-pause-button')+'" data-z19-pause="'+h(p.id)+'" data-z19-paused="'+(summary.pause?'true':'false')+'">'+(summary.pause?'Retomar pedido':'Parar pedido')+'</button>');
+    if(summary.printerPause)actions.push('<button class="btn ghost" data-z19-printer-pause data-z19-paused="true">Encerrar manutenção</button>');
+    if(stage==='ready_pickup'){if(phone)actions.push('<button class="btn whatsapp" data-z19-notify="'+h(p.id)+'">Avisar cliente</button>');actions.push('<button class="btn primary" data-z19-delivered="'+h(p.id)+'">Entregue</button>');actions.push('<button class="btn ghost" data-z19-reopen="'+h(p.id)+'">Voltar ao fluxo</button>')}
+    if(stage==='production')actions.push('<button class="btn ghost" data-z19-production-step="'+h(p.id)+'">Etapa da produção</button>');
+    actions.push('<button class="btn ghost" data-z19-deadline="'+h(p.id)+'">Novo prazo</button>');
+    if(phone){actions.push('<button class="btn ghost" data-z19-wa="'+h(w.phone||'')+'" data-z19-wa-name="'+h(w.client_name||w.company_name||'Cliente')+'" data-z19-wa-order="'+h(orderNo(p))+'">WhatsApp</button>');actions.push('<button class="btn ghost" data-z19-wa-qr="'+h(p.id)+'">QR WhatsApp</button>')}
+    if(phone&&(trackingToken||trackingCode))actions.push('<button class="btn ghost" data-z19-status-link="'+h(trackingToken||'')+'" data-z19-status-code="'+h(trackingCode||'')+'" data-z19-status-phone="'+h(w.phone||'')+'" data-z19-status-order="'+h(orderNo(p))+'">Enviar acompanhamento</button>');
+    const itemCount=Math.max(1,Number(summary.qty)||1),deadline=summary.promised?'<span class="z19-deadline-countdown" data-deadline-countdown="'+h(summary.promised)+'"></span><span>Entrega '+h(dt(summary.promised))+'</span>':'<span>Entrega sem prazo definido</span>';
+    const pauseNotice=[summary.pause,summary.printerPause].filter(Boolean).map(pause=>'<div class="z19-order-pause"><strong>'+(pause.scope==='printer'?'Produção parada · impressora em manutenção':'Pedido parado')+' · '+h(pause.reason||'Motivo não registrado')+'</strong><span data-pause-elapsed="'+h(pause.started_at)+'"></span>'+(pause.note&&pause.note!==pause.reason?'<small>'+h(pause.note)+'</small>':'')+'</div>').join('');
+    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue ':'')+(paused?'is-paused':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div class="z19-card-stage" data-stage="'+h(stage)+'"'+(paused?' data-paused="true"':'')+'><b>'+h(paused?'Pedido parado':STAGE_LABELS[stage]||stage)+'</b><small><strong>'+h(itemCount)+'</strong> '+(itemCount===1?'item':'itens')+'</small></div></div>'+pauseNotice+'<div class="z19-zero19-meta">'+deadline+(summary.risk&&!summary.overdue?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'</div><div class="z19-zero19-items">'+summary.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
   }
   async function enhanceDashboard(){
     try{
@@ -156,7 +205,39 @@ export function createZero19PdvSync(ctx){
       bindRoot(section);
     }catch(error){console.warn('zero19 sync dashboard',error)}
   }
+  async function renderHome({loading=true}={}){
+    const requestedHash=location.hash,requestedOwner=accountOwnerId();
+    if(loading){app.innerHTML=shell('<main class="container simple-container production-home"><section class="production-home-loading" aria-live="polite"><span class="loading"></span><div><b>Organizando a produção</b><small>Buscando somente as personalizações em aberto da Loja Zero19.</small></div></section></main>');bindCommon()}
+    let data;try{data=await load(true)}catch(error){console.error('production home',error);app.innerHTML=shell('<main class="container simple-container production-home"><section class="production-load-error"><div class="eyebrow">CONEXÃO COM A PRODUÇÃO</div><h1>Não foi possível carregar a fila</h1><p>'+h(error?.message||'Falha de conexão')+'</p><button class="btn primary" data-production-retry>Tentar novamente</button></section></main>');bindCommon();app.querySelector('[data-production-retry]').onclick=()=>{invalidate();renderHome()};return}
+    if(location.hash!==requestedHash||accountOwnerId()!==requestedOwner)return;
+    const open=data.summaries.filter(row=>STAGE_ORDER.includes(row.stage)),c=counts(open,data.standaloneHalftones),overdue=open.filter(row=>row.overdue).length,risk=open.filter(row=>row.risk&&!row.overdue).length;
+    const standaloneHtml=asset=>'<article class="z19-zero19-card production-home-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>';
+    const visible=()=>open.filter(row=>(homeSelected==='all'||row.stage===homeSelected)&&(!homeQuery||[orderNo(row.project),row.workspace?.client_name,row.workspace?.company_name,row.workspace?.phone,...row.items.map(item=>item.text_value||item.garment_name||'')].join(' ').toLocaleLowerCase('pt-BR').includes(homeQuery)));
+    const draw=()=>{const rows=visible(),standalone=homeSelected==='all'||homeSelected==='awaiting_halftone'?data.standaloneHalftones||[]:[],grid=app.querySelector('[data-production-open-grid]');if(!grid)return;grid.innerHTML=rows.map(summary=>card(summary).replace('z19-zero19-card ','z19-zero19-card production-home-card ')).join('')+standalone.map(standaloneHtml).join('')||'<div class="production-home-empty"><b>Nenhuma personalização neste filtro.</b><span>Pedidos com personalização da Loja Zero19 aparecerão aqui automaticamente.</span></div>';app.querySelector('[data-production-result-count]').textContent=String(rows.length+standalone.length);app.querySelectorAll('[data-home-stage-filter]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.homeStageFilter===homeSelected)));bindRoot(grid)};
+    const total=open.length+(data.standaloneHalftones||[]).length;
+    const localBacklogUnits=open.filter(row=>!['ready_pickup','delivered','cancelled'].includes(row.stage)).reduce((total,row)=>total+Math.max(1,Number(row.qty)||1),0),reportedBacklogUnits=Math.max(0,Number(data.sla?.backlog_quantity)||0),backlogUnits=Math.max(localBacklogUnits,reportedBacklogUnits);
+    const nextAvailable=data.printerPause?'Produção pausada':data.schedule.pausedCount?'Prazo depende da retomada':data.schedule.newUnitAvailableAt?slotDt(data.schedule.newUnitAvailableAt):'Previsão indisponível — conferir fila';
+    app.innerHTML=shell('<main class="container simple-container production-home"><section class="production-home-hero"><div><div class="eyebrow">LOJA ZERO19 → PERSONALIZAÇÕES</div><h1>Produção de personalizações</h1><p>Veja o que precisa ser feito agora, do recebimento da arte até a retirada. Clientes sem trabalho aberto ficam fora desta tela.</p></div><div class="production-home-actions"><button class="btn primary" data-z19-global-upload>+ Subir arte</button><button class="btn" data-z19-home-refresh>Atualizar</button><button class="btn ghost" data-nav="/clientes">Todos os clientes</button></div></section><section class="production-health '+(overdue?'has-overdue':'')+'"><div><small>Em aberto</small><strong>'+total+'</strong></div><p>'+(overdue?'<b>'+overdue+' com prazo vencido.</b> ':'')+(risk?'<b>'+risk+' com risco de atraso.</b> ':'')+(overdue||risk?'Comece pelos pedidos destacados.':'A fila está dentro do prazo informado.')+'</p><span>Sincronização automática ativa</span></section><section class="production-stage-board" aria-label="Etapas da produção"><button data-home-stage-filter="all" aria-pressed="true"><strong>'+total+'</strong><span>Tudo em aberto</span></button>'+STAGE_ORDER.map(stage=>'<button data-home-stage-filter="'+stage+'" aria-pressed="false"><strong>'+c[stage]+'</strong><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section><section class="production-open-section"><div class="production-open-head"><div><div class="eyebrow">TRABALHO EM ABERTO</div><h2>Próximas ações</h2><p>Cada cartão mostra o próximo passo para a produção continuar.</p></div><span data-production-result-count>'+total+'</span></div><div class="production-search"><span>⌕</span><input type="search" data-production-search placeholder="Buscar pedido, cliente, WhatsApp ou personalização" aria-label="Buscar na produção"></div><div class="z19-zero19-grid production-open-grid" data-production-open-grid></div></section></main>');
+    const hero=app.querySelector('.production-home-hero'),health=app.querySelector('.production-health');
+    if(hero&&health){
+      const archive=document.createElement('button');archive.className='btn ghost';archive.dataset.nav='/zero19-entregues';archive.textContent='Entregues';hero.querySelector('.production-home-actions')?.appendChild(archive);
+      const maintenance=document.createElement('button');maintenance.className='btn '+(data.printerPause?'primary':'ghost');maintenance.dataset.z19PrinterPause='';maintenance.dataset.z19Paused=String(Boolean(data.printerPause));maintenance.textContent=data.printerPause?'Retomar impressora':'Impressora em manutenção';hero.querySelector('.production-home-actions')?.appendChild(maintenance);
+      const reasons=document.createElement('button');reasons.className='btn ghost';reasons.dataset.z19ManageReasons='';reasons.textContent='Motivos de pausa';hero.querySelector('.production-home-actions')?.appendChild(reasons);
+      const holidays=document.createElement('button');holidays.className='btn ghost';holidays.dataset.z19ManageHolidays='';holidays.textContent='Feriados';hero.querySelector('.production-home-actions')?.appendChild(holidays);
+      const timing=document.createElement('button');timing.className='btn ghost';timing.dataset.z19ProductionSettings='';timing.textContent='Tempos da produção';hero.querySelector('.production-home-actions')?.appendChild(timing);
+      if(!data.pauseSchemaReady){for(const button of [maintenance,reasons,holidays]){button.disabled=true;button.title='Aguardando a atualização segura do banco de dados'}const pending=document.createElement('small');pending.className='production-config-pending';pending.textContent='Pausas e feriados aguardando atualização do banco.';hero.querySelector('.production-home-actions')?.appendChild(pending)}
+      const b=data.schedule.breakdown,detail='Arte/preparação: '+((b.art||0)+(b.preparation||0))+' min · Impressão: '+b.printing+' min ('+b.printBatches+' lotes) · Corte: '+b.cutting+' min · Forno: '+b.curing+' min · Prensa: '+b.pressing+' min';
+      const metrics=document.createElement('section');metrics.className='production-live-metrics';metrics.innerHTML='<article><small>Tempo estimado por camisa</small><strong>'+Number(data.avgMinutes).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min</strong><span>Calculado por etapas. Média medida: '+Number(data.measuredAvgMinutes).toLocaleString('pt-BR',{maximumFractionDigits:1})+' min · '+(Number(data.sla?.completed_sample_count)||0)+' produções novas</span></article><article><small>Próximo prazo disponível</small><strong>'+h(nextAvailable)+'</strong><span>'+backlogUnits+' unidade(s) · '+data.schedule.totalMinutes+' min na fila + '+data.schedule.newUnitReserveMinutes+' min para nova unidade · segunda a sábado, 10h–18h</span><details><summary>Como este prazo foi calculado</summary><p>'+h(detail)+'</p><p>Somente peças da mesma etapa e com medidas confirmadas compartilham lotes. Máquinas e operador podem trabalhar em paralelo. A previsão acima inclui a reserva para uma nova unidade depois de toda a fila.</p></details><span>'+h(data.schedule.warnings.join(' '))+'</span></article>';health.before(metrics);
+    }
+    bindCommon();bindRoot(app);draw();
+    app.querySelectorAll('[data-home-stage-filter]').forEach(button=>button.onclick=()=>{homeSelected=button.dataset.homeStageFilter;draw()});
+    const search=app.querySelector('[data-production-search]');search.value=homeQuery;search.oninput=event=>{homeQuery=String(event.target.value||'').trim().toLocaleLowerCase('pt-BR');draw()};
+    app.querySelector('[data-z19-home-refresh]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='Atualizando…';await ensureAutomaticSync(true);invalidate();await renderHome()};
+  }
   function bindRoot(root=document){
+    updateDeadlineCountdowns(root);ensureCountdownTimer();ensureLiveRefresh();
+    root.querySelectorAll('[data-z19-production-settings]').forEach(b=>b.onclick=()=>planningUI.openSettings());
+    root.querySelectorAll('[data-z19-production-step]').forEach(b=>b.onclick=()=>planningUI.openStep(b.dataset.z19ProductionStep));
     root.querySelectorAll('[data-z19-open-queue]').forEach(b=>b.onclick=()=>nav('/zero19-fila'));
     root.querySelectorAll('[data-z19-open-stage]').forEach(b=>b.onclick=()=>{nav('/zero19-fila');sessionStorage.setItem('z19-zero19-stage',b.dataset.z19OpenStage||'')});
     root.querySelectorAll('[data-z19-sync-now]').forEach(b=>b.onclick=()=>syncRecent());
@@ -171,18 +252,52 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-choose-font]').forEach(b=>b.onclick=()=>chooseFont(b.dataset.z19ChooseFont));
     root.querySelectorAll('[data-z19-team-film]').forEach(b=>b.onclick=()=>addTeamToFilm(b.dataset.z19TeamFilm));
     root.querySelectorAll('[data-z19-asset-film]').forEach(b=>b.onclick=()=>addAssetToFilm(b.dataset.z19AssetFilm));
-    root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready));
+    root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready,b));
     root.querySelectorAll('[data-z19-force-ready]').forEach(b=>b.onclick=()=>forceReady(b.dataset.z19ForceReady));
     root.querySelectorAll('[data-z19-notify]').forEach(b=>b.onclick=()=>notifyProject(b.dataset.z19Notify));
     root.querySelectorAll('[data-z19-delivered]').forEach(b=>b.onclick=()=>markDelivered(b.dataset.z19Delivered));
-    root.querySelectorAll('[data-z19-wa]').forEach(b=>b.onclick=()=>{const d=digits(b.dataset.z19Wa);if(d)window.open('https://wa.me/'+(d.startsWith('55')?d:'55'+d),'_blank','noopener,noreferrer')});
+    root.querySelectorAll('[data-z19-reopen]').forEach(b=>b.onclick=()=>openReopenModal(b.dataset.z19Reopen));
+    root.querySelectorAll('[data-z19-deadline]').forEach(b=>b.onclick=()=>openDeadlineModal(b.dataset.z19Deadline));
+    root.querySelectorAll('[data-z19-pause]').forEach(b=>b.onclick=()=>openPauseModal(b.dataset.z19Pause,b.dataset.z19Paused==='true'));
+    root.querySelectorAll('[data-z19-printer-pause]').forEach(b=>b.onclick=()=>openPauseModal(null,b.dataset.z19Paused==='true'));
+    root.querySelectorAll('[data-z19-manage-reasons]').forEach(b=>b.onclick=()=>openReasonsManager());
+    root.querySelectorAll('[data-z19-manage-holidays]').forEach(b=>b.onclick=()=>openHolidaysManager());
+    root.querySelectorAll('[data-z19-wa]').forEach(b=>b.onclick=()=>{const d=digits(b.dataset.z19Wa),message=whatsappContactMessage(b.dataset.z19WaName,b.dataset.z19WaOrder);if(d)window.open('https://wa.me/'+(d.startsWith('55')?d:'55'+d)+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer')});
+    root.querySelectorAll('[data-z19-wa-qr]').forEach(b=>b.onclick=()=>openWhatsappQr(b.dataset.z19WaQr));
+    root.querySelectorAll('[data-z19-status-link]').forEach(button=>button.onclick=()=>{const phone=digits(button.dataset.z19StatusPhone),base='https://venduss.com/acompanhar-personalizacao/zero19',url=button.dataset.z19StatusLink?base+'/'+encodeURIComponent(button.dataset.z19StatusLink):base+'?codigo='+encodeURIComponent(button.dataset.z19StatusCode||''),message='Olá! Acompanhe o andamento do seu pedido #'+(button.dataset.z19StatusOrder||'')+' da ZERO19 neste link: '+url;if(phone)window.open('https://wa.me/'+(phone.startsWith('55')?phone:'55'+phone)+'?text='+encodeURIComponent(message),'_blank','noopener,noreferrer')});
   }
-  async function renderQueue(){
-    const data=await load(true),c=counts(data.summaries,data.standaloneHalftones),hashQuery=(location.hash.split('?')[1]||''),hashParams=new URLSearchParams(hashQuery),stageParam=hashParams.get('stage')||'',orderParam=hashParams.get('pedido')||'',saved=stageParam||sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
+  async function renderQueue({loading=true}={}){
+    if(loading){app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="production-home-loading" aria-live="polite"><span class="loading"></span><div><b>Abrindo a fila por etapas</b><small>Carregando somente os pedidos em aberto.</small></div></section></main>',{back:true});bindCommon()}
+    let data;try{data=await load(true)}catch(error){console.error('production queue',error);app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="production-load-error"><h1>Não foi possível carregar a fila</h1><p>'+h(error?.message||'Falha de conexão')+'</p><button class="btn primary" data-production-retry>Tentar novamente</button></section></main>',{back:true});bindCommon();app.querySelector('[data-production-retry]').onclick=renderQueue;return}
+    const c=counts(data.summaries,data.standaloneHalftones),hashQuery=(location.hash.split('?')[1]||''),hashParams=new URLSearchParams(hashQuery),stageParam=hashParams.get('stage')||'',orderParam=hashParams.get('pedido')||'',saved=stageParam||sessionStorage.getItem('z19-zero19-stage')||'';sessionStorage.removeItem('z19-zero19-stage');
     app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">Integração ZERO19</div><h1>Personalizações do PDV</h1><p>Uma única fila para arte, produção, conclusão e retirada.</p></div><div class="hero-actions"><button class="btn primary" data-z19-global-upload>＋ Subir arte</button><button class="btn" data-app-action="settings">Configurações</button></div></section><section class="z19-zero19-summary">'+STAGE_ORDER.map(stage=>'<button data-z19-jump="'+stage+'"><b>'+c[stage]+'</b><span>'+h(STAGE_LABELS[stage])+'</span></button>').join('')+'</section>'+STAGE_ORDER.map(stage=>{const rows=data.summaries.filter(x=>x.stage===stage),standalone=stage==='awaiting_halftone'?(data.standaloneHalftones||[]):[],total=rows.length+standalone.length;const standaloneHtml=standalone.map(asset=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">HALFTONE AVULSO</div><h3>'+h(asset.name)+'</h3><small>Biblioteca ZERO19 · sem cliente vinculado</small></div><div><b>Aguardando halftone</b><small>1 arte</small></div></div><div class="z19-zero19-meta"><span>Pode vincular a um cliente depois</span></div><div class="z19-zero19-card-actions"><button class="btn" data-z19-open="'+h(asset.workspace_id)+'">Abrir arte</button><button class="btn primary" data-z19-standalone-halftone-ready="'+h(asset.id)+'">Halftone pronto</button></div></article>').join('');return '<section class="z19-zero19-section" id="z19-stage-'+stage+'"><div class="z19-zero19-section-head"><div><h2>'+h(STAGE_LABELS[stage])+'</h2><p>'+h(STAGE_HINTS[stage])+'</p></div><b>'+total+'</b></div><div class="z19-zero19-grid">'+(total?rows.map(card).join('')+standaloneHtml:'<div class="empty mini">Nenhum pedido nesta etapa.</div>')+'</div></section>'}).join('')+'</main>',{back:true});
     bindCommon();bindRoot(app);app.querySelectorAll('[data-z19-jump]').forEach(b=>b.onclick=()=>document.getElementById('z19-stage-'+b.dataset.z19Jump)?.scrollIntoView({behavior:'smooth',block:'start'}));
     if(saved)setTimeout(()=>document.getElementById('z19-stage-'+saved)?.scrollIntoView({behavior:'smooth',block:'start'}),50);
     if(orderParam){history.replaceState(null,'','#/zero19-fila');setTimeout(()=>openGlobalUpload(orderParam),60)}
+  }
+  function whatsappContactMessage(name,order){
+    const hour=new Date().getHours(),greeting=hour<12?'Bom dia':hour<18?'Boa tarde':'Boa noite',firstName=String(name||'cliente').trim().split(/\s+/)[0]||'cliente';
+    return greeting+', '+firstName+'! Tudo bem? Estou entrando em contato sobre o seu pedido #'+(order||'')+' da ZERO19.';
+  }
+  async function openWhatsappQr(projectId){
+    const data=await load(true),summary=data.summaries.find(row=>row.project.id===projectId);if(!summary)return toast('Pedido não encontrado.','err');const workspace=summary.workspace||{},phone=digits(workspace.phone);if(!phone)return toast('Cliente sem WhatsApp cadastrado.','err');
+    const message=whatsappContactMessage(workspace.client_name||workspace.company_name,orderNo(summary.project)),url='https://wa.me/'+(phone.startsWith('55')?phone:'55'+phone)+'?text='+encodeURIComponent(message),modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact z19-whatsapp-qr-modal" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">WHATSAPP DO CLIENTE</div><h2>Aponte a câmera do celular</h2><p>'+h(workspace.client_name||workspace.company_name||'Cliente')+' · Pedido #'+h(orderNo(summary.project))+'</p></div><button class="btn ghost small close">×</button></div><div class="z19-whatsapp-qr"><span class="loading"></span><small>Gerando QR Code…</small></div><div class="z19-ready-message">'+h(message)+'</div><div class="modal-footer"><button class="btn close">Fechar</button><a class="btn whatsapp" href="'+h(url)+'" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());
+    try{if(!window.Z19QRCode?.toDataURL)throw new Error('Gerador de QR indisponível');const image=await window.Z19QRCode.toDataURL(url,{width:360,margin:2,errorCorrectionLevel:'M',color:{dark:'#08110d',light:'#ffffff'}});const area=modal.querySelector('.z19-whatsapp-qr');if(area)area.innerHTML='<img src="'+h(image)+'" alt="QR Code para abrir o WhatsApp de '+h(workspace.client_name||workspace.company_name||'cliente')+'"><b>Leia com a câmera do celular</b>'}catch(error){modal.remove();toast('Não foi possível gerar o QR Code. Atualize a página e tente novamente.','err')}
+  }
+  async function renderDelivered(){
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="production-home-loading"><span class="loading"></span><div><b>Abrindo entregues</b><small>Buscando o histórico recente.</small></div></section></main>',{back:true});bindCommon();
+    const owner=accountOwnerId(),itemsResult=await supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).eq('stage','delivered').order('delivered_at',{ascending:false,nullsFirst:false}).limit(300);
+    if(itemsResult.error)throw itemsResult.error;
+    const items=itemsResult.data||[],projectIds=[...new Set(items.map(item=>item.project_id).filter(Boolean))],projectsResult=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds):{data:[],error:null};
+    if(projectsResult.error)throw projectsResult.error;
+    const projects=projectsResult.data||[],workspaceIds=[...new Set(projects.map(project=>project.workspace_id).filter(Boolean))],workspacesResult=workspaceIds.length?await supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).in('id',workspaceIds):{data:[],error:null};
+    if(workspacesResult.error)throw workspacesResult.error;
+    const workspaces=new Map((workspacesResult.data||[]).map(row=>[row.id,row])),groups=new Map();for(const item of items){if(!groups.has(item.project_id))groups.set(item.project_id,[]);groups.get(item.project_id).push(item)}
+    const rows=projects.map(project=>({project,workspace:workspaces.get(project.workspace_id),items:groups.get(project.id)||[]})).filter(row=>row.items.length).sort((a,b)=>new Date(b.project.finalized_at||b.items[0]?.delivered_at||0)-new Date(a.project.finalized_at||a.items[0]?.delivered_at||0));
+    app.innerHTML=shell('<main class="container simple-container z19-zero19-page"><section class="simple-hero"><div><div class="eyebrow">HISTÓRICO DA PRODUÇÃO</div><h1>Pedidos entregues</h1><p>Consulte entregas e recoloque um pedido no fluxo quando uma etapa tiver sido marcada por engano.</p></div><button class="btn" data-nav="/">Voltar à produção</button></section><section class="production-open-section"><div class="production-open-head"><div><h2>Entregues recentemente</h2><p>Mais recentes primeiro.</p></div><span>'+rows.length+'</span></div><div class="z19-zero19-grid">'+(rows.map(row=>'<article class="z19-zero19-card"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(row.project))+'</div><h3>'+h(row.workspace?.client_name||row.workspace?.company_name||'Cliente')+'</h3><small>'+h(row.workspace?.phone||'Sem WhatsApp')+'</small></div><div><b>Entregue</b><small>'+h(dt(row.project.finalized_at||row.items[0]?.delivered_at))+'</small></div></div><div class="z19-zero19-items">'+row.items.map(itemLine).join('')+'</div><div class="z19-zero19-card-actions"><button class="btn primary" data-archive-reopen="'+h(row.project.id)+'">Reabrir pedido</button></div></article>').join('')||'<div class="empty">Nenhum pedido entregue encontrado.</div>')+'</div></section></main>',{back:true});
+    bindCommon();app.querySelectorAll('[data-archive-reopen]').forEach(button=>button.onclick=()=>openReopenModal(button.dataset.archiveReopen,{after:renderDelivered}));
   }
   function findWorkItem(data,id){return data.items.find(item=>item.id===id)}
   async function openGlobalUpload(initialQuery=''){
@@ -258,7 +373,7 @@ export function createZero19PdvSync(ctx){
       const linked=await supabase.from('z19p_zero19_work_items').update({asset_id:assetId,updated_at:new Date().toISOString()}).eq('id',item.id).eq('owner_id',owner);if(linked.error)throw linked.error;
       invalidate();
       if(item.stage==='awaiting_halftone'){toast('Arte importada. Faça o halftone e depois use “Halftone pronto”.','ok');nav('/ambiente/'+summary.workspace.id);return}
-      if(item.without_application){await ensureDtfProfile(item,saved.data);const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();return}
+      if(item.without_application){await ensureDtfProfile(item,saved.data);const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:assetId});if(reviewed.error)throw reviewed.error;invalidate();toast('DTF liberado para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);return}
       await offerAfterUpload?.([saved.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});
       invalidate();
     }catch(error){console.error('import zero19 artwork',error);toast(error.message||'Não foi possível importar a arte recebida no PDV.','err')}
@@ -268,14 +383,14 @@ export function createZero19PdvSync(ctx){
     const summary=data.summaries.find(row=>row.project.id===item.project_id);if(!summary)return;
     if(!item.asset_id)return importSourceArtwork(item.id);
     const asset=await supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',accountOwnerId()).single();if(asset.error)return toast(asset.error.message,'err');
-    if(item.without_application){try{await ensureDtfProfile(item,asset.data)}catch(error){return toast(error.message,'err')}const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');return renderQueue()}
+    if(item.without_application){try{await ensureDtfProfile(item,asset.data)}catch(error){return toast(error.message,'err')}const reviewed=await supabase.rpc('z19p_zero19_mark_art_reviewed',{p_work_item_id:item.id,p_asset_id:item.asset_id});if(reviewed.error)return toast(reviewed.error.message,'err');invalidate();toast('Halftone liberado para Aguardando produção.','ok');if(productionViewActive())return refreshProductionViewAt(window.scrollY);return}
     try{await offerAfterUpload?.([asset.data],{workspace:summary.workspace,projects:[summary.project],allowWithoutOrder:true});invalidate()}catch(error){toast(error.message||'Não foi possível abrir tamanho e posição.','err')}
   }
   async function finishStandaloneHalftone(assetId){
     const data=await load(true),asset=(data.standaloneHalftones||[]).find(row=>row.id===assetId);if(!asset)return toast('Halftone avulso não encontrado.','err');
     const metadata={...(asset.metadata||{}),standalone_halftone_pending:false,standalone_halftone_completed_at:new Date().toISOString()};
     const result=await supabase.from('z19p_assets').update({metadata,updated_at:new Date().toISOString()}).eq('id',assetId).eq('owner_id',accountOwnerId());if(result.error)return toast(result.error.message,'err');
-    invalidate();toast('Halftone concluído. A arte continua na Biblioteca ZERO19 para você transferir quando quiser.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
+    invalidate();toast('Halftone concluído. A arte continua na Biblioteca ZERO19 para você transferir quando quiser.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);
   }
   async function chooseFont(workItemId){
     if(!workItemId)return;
@@ -291,7 +406,7 @@ export function createZero19PdvSync(ctx){
     modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Camisa de time</div><h2>Escolher fonte</h2><p>A fonte precisa estar testada e liberada.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Fonte / temporada</label><select data-font-select><option value="">Escolha</option>'+fonts.map(font=>'<option value="'+h(font.id)+'">'+h(font.label)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-font-confirm disabled>Usar esta fonte</button></div></div>';
     document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
     const select=modal.querySelector('[data-font-select]'),button=modal.querySelector('[data-font-confirm]');select.onchange=()=>button.disabled=!select.value;
-    button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida. Pedido liberado para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue()};
+    button.onclick=async()=>{button.disabled=true;const result=await supabase.rpc('z19p_zero19_set_font',{p_work_item_id:workItemId,p_font_set_id:select.value});if(result.error){button.disabled=false;return toast(result.error.message,'err')}modal.remove();invalidate();toast('Fonte definida. Pedido liberado para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY)};
   }
   async function addAssetToFilm(workItemId){
     const data=await load(true),item=findWorkItem(data,workItemId);if(!item)return toast('DTF não encontrado.','err');
@@ -315,18 +430,32 @@ export function createZero19PdvSync(ctx){
     });
   }
   async function markFontReady(id){
-    if(!id)return;const {error}=await supabase.rpc('z19p_zero19_mark_font_ready',{p_work_item_id:id});if(error)return toast(error.message,'err');invalidate();toast('Fonte liberada. Pedido movido para Aguardando produção.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
+    if(!id)return;const {error}=await supabase.rpc('z19p_zero19_mark_font_ready',{p_work_item_id:id});if(error)return toast(error.message,'err');invalidate();toast('Fonte liberada. Pedido movido para Aguardando produção.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);
+  }
+  function confirmAction({eyebrow='CONFIRMAR AÇÃO',title,message,confirmLabel='Confirmar',danger=false}){
+    return new Promise(resolve=>{
+      const modal=document.createElement('div');modal.className='modal-backdrop';let finished=false;
+      const close=value=>{if(finished)return;finished=true;modal.remove();resolve(value)};
+      modal.innerHTML='<div class="modal compact" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">'+h(eyebrow)+'</div><h2>'+h(title)+'</h2></div><button class="btn ghost small" data-confirm-no aria-label="Fechar">×</button></div><p>'+h(message)+'</p><div class="modal-footer"><button class="btn" data-confirm-no>Cancelar</button><button class="btn '+(danger?'danger':'primary')+'" data-confirm-yes>'+h(confirmLabel)+'</button></div></div>';
+      document.body.appendChild(modal);modal.querySelectorAll('[data-confirm-no]').forEach(button=>button.onclick=()=>close(false));modal.querySelector('[data-confirm-yes]').onclick=()=>close(true);modal.onclick=event=>{if(event.target===modal)close(false)};modal.onkeydown=event=>{if(event.key==='Escape')close(false)};modal.querySelector('[data-confirm-yes]').focus();
+    });
   }
   async function forceReady(projectId){
-    if(!projectId||!confirm('Marcar este pedido como finalizado/pronto para retirada? Use isto para limpar pedidos antigos que já foram produzidos.'))return;
+    if(!projectId||!await confirmAction({eyebrow:'FINALIZAR PRODUÇÃO',title:'Marcar como pronto?',message:'O pedido sairá da etapa atual e ficará pronto para retirada. Você poderá devolvê-lo ao fluxo se precisar corrigir.',confirmLabel:'Sim, marcar como pronto'}))return;
     const {error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:'ready_pickup'});
     if(error)return toast(error.message,'err');
     invalidate();toast('Pedido finalizado e movido para Pronto para retirada.','ok');
-    if(location.hash.includes('/zero19-fila'))renderQueue();else enhanceDashboard();
+    if(productionViewActive())await refreshProductionViewAt(window.scrollY);else enhanceDashboard();
   }
-  async function markReady(projectId){
+  async function refreshProductionViewAt(scrollTop){
+    if(location.hash.includes('/zero19-fila'))await renderQueue({loading:false});else await renderHome({loading:false});
+    requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo(0,Math.max(0,scrollTop||0))));
+  }
+  async function markReady(projectId,button){
     const data=await load(),summary=data.summaries.find(x=>x.project.id===projectId);if(!summary)return;
-    const {error}=await supabase.rpc('z19p_zero19_mark_ready',{p_project_id:projectId});if(error)return toast(error.message,'err');invalidate();toast('Pedido marcado como pronto para retirada.','ok');openReadyModal(summary);if(location.hash.includes('/zero19-fila'))setTimeout(()=>renderQueue(),150);
+    const scrollTop=window.scrollY;if(button){button.disabled=true;button.textContent='Atualizando…'}
+    const {error}=await supabase.rpc('z19p_zero19_mark_ready',{p_project_id:projectId});if(error){if(button){button.disabled=false;button.textContent='Marcar como pronto'}return toast(error.message,'err')}
+    invalidate();toast('Pedido marcado como pronto para retirada.','ok');await refreshProductionViewAt(scrollTop);openReadyModal(summary);
   }
   function openReadyModal(summary){
     const w=summary.workspace||{},message=notifyMessage(w.client_name||w.company_name),modal=document.createElement('div');modal.className='modal-backdrop';
@@ -343,12 +472,71 @@ export function createZero19PdvSync(ctx){
     if(location.hash.includes('/zero19-fila'))renderQueue();
   }
   async function markDelivered(projectId){
-    if(!confirm('Confirmar que o cliente retirou este pedido?'))return;
-    const {error}=await supabase.rpc('z19p_zero19_mark_delivered',{p_project_id:projectId});if(error)return toast(error.message,'err');invalidate();toast('Pedido entregue e sincronizado com a ZERO19.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();
+    if(!await confirmAction({eyebrow:'RETIRADA DO CLIENTE',title:'Confirmar entrega?',message:'O pedido irá para o histórico de entregues. Ele poderá ser reaberto e enviado para qualquer etapa do fluxo.',confirmLabel:'Sim, pedido entregue'}))return;
+    const {error}=await supabase.rpc('z19p_zero19_mark_delivered',{p_project_id:projectId});if(error)return toast(error.message,'err');invalidate();toast('Pedido entregue e sincronizado com a ZERO19.','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);
+  }
+  async function openReopenModal(projectId,{after=null}={}){
+    if(!projectId)return;
+    const modal=document.createElement('div');modal.className='modal-backdrop';
+    const options=STAGE_ORDER.filter(stage=>stage!=='ready_pickup').map(stage=>'<option value="'+stage+'">'+h(STAGE_LABELS[stage])+'</option>').join('');
+    modal.innerHTML='<div class="modal compact" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">CORRIGIR O FLUXO</div><h2>Para qual etapa o pedido deve voltar?</h2><p>Use isto quando uma entrega ou conclusão foi marcada por engano.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Etapa correta<select data-reopen-stage>'+options+'</select></label></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-reopen-confirm>Colocar novamente no fluxo</button></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());
+    modal.querySelector('[data-reopen-confirm]').onclick=async event=>{const button=event.currentTarget;button.disabled=true;const stage=modal.querySelector('[data-reopen-stage]').value,{error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:stage});if(error){button.disabled=false;return toast(error.message,'err')}modal.remove();invalidate();toast('Pedido recolocado em '+STAGE_LABELS[stage]+'.','ok');if(after)await after();else if(productionViewActive())await refreshProductionViewAt(window.scrollY)};
+  }
+  async function openDeadlineModal(projectId){
+    const data=await load(true),summary=data.summaries.find(row=>row.project.id===projectId);if(!summary)return toast('Pedido não encontrado.','err');
+    const current=summary.promised?new Date(summary.promised):new Date(Date.now()+24*60*60*1000),pad=value=>String(value).padStart(2,'0'),localDate=pad(current.getFullYear())+'-'+pad(current.getMonth()+1)+'-'+pad(current.getDate()),localTime=pad(current.getHours())+':'+pad(current.getMinutes()),modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">PEDIDO #'+h(orderNo(summary.project))+'</div><h2>Definir novo prazo</h2><p>A data e a hora serão atualizadas no projeto inteiro e no acompanhamento do cliente.</p></div><button class="btn ghost small close">×</button></div><div class="cost-grid two"><label>Nova data<input type="date" data-deadline-date value="'+h(localDate)+'"></label><label>Novo horário<input type="time" data-deadline-time value="'+h(localTime)+'"></label></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-deadline-save>Salvar novo prazo</button></div></div>';
+    const controls=document.createElement('div');controls.innerHTML='<label class="field">Prioridade<select data-deadline-priority><option value="manual_deadline">Prazo forçado — encaixar pela entrega</option><option value="normal">Normal — manter na fila</option><option value="in_store">Cliente aguardando na loja — fazer primeiro</option></select></label><p class="hint" data-deadline-impact aria-live="polite"></p>';modal.querySelector('.modal-footer').before(controls);
+    const preview=()=>{const date=modal.querySelector('[data-deadline-date]').value,time=modal.querySelector('[data-deadline-time]').value,area=modal.querySelector('[data-deadline-impact]');if(!date||!time)return;const promised=new Date(date+'T'+time+':00');if(!Number.isFinite(promised.getTime()))return;const priority=modal.querySelector('[data-deadline-priority]').value;
+      const items=(data.sla.production_items||data.items).map(item=>item.project_id!==projectId?item:{...item,promised_at:promised.toISOString(),metadata:{...item.metadata,details:(item.metadata?.details?.length?item.metadata.details:[{}]).map(detail=>({...detail,production:{...detail.production,priority}}))}}),schedule=calculateProductionSchedule({...data.sla,production_items:items,pauses:data.sla.pauses||[]}),own=schedule.projects.find(row=>row.project_id===projectId),risks=schedule.projects.filter(row=>row.project_id!==projectId&&row.atRisk);
+      area.textContent=(own?.predictedAt?'Previsão deste pedido: '+slotDt(own.predictedAt)+'. ':'A previsão depende da retomada ou revisão da fila. ')+(risks.length?risks.length+' outro(s) pedido(s) podem ultrapassar a entrega prometida. ':'')+'As datas já combinadas dos outros pedidos não serão alteradas.';};
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());modal.querySelectorAll('input,select').forEach(control=>control.addEventListener('change',preview));preview();
+    modal.querySelector('[data-deadline-save]').onclick=async event=>{const button=event.currentTarget,date=modal.querySelector('[data-deadline-date]').value,time=modal.querySelector('[data-deadline-time]').value;if(!date||!time)return toast('Informe a nova data e o horário.','err');const parsed=new Date(date+'T'+time+':00');if(!Number.isFinite(parsed.getTime()))return toast('Prazo inválido.','err');const promisedAt=parsed.toISOString();button.disabled=true;button.textContent='Atualizando…';
+      let result;try{result=await supabase.rpc('z19p_reschedule_order',{p_project_id:projectId,p_promised_at:promisedAt,p_priority:modal.querySelector('[data-deadline-priority]').value})}catch(error){result={error}}
+      if(result.error){button.disabled=false;button.textContent='Salvar novo prazo';return toast(result.error.message||'Não foi possível salvar. Nenhum prazo foi alterado.','err')}
+      modal.remove();invalidate();toast('Novo prazo salvo no pedido inteiro.','ok');await refreshProductionViewAt(window.scrollY)};
+  }
+  async function openPauseModal(projectId,isPaused=false){
+    const global=projectId==null;
+    if(isPaused){
+      if(!await confirmAction({eyebrow:global?'IMPRESSORA':'PRODUÇÃO',title:global?'Encerrar manutenção?':'Retomar este pedido?',message:global?'A pausa geral será encerrada. Pedidos com pausa individual continuam parados.':'A pausa individual será encerrada. Se a impressora estiver em manutenção, a produção continuará parada.',confirmLabel:'Retomar agora'}))return;
+      try{const {error}=await supabase.rpc('z19p_set_production_pause',{p_project_id:projectId,p_paused:false,p_reason_id:null,p_note:null});if(error)throw error;invalidate();toast(global?'Manutenção encerrada. Pausas individuais foram preservadas.':'Pausa individual encerrada.','ok');return refreshProductionViewAt(window.scrollY)}catch(error){return toast(error.message||'Não foi possível retomar. Tente novamente.','err')}
+    }
+    const data=await load(true);if(!data.pauseSchemaReady)return toast('Pausas ainda aguardam a atualização do banco. Nenhuma configuração foi perdida.','err');const modal=document.createElement('div');modal.className='modal-backdrop';
+    modal.innerHTML='<div class="modal compact" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">'+(global?'MANUTENÇÃO GERAL':'PARAR PEDIDO')+'</div><h2>'+h(global?'Pausar toda a produção?':'Por que este pedido ficará parado?')+'</h2><p>O período parado não entrará na média de tempo por camisa. O prazo combinado continua visível.</p></div><button class="btn ghost small close">×</button></div><div class="field"><label>Motivo<select data-pause-reason><option value="">Escolha o motivo</option>'+data.reasons.map(reason=>'<option value="'+h(reason.id)+'">'+h(reason.name)+'</option>').join('')+'</select></label><button class="btn ghost small" data-pause-manage-reasons>Gerenciar motivos</button></div><div class="field"><label>Observação opcional<textarea data-pause-note rows="3" maxlength="300" placeholder="Explique apenas se for necessário"></textarea></label></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-pause-confirm disabled>Confirmar pausa</button></div></div>';
+    document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());const select=modal.querySelector('[data-pause-reason]'),confirm=modal.querySelector('[data-pause-confirm]');select.onchange=()=>confirm.disabled=!select.value;
+    if(global){const maintenance=data.reasons.find(reason=>/impressora.*manuten/i.test(reason.name));if(maintenance){select.value=maintenance.id;confirm.disabled=false}}
+    modal.querySelector('[data-pause-manage-reasons]').onclick=async()=>{await openReasonsManager({onClose:async()=>{const fresh=await load(true),chosen=select.value;select.innerHTML='<option value="">Escolha o motivo</option>'+fresh.reasons.map(reason=>'<option value="'+h(reason.id)+'">'+h(reason.name)+'</option>').join('');select.value=chosen;confirm.disabled=!select.value}})};
+    confirm.onclick=async()=>{confirm.disabled=true;try{const {data:saved,error}=await supabase.rpc('z19p_set_production_pause',{p_project_id:projectId,p_paused:true,p_reason_id:select.value,p_note:modal.querySelector('[data-pause-note]').value});if(error)throw error;if(!saved?.id)throw new Error('A pausa não foi confirmada. Atualize e tente novamente.');modal.remove();invalidate();toast(global?'Impressora em manutenção. Todos os relógios foram pausados.':'Pedido parado.','ok');await refreshProductionViewAt(window.scrollY)}catch(error){confirm.disabled=false;toast(error.message||'Não foi possível parar o pedido. Tente novamente.','err')}};
+  }
+  async function openReasonsManager({onClose=null}={}){
+    const owner=accountOwnerId();if(!owner)return toast('Entre na conta da loja para gerenciar os motivos.','err');
+    const modal=document.createElement('div');modal.className='modal-backdrop';let editing=null,rows=[],busy=false,changed=false;
+    const close=async()=>{if(busy)return;modal.remove();try{if(onClose)await onClose();else if(changed&&productionViewActive())await refreshProductionViewAt(window.scrollY)}catch(error){toast(error.message||'Não foi possível atualizar a fila.','err')}};
+    const showError=error=>{const box=modal.querySelector('[data-reason-error]');box.textContent=error?.code==='23505'?'Já existe um motivo com esse nome. Edite o motivo existente.':error?.message||'Não foi possível salvar. Tente novamente.';box.hidden=false};
+    const setBusy=value=>{busy=value;modal.querySelectorAll('button,input').forEach(element=>element.disabled=value)};
+    const saveResult=async operation=>{const {data,error}=await operation.select('id,name,active,sort_order').single();if(error)throw error;if(!data?.id)throw new Error('A alteração não foi confirmada. Atualize a página e tente novamente.');const index=rows.findIndex(row=>row.id===data.id);if(index<0)rows.push(data);else rows[index]={...rows[index],...data};changed=true;invalidate();return data};
+    const draw=()=>{
+      modal.innerHTML='<div class="modal compact z19-reasons-manager" role="dialog" aria-modal="true" aria-label="Motivos de pausa"><div class="modal-head"><div><div class="eyebrow">CONFIGURAÇÃO DA PRODUÇÃO</div><h2>Motivos de pausa</h2><p>Crie, edite ou exclua os motivos usados para parar pedidos.</p></div><button type="button" class="btn ghost small close" aria-label="Fechar">×</button></div><div class="z19-reason-list">'+rows.filter(row=>row.active).map(row=>'<div class="z19-reason-row"><span>'+h(row.name)+'</span><div class="z19-reason-actions"><button type="button" class="btn ghost small" data-edit-reason="'+h(row.id)+'">Editar</button><button type="button" class="btn ghost small" data-delete-reason="'+h(row.id)+'">Excluir</button></div></div>').join('')+'</div><form data-reason-form><div class="field"><label>'+(editing?'Editar motivo':'Criar novo motivo')+'<input data-reason-input required maxlength="100" value="'+h(editing?.name||'')+'" placeholder="Ex.: aguardando chegar camisa"></label></div><p data-reason-error class="z19-inline-error" role="alert" hidden></p><div class="modal-footer"><button type="button" class="btn close">Fechar</button>'+(editing?'<button type="button" class="btn ghost" data-new-reason>Cancelar edição / Novo</button>':'')+'<button type="submit" class="btn primary" data-save-reason>'+(editing?'Salvar alteração':'Adicionar motivo')+'</button></div></form></div>';
+      modal.querySelectorAll('.close').forEach(button=>button.onclick=close);
+      const input=modal.querySelector('[data-reason-input]');
+      modal.querySelector('[data-new-reason]')?.addEventListener('click',()=>{editing=null;draw();modal.querySelector('[data-reason-input]').focus()});
+      modal.querySelectorAll('[data-edit-reason]').forEach(button=>button.onclick=()=>{editing=rows.find(row=>row.id===button.dataset.editReason);draw();modal.querySelector('[data-reason-input]').focus()});
+      modal.querySelectorAll('[data-delete-reason]').forEach(button=>button.onclick=async()=>{if(busy)return;const row=rows.find(row=>row.id===button.dataset.deleteReason);if(!row||!await confirmAction({title:'Excluir “'+row.name+'”?',message:'O motivo sairá da lista de novas pausas. Pedidos e pausas já registrados serão preservados.',confirmLabel:'Excluir motivo',danger:true}))return;setBusy(true);try{await saveResult(supabase.from('z19p_pause_reasons').update({active:false,updated_at:new Date().toISOString()}).eq('owner_id',owner).eq('id',row.id));if(editing?.id===row.id)editing=null;draw();toast('Motivo excluído da lista.','ok')}catch(error){showError(error)}finally{setBusy(false)}});
+      modal.querySelector('[data-reason-form]').onsubmit=async event=>{event.preventDefault();if(busy)return;const name=String(input.value||'').trim();if(!name){showError(new Error('Informe o nome do motivo.'));input.focus();return}const duplicate=rows.find(row=>row.id!==editing?.id&&row.name.toLocaleLowerCase('pt-BR')===name.toLocaleLowerCase('pt-BR'));if(duplicate?.active){showError(new Error('Já existe um motivo com esse nome. Edite o motivo existente.'));return}setBusy(true);try{const target=editing||duplicate,operation=target?supabase.from('z19p_pause_reasons').update({name,active:true,updated_at:new Date().toISOString()}).eq('owner_id',owner).eq('id',target.id):supabase.from('z19p_pause_reasons').insert({owner_id:owner,name,sort_order:100});await saveResult(operation);editing=null;draw();toast('Motivo salvo.','ok')}catch(error){showError(error)}finally{setBusy(false)}};
+    };
+    document.body.appendChild(modal);modal.innerHTML='<div class="modal compact" role="status">Carregando motivos…</div>';
+    try{const {data,error}=await supabase.from('z19p_pause_reasons').select('*').eq('owner_id',owner).order('sort_order').order('name');if(error)throw error;rows=data||[];draw()}catch(error){draw();showError(error)}
+  }
+  async function openHolidaysManager(){
+    const owner=accountOwnerId(),modal=document.createElement('div');modal.className='modal-backdrop';
+    const draw=async()=>{const {data,error}=await supabase.from('z19p_production_holidays').select('*').eq('owner_id',owner).order('holiday_date');if(error)throw error;const rows=data||[];modal.innerHTML='<div class="modal compact" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">CALENDÁRIO PRODUTIVO</div><h2>Feriados sem contagem de tempo</h2><p>Nessas datas o relógio da produção não avança.</p></div><button class="btn ghost small close">×</button></div><div class="z19-reason-list">'+rows.map(row=>'<div><span class="btn ghost">'+h(String(row.holiday_date).split('-').reverse().join('/'))+' · '+h(row.name)+'</span><button class="btn ghost small" data-delete-holiday="'+h(row.id)+'">×</button></div>').join('')+'</div><div class="cost-grid two"><label>Data<input type="date" data-holiday-date></label><label>Nome<input data-holiday-name maxlength="100" placeholder="Ex.: Natal"></label></div><div class="modal-footer"><button class="btn close">Fechar</button><button class="btn primary" data-save-holiday>Adicionar feriado</button></div></div>';modal.querySelectorAll('.close').forEach(button=>button.onclick=()=>modal.remove());modal.querySelectorAll('[data-delete-holiday]').forEach(button=>button.onclick=async()=>{const {error:removeError}=await supabase.from('z19p_production_holidays').delete().eq('owner_id',owner).eq('id',button.dataset.deleteHoliday);if(removeError)return toast(removeError.message,'err');invalidate();void draw()});modal.querySelector('[data-save-holiday]').onclick=async()=>{const holiday_date=modal.querySelector('[data-holiday-date]').value,name=String(modal.querySelector('[data-holiday-name]').value||'').trim();if(!holiday_date||!name)return toast('Informe a data e o nome do feriado.','err');const {error:saveError}=await supabase.from('z19p_production_holidays').upsert({owner_id:owner,holiday_date,name},{onConflict:'owner_id,holiday_date'});if(saveError)return toast(saveError.message,'err');invalidate();void draw()}};
+    document.body.appendChild(modal);try{await draw()}catch(error){modal.remove();toast('O calendário de feriados ainda aguarda a atualização do banco.','err')}
   }
   async function syncRecent(limit=30){
     const n=Math.max(1,Math.min(100,Number(limit)||30)),{data,error}=await supabase.rpc('z19p_sync_zero19_recent',{p_limit:n});
-    if(error)return toast(error.message,'err');lastAutoSyncAt=Date.now();invalidate();toast((data?.synced||0)+' pedido(s) sincronizado(s).','ok');if(location.hash.includes('/zero19-fila'))renderQueue();else enhanceDashboard();
+    if(error)return toast(error.message,'err');lastAutoSyncAt=Date.now();invalidate();toast((data?.synced||0)+' pedido(s) sincronizado(s).','ok');if(productionViewActive())await refreshProductionViewAt(window.scrollY);else enhanceDashboard();
   }
   async function enhanceSettings(modal){
     if(!modal||modal.querySelector('[data-zero19-sync-settings]'))return;
@@ -365,11 +553,11 @@ export function createZero19PdvSync(ctx){
     modal.querySelector('[data-force-apply]').onclick=async()=>{const button=modal.querySelector('[data-force-apply]');button.disabled=true;const projectId=modal.querySelector('[data-stage-project]').value,stage=modal.querySelector('[data-force-stage]').value,{error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:stage});if(error){button.disabled=false;return toast(error.message,'err')}invalidate();modal.remove();toast('Etapa atualizada.','ok');if(location.hash.includes('/zero19-fila'))renderQueue();else nav('/')};
   }
   async function openTransfer(asset){
-    const data=await load(true),pending=data.summaries.filter(s=>['awaiting_art','awaiting_font','ready_production'].includes(s.stage)),modal=document.createElement('div');modal.className='modal-backdrop';
+    const data=await load(true),clientsResult=await supabase.from('z19p_workspaces').select('*').eq('owner_id',accountOwnerId()).eq('workspace_type','client').order('client_name',{ascending:true}),clients=clientsResult.data||[],pending=data.summaries.filter(s=>['awaiting_art','awaiting_font','ready_production'].includes(s.stage)),modal=document.createElement('div');modal.className='modal-backdrop';
     const pendingRows=[];for(const s of pending){const artItems=s.items.filter(i=>i.stage==='awaiting_art');if(artItems.length){for(const item of artItems)pendingRows.push({summary:s,item})}}
-    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Biblioteca ZERO19</div><h2>Transferir arte</h2><p>'+h(asset.name)+'</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pendingRows.length?pendingRows.map((row,index)=>'<button class="z19-transfer-row" data-transfer-index="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>'+h(STAGE_LABELS[row.item.stage])+' · prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="field"><label>Ou transferir apenas para outro cliente</label><select data-transfer-workspace><option value="">Escolha um cliente</option>'+data.workspaces.filter(w=>w.workspace_type==='client').map(w=>'<option value="'+h(w.id)+'">'+h(w.client_name||w.company_name)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn" data-transfer-only disabled>Transferir para cliente</button></div></div>';
+    modal.innerHTML='<div class="modal compact"><div class="modal-head"><div><div class="eyebrow">Biblioteca ZERO19</div><h2>Transferir arte</h2><p>'+h(asset.name)+'</p></div><button class="btn ghost small close">×</button></div><div class="z19-transfer-list">'+(pendingRows.length?pendingRows.map((row,index)=>'<button class="z19-transfer-row" data-transfer-index="'+index+'"><b>'+h(row.summary.workspace?.client_name||row.summary.workspace?.company_name||'Cliente')+' · Pedido #'+h(orderNo(row.summary.project))+'</b><span>'+h(row.item.text_value||row.item.garment_name||'Arte pendente')+'</span><small>'+h(STAGE_LABELS[row.item.stage])+' · prazo '+h(dt(row.summary.promised))+'</small></button>').join(''):'<div class="empty mini">Nenhum pedido aguardando arte agora.</div>')+'</div><div class="field"><label>Ou transferir apenas para outro cliente</label><select data-transfer-workspace><option value="">Escolha um cliente</option>'+clients.map(w=>'<option value="'+h(w.id)+'">'+h(w.client_name||w.company_name)+'</option>').join('')+'</select></div><div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn" data-transfer-only disabled>Transferir para cliente</button></div></div>';
     document.body.appendChild(modal);modal.querySelectorAll('.close').forEach(b=>b.onclick=()=>modal.remove());
-    const only=modal.querySelector('[data-transfer-only]'),select=modal.querySelector('[data-transfer-workspace]');select.onchange=()=>only.disabled=!select.value;only.onclick=()=>transferAsset(asset,{workspace:data.workspaces.find(w=>w.workspace_type==='client'&&w.id===select.value),project:null,item:null},modal);
+    const only=modal.querySelector('[data-transfer-only]'),select=modal.querySelector('[data-transfer-workspace]');select.onchange=()=>only.disabled=!select.value;only.onclick=()=>transferAsset(asset,{workspace:clients.find(w=>w.id===select.value),project:null,item:null},modal);
     modal.querySelectorAll('[data-transfer-index]').forEach(b=>b.onclick=()=>{const row=pendingRows[Number(b.dataset.transferIndex)];transferAsset(asset,{workspace:row.summary.workspace,project:row.summary.project,item:row.item},modal)});
   }
   async function transferAsset(asset,target,modal){
@@ -394,5 +582,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {enhanceDashboard,renderQueue,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync};
 }

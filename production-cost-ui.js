@@ -203,7 +203,7 @@ export function createProductionCostUI(ctx){
 
   function mountFilmCost(element,options){
     assertOpen();
-    let serial=0,destroyed=false,profileId=null,ripModeOverride=null,commissionIncluded=false,commissionKey=null,latestSnapshot=null;const refresh=async()=>{
+    let serial=0,destroyed=false,profileId=null,ripModeOverride=null,commissionIncluded=false,commissionKey=null,latestSnapshot=null,activeRefresh=Promise.resolve();const refreshImpl=async()=>{
       latestSnapshot=null;if(destroyed)return;
       const current=++serial;
       try{
@@ -229,9 +229,9 @@ export function createProductionCostUI(ctx){
           const checkbox=element.querySelector('[data-include-project-commissions]');if(checkbox)checkbox.onchange=()=>{commissionIncluded=checkbox.checked&&summary.canInclude&&admin()&&explicitAmount===undefined;renderEstimate()};options.onEstimate?.(estimate);
         };renderEstimate();
       }catch(error){latestSnapshot=null;if(disposed||!canView()){destroy();return}if(!destroyed&&current===serial)element.innerHTML=`<div class="film-cost-panel"><h2>Custo do filme indisponível</h2><p class="cost-inline-error">${h(error.message)}</p><button class="btn" data-cost-retry>Tentar novamente</button></div>`;element.querySelector('[data-cost-retry]')?.addEventListener('click',refresh);}
-    };
+    },refresh=()=>activeRefresh=refreshImpl();
     const blockPrivateEvent=event=>{if(disposed||!canView()){event.preventDefault();event.stopImmediatePropagation();destroy()}};for(const type of ['click','input','change'])element.addEventListener(type,blockPrivateEvent,true);
-    const listener=()=>refresh(),dispose=()=>{if(destroyed)return;destroyed=true;serial++;latestSnapshot=null;listeners.delete(listener);panelDisposers.delete(dispose);for(const type of ['click','input','change'])element.removeEventListener(type,blockPrivateEvent,true);options.onDestroy?.();element.innerHTML=''};listeners.add(listener);panelDisposers.add(dispose);refresh();return {refresh,destroy:dispose,invalidate:()=>{serial++;latestSnapshot=null},getSnapshot:()=>{assertOpen();return destroyed||!latestSnapshot?null:clone(latestSnapshot)}};
+    const listener=()=>refresh(),dispose=()=>{if(destroyed)return;destroyed=true;serial++;latestSnapshot=null;listeners.delete(listener);panelDisposers.delete(dispose);for(const type of ['click','input','change'])element.removeEventListener(type,blockPrivateEvent,true);options.onDestroy?.();element.innerHTML=''};listeners.add(listener);panelDisposers.add(dispose);refresh();return {refresh,destroy:dispose,invalidate:()=>{serial++;latestSnapshot=null},getSnapshot:()=>{assertOpen();return destroyed||!latestSnapshot?null:clone(latestSnapshot)},getSnapshotAsync:async()=>{assertOpen();await activeRefresh;return destroyed||!latestSnapshot?null:clone(latestSnapshot)}};
   }
 
   async function openQuickQuote(){
