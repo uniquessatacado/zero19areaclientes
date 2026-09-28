@@ -17,13 +17,13 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Produção diária e prazos
 
-- [ ] Revisar página inicial para mostrar apenas personalizações realmente abertas, em ordem vencidos → prazo próximo → antigos, com etapas claras e sem clientes fora do fluxo.
-- [ ] Cards: manter tamanho aprovado; status destacado sem sobreposição do número de itens; contagem regressiva real em dias/horas/minutos; marcar pronto/entregue atualiza o card sem refresh e preserva filtro/posição. Confirmar com modal próprio, não `window.confirm`.
-- [ ] Pausar pedido com motivo, tempo parado e destaque no card; gerenciar motivos (criar/editar/excluir), padrão “aguardando chegar camisa”. Reabrir pedido pronto/entregue escolhendo a etapa; ajustar prazo manualmente por projeto.
-- [ ] Impressora em manutenção pausa pedidos afetados e relógio; feriados nacionais no calendário e opção de feriado manual. Trabalho útil só segunda–sábado 10h–18h, excluindo pausa/feriado.
-- [ ] Recalcular próximo prazo com backlog real ainda não produzido, inclusive pedidos aguardando arte/produção. Legado entra no backlog (30 min por camisa ou por estampa sem camisa), mas não contamina média histórica. Nunca prometer conclusão no início do expediente. Respeitar prazo dos pedidos existentes e encaixes urgentes/“cliente na loja” sem sobrescrever fila silenciosamente.
-- [ ] Tempos configuráveis e estimativa por etapa: arte ~30 min, impressão ~50 min/metro de filme, corte/poliamida ~5 min/estampa, forno ~2 min por lote A3 com possível segunda rodada, prensa ~5 min por lado. Agrupar apenas trabalhos realmente compatíveis e no mesmo estágio, não assumir todo backlog num filme.
-- [ ] Mostrar média atual por camisa e próximo prazo disponível em tempo real, iguais ao PDV; dia da semana e data/hora legíveis.
+- [~] Página inicial tem código de filtro e ordenação de trabalho aberto; confirmar com dados reais se vencidos/prazo/antigos estão na ordem correta e se nenhum cliente sem trabalho entra.
+- [~] Cards têm status/quantidade separados no HTML/CSS e contagem regressiva atualizada a cada segundo; ações usam atualização localizada e há modais de confirmação. Build passou; falta inspeção visual desktop/mobile e operação real sem perder filtro/posição.
+- [~] Pausa por pedido, motivo/tempo no card, gerenciamento criar/editar/excluir, reabrir escolhendo etapa e “Novo prazo” existem no código; tabelas e RPCs correspondentes existem no banco. Falta testar operações reais, permissões e motivo inicial em conta nova.
+- [~] Código tem manutenção da impressora, feriados manuais e calendário útil segunda–sábado 10h–18h; tabelas/RPCs existem. Banco confirmado com 13 datas por ano de 2026 a 2030 e cinco motivos de pausa ativos. Falta testar pausa/retomada com pedido controlado e revisar as datas locais/futuras conforme calendário da loja.
+- [~] Planejador `production-scheduler.js` separa prioridade e estágios, reserva backlog desconhecido e não soma espera histórica à média; testes automatizados passaram no build. Falta conferir snapshots reais dos pedidos devidos na segunda, encaixes e risco de atraso antes de considerar promessa confiável.
+- [~] Tempos editáveis por etapa, lotes de filme/forno apenas com estágios compatíveis e prensa por lado estão no planejador e no banco; testar dimensões/quantidades reais e convergência PDV–Personalizações.
+- [~] Tela de produção mostra tempo estimado por camisa, média medida, fila, próximo prazo com dia da semana/data/hora e explicação do cálculo; o planejador é compartilhado com o NovoVenduss. Falta comparação funcional simultânea com o PDV em dados reais e atualização automática durante mudanças concorrentes.
 
 ## P1 — Artes, custos e cliente
 
