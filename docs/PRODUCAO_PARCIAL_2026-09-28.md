@@ -15,7 +15,7 @@
 - Concluir uma personalização atualiza somente ela e a venda de origem; resumo do pedido é recalculado. Finalização manual do pedido inteiro continua disponível com aviso explícito.
 - Percentual conta personalizações concluídas (prontas para retirada/entregues), não quantidade de camisas nem arquivos adicionados ao filme. Prontas para produzir e em produção aparecem separadas.
 - Fila e seletor contam todos os itens ativos do pedido, inclusive já entregues. Página pública apresenta progresso e situação de cada personalização.
-- Migrações aplicadas: `20260928180349_partial_personalization_production` e `20260928181352_preserve_unreviewed_art_during_sync`. Nenhuma mudança de financeiro/estoque.
+- Migrações aplicadas: `20260928180349_partial_personalization_production`, `20260928181352_preserve_unreviewed_art_during_sync` e `20260928181941_preserve_manual_workspace_production_status` (preserva comportamento de projetos oficiais não ZERO19). Nenhuma mudança de financeiro/estoque.
 
 ## Recuperação real
 
@@ -34,4 +34,7 @@ SPORTINGBET `ea1610cf-4197-41f0-9255-f359a1c8a497` movida para o projeto #49323 
 
 ## Publicação
 
-Pendente de registrar hashes e deployment após confirmação no domínio oficial.
+- Personalizações: código `84c9661`, versão **2.17.45**, deployment `dpl_AMUPkLYNKwNau2YagPEeWmec63ME`, produção **READY**, build remoto 22s.
+- Domínio confirmado: https://019-personalizacoes.vercel.app — HTTP 200, SHA-256 igual ao build local em index.html, app.js, zero19-pdv-sync.js, order-item-progress.js, production-v217.js e official-order-workflow.js.
+- Venduss: código `e44ae6ee` enviado ao GitHub. Servidor mantido pelo dono não foi implantado por esta operação.
+- Monitoramento: sem teste autenticado no navegador e sem inspeção de impressão física. Verificações HTTP/artefato e SQL concluídas; não equivale a ausência de todos os erros da aplicação.
