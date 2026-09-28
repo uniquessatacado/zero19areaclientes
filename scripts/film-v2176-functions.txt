@@ -27,9 +27,10 @@
     for(const item of source){
       if(item.type!=='team_customization'||item.vectorSource||(!item.name&&!item.number))continue;
       const next={...item,name:String(item.name).normalize('NFC'),letteringMetricsVersion:3,spacingMode:item.spacingMode||'optical'};
+      const reference=officialNameReference(next);if(reference&&next.name)next.nameReferenceChar=reference;
       const layout=await prepareLetteringLayout(next);if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;
       next.widthCm=layout.widthCm;next.heightCm=layout.heightCm;
-      const needs=item.letteringMetricsVersion!==3||Math.abs(next.widthCm-item.widthCm)>.000001||Math.abs(next.heightCm-item.heightCm)>.000001;
+      const needs=item.nameReferenceChar!==next.nameReferenceChar||item.letteringMetricsVersion!==3||Math.abs(next.widthCm-item.widthCm)>.000001||Math.abs(next.heightCm-item.heightCm)>.000001;
       if(needs){delete next.previewDataUrl;replacements.push(next);changed.add(item.localId);}
     }
     if(!current()||generation!==productionAccountGeneration||filmItems!==source)return null;

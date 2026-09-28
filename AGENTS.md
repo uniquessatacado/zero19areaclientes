@@ -3,6 +3,7 @@
 Leia antes de alterar o sistema e registre aqui novas regras permanentes que o dono estabelecer.
 
 - Antes de começar, ler `PENDENCIAS.md` deste repositório e o do NovoVenduss. Atualizar ambos quando um pedido mudar de estado; não trocar de frente deixando itens iniciados sem teste, registro de bloqueio ou próximo passo.
+- Fonte Palmeiras/camisa azul: a altura informada (5,5 cm no exemplo JOÃO) corresponde ao corpo do O menor, não ao J alto. Manter escala uniforme, proporções e acentos; J e demais letras altas ficam maiores. Não aplicar essa calibração a outras fontes nem redimensionar números. Filmes antigos exigem recálculo explícito antes da nova exportação.
 
 - O objetivo é agilizar a linha de produção e organizar pedidos abertos. A página inicial mostra apenas trabalho em aberto, priorizado por prazo e etapa, sem clientes sem personalização ativa.
 - Layout moderno, limpo, legível, responsivo em PC e celular; sem rolagem horizontal, contraste fraco, botões quebrados ou controles sobrepostos. Animações e imagens não podem tornar o sistema lento.

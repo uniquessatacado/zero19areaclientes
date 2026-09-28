@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.45';
+const version='2.17.46';
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21715-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
@@ -19,7 +19,10 @@ function replaceOnce(before,after){const count=production.split(before).length-1
 replaceOnce("  async function prepareLetteringLayout(item){","  async function prepareLegacyLetteringLayout(item){");
 replaceOnce('>Exportar PNG 300 DPI</button>','>Exportar filme 300 DPI</button>');
 replaceOnce("  async function testCustomization(set){",fs.readFileSync(path.join(root,'scripts/film-v2176-functions.txt'),'utf8')+"\n  async function testCustomization(set){");
-production="import {refineLetteringLayout} from './lettering-layout-v2176.js?v=2.17.8';\nimport {createSavedFilmDrafts,openSavedFilmDialog,filmNameProof,NAMED_FILM_DRAFT_KIND} from './film-saved-drafts.js?v=2.17.8';\n"+production;
+production="import {refineLetteringLayout,officialNameReference} from './lettering-layout-v2176.js?v=2.17.8';\nimport {createSavedFilmDrafts,openSavedFilmDialog,filmNameProof,NAMED_FILM_DRAFT_KIND} from './film-saved-drafts.js?v=2.17.8';\n"+production;
+replaceOnce("    const labelBase=set._path||customizationName(set);","    item.nameReferenceChar=officialNameReference(item);\n    const labelBase=set._path||customizationName(set);");
+replaceOnce("            item.sizeOverride=['nameHeightCm'","            item.nameReferenceChar=officialNameReference(item);\n            item.sizeOverride=['nameHeightCm'");
+replaceOnce("  async function exportFilm(media,assetMap){","  async function exportFilm(media,assetMap){\n    if(filmItems.some(item=>item.name&&officialNameReference(item)&&item.nameReferenceChar!==officialNameReference(item)))throw new Error('A medida da fonte Palmeiras azul foi corrigida: a altura informada deve ser a do O. Clique em Atualizar filme para recalcular o nome e o encaixe antes de exportar.');");
 replaceOnce("g.drawImage(image,x+part.xCm,y+part.yCm,part.widthCm,part.heightCm)","if(part.sourceCrop){const c=part.sourceCrop;g.drawImage(image,c.x*image.naturalWidth,c.y*image.naturalHeight,c.width*image.naturalWidth,c.height*image.naturalHeight,x+part.xCm,y+part.yCm,part.widthCm,part.heightCm)}else g.drawImage(image,x+part.xCm,y+part.yCm,part.widthCm,part.heightCm)");
 replaceOnce("      name:cleanName,number:cleanNumber,fontSource:set._source||null,fontSources:set._sources||[],","      name:cleanName.normalize('NFC'),number:cleanNumber,letteringMetricsVersion:3,spacingMode:'optical',fontSource:set._source||null,fontSources:set._sources||[],");
 replaceOnce("nameHeightCm:Number(set.default_name_height_cm)||5.5","nameHeightCm:Number(set.default_name_height_cm)||5.5");

@@ -1,6 +1,11 @@
 /** v2.17.6: cap/body height is independent of accents. Legacy jobs opt in only
  * on recalculation, so exporting an old job never silently changes its geometry. */
 export const LETTERING_METRICS_VERSION = 3;
+// Explicit owner-confirmed calibration, scoped to the registered blue Palmeiras
+// font. Never infer sizing from a product label or change other official fonts.
+export function officialNameReference(item) {
+  return item.sourceId==='3dd7b508-a3d0-4752-84dd-82ac24622c48' || item.fontSource?.id==='488c3140-fc74-4124-832a-fdb62e127c26' ? 'O' : null;
+}
 export const baseCharacter = char => String(char).normalize('NFD').replace(/\p{M}/gu, '');
 const nextFrame = () => new Promise(resolve => setTimeout(resolve, 0));
 const finiteMetrics = m => m && ['actualBoundingBoxAscent','actualBoundingBoxDescent','actualBoundingBoxLeft','actualBoundingBoxRight'].every(k=>Number.isFinite(m[k]));
@@ -132,7 +137,9 @@ async function refineNameLine(item,legacy,{drawLine,sanitizeSvg,hasGlyph}={}){
   const references=new Map();
   for(const part of legacy.nameLine.parts)if(part.kind==='font'){
     const family=legacy.families.get(part.source.id);
-    const reference=references.get(part.source.id)||['H','E','I','A','O'].find(c=>!hasGlyph||hasGlyph(family,c))||baseCharacter(part.char);
+    const requested=item.nameReferenceChar;
+    if(requested&&hasGlyph&&!hasGlyph(family,requested))throw new Error('A fonte não contém a letra de referência “'+requested+'”. Confira o cadastro antes de imprimir.');
+    const reference=references.get(part.source.id)||requested||['H','E','I','A','O'].find(c=>!hasGlyph||hasGlyph(family,c))||baseCharacter(part.char);
     references.set(part.source.id,reference);
     const base=metrics(reference,part.source);
     if(!finiteMetrics(base)||base.actualBoundingBoxAscent+base.actualBoundingBoxDescent<=0)throw new Error('Não foi possível medir a letra base de “'+part.char+'”.');
