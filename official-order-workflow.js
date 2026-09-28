@@ -54,6 +54,25 @@ function colorFrom(item={}){
   return 'black';
 }
 function colorInfo(id){return GARMENT_COLORS.find(c=>c.id===id)||GARMENT_COLORS[0]}
+export function placementDimensions(asset,profile=null,placement=null){
+  const meta=asset?.metadata||{},saved=meta.shirt_placement||{};
+  const positive=value=>{const n=num(value);return Number.isFinite(n)&&n>0?n:0};
+  const pixelRatio=positive(asset?.width)/positive(asset?.height),ratio=Number.isFinite(pixelRatio)&&pixelRatio>0?pixelRatio:1;
+  const sources=[
+    [profile?.default_width_cm,profile?.default_height_cm],
+    [placement?.width_cm,placement?.height_cm],
+    [saved.width_cm,saved.height_cm],
+    [meta.requested_width_cm,meta.requested_height_cm],
+    [meta.pdv_width_cm,meta.pdv_height_cm]
+  ];
+  for(const [w,h] of sources){const width=positive(w),height=positive(h);if(width||height)return {width:width||height*ratio,height:height||width/ratio,ratio};}
+  return {width:9,height:9/ratio,ratio};
+}
+export function placementOrderProduct(asset,products=[],placement=null){
+  const sourceRef=String(asset?.metadata?.personalization_sale_id||placement?.external_order_item_ref||'');
+  if(sourceRef){const product=products.find(p=>p.ref===sourceRef);if(!product)throw new Error('A arte pertence a outro item. Atualize o pedido antes de organizar.');return product;}
+  return products[0]||null;
+}
 function surfaceMetrics(model,surface){
   const m=GARMENT_MODELS[model]||GARMENT_MODELS.normal,sleeve=surface==='left_sleeve'||surface==='right_sleeve';
   return sleeve?{width:m.sleeveWidth,length:m.sleeveLength}:{width:m.bodyWidth,length:m.bodyLength};
@@ -229,16 +248,25 @@ export function createOfficialOrderWorkflow(ctx){
     return {blob,width,height};
   }
   async function savePlacement(asset,workspace,project,product,choice,position,widthCm,heightCm,manualGarment=null,manualGroup=null,onProgress=()=>{}){
-    const account=owner(),actor=user(),projectId=project?.official_order_ref?project.id:null,piece=pieceForPlacement(product,choice,manualGarment),model=piece.garment_model==='oversized'?'oversized':'normal',safe=safePosition(model,choice.surface,widthCm,heightCm,position),placementId=uuid(),mockupId=uuid();
+    if(asset.metadata?.personalization_sale_id&&String(asset.metadata.personalization_sale_id)!==String(product?.ref||''))throw new Error('Esta arte pertence a outra personalização. Nenhum vínculo foi alterado.');
+    const account=owner(),actor=user(),projectId=project?.official_order_ref?project.id:null,piece=pieceForPlacement(product,choice,manualGarment),model=piece.garment_model==='oversized'?'oversized':'normal',safe=safePosition(model,choice.surface,widthCm,heightCm,position),mockupId=uuid();
+    let previousQuery=supabase.from('z19p_asset_placements').select('*').eq('owner_id',account).eq('asset_id',asset.id).eq('production_state','pending');
+    previousQuery=projectId?previousQuery.eq('project_id',projectId):previousQuery.is('project_id',null);
+    previousQuery=product?.ref?previousQuery.eq('external_order_item_ref',product.ref):previousQuery.is('external_order_item_ref',null);
+    previousQuery=manualGarment?.id?previousQuery.eq('manual_garment_id',manualGarment.id):previousQuery.is('manual_garment_id',null);
+    const previousResult=await previousQuery.order('created_at',{ascending:false}).limit(1).maybeSingle();if(previousResult.error)throw previousResult.error;
+    const previous=previousResult.data,placementId=previous?.id||uuid();
     const generated=await generateMockup(asset,piece,safe,widthCm,heightCm,choice.surface),path=account+'/'+workspace.id+'/auto-mockups/'+mockupId+'.png';
-    let uploaded=false,assetInserted=false;
+    let uploaded=false,assetInserted=false,placementWritten=false;
     try{
       if(ctx.uploadFile)await ctx.uploadFile(path,generated.blob,{contentType:'image/png',onProgress});
       else{const up=await supabase.storage.from(ctx.bucket).upload(path,generated.blob,{contentType:'image/png',upsert:false});if(up.error)throw up.error}
       uploaded=true;
       let result=await supabase.from('z19p_assets').insert({id:mockupId,owner_id:account,workspace_id:workspace.id,project_id:projectId,folder_id:null,name:'Mockup · '+asset.name+' · '+pieceTitle(piece)+' · '+position.label,asset_type:'mockup',original_path:path,processed_path:path,mime_type:'image/png',size_bytes:generated.blob.size,width:generated.width,height:generated.height,dpi:300,alpha_trimmed:false,background_removed:false,maximized:false,created_by:actor,updated_by:actor,metadata:{auto_mockup:true,source_asset_id:asset.id,placement_id:placementId,manual_garment_id:manualGarment?.id||null,manual_garment_group_id:manualGroup?.id||manualGarment?.group_id||null,garment_model:model,garment_color:piece.color||null,surface:choice.surface,position_code:position.code}}).select().single();if(result.error)throw result.error;assetInserted=true;
       const row={id:placementId,owner_id:account,workspace_id:workspace.id,project_id:projectId,asset_id:asset.id,position_id:position.id,manual_garment_id:manualGarment?.id||null,manual_garment_group_id:manualGroup?.id||manualGarment?.group_id||null,external_order_ref:project?.official_order_ref||null,external_order_item_ref:product?.ref||null,garment_model:model,garment_color:piece.color||colorForCatalog(piece.color_name,piece.color_hex).id,garment_color_name:piece.color_name||'',garment_size:piece.size||'',garment_category:piece.category||'',surface:choice.surface,position_code:position.code,width_cm:widthCm,height_cm:heightCm,mockup_asset_id:mockupId,production_state:'pending',metadata:{order_quantity:Math.max(1,Number(piece.quantity||product?.quantity||1)),product_name:piece.product_name||product?.name||'',product_image:piece.product_image_url||product?.image||'',anchor_x:Number(safe.anchor_x),anchor_y:Number(safe.anchor_y),awaiting_production:true},created_by:actor,updated_by:actor};
-      result=await supabase.from('z19p_asset_placements').insert(row);if(result.error)throw result.error;
+      if(previous){row.created_by=previous.created_by;result=await supabase.from('z19p_asset_placements').update({...row,updated_at:new Date().toISOString()}).eq('id',placementId).eq('owner_id',account).eq('production_state','pending').select('id').single();}
+      else result=await supabase.from('z19p_asset_placements').insert(row);
+      if(result.error)throw result.error;placementWritten=true;
       const existing=await supabase.from('z19p_asset_print_profiles').select('*').eq('asset_id',asset.id).maybeSingle();if(existing.error)throw existing.error;
       const ratio=widthCm/heightCm,profile={asset_id:asset.id,owner_id:account,project_id:projectId,default_width_cm:widthCm,default_height_cm:heightCm,aspect_ratio:ratio,halftone:Boolean(existing.data?.halftone),allow_internal_nesting:existing.data?.allow_internal_nesting!==false,rotation_policy:existing.data?.rotation_policy||'free',ready_for_print:true,created_by:existing.data?.created_by||actor,updated_by:actor,updated_at:new Date().toISOString()};
       result=await supabase.from('z19p_asset_print_profiles').upsert(profile,{onConflict:'asset_id'});if(result.error)throw result.error;
@@ -247,22 +275,32 @@ export function createOfficialOrderWorkflow(ctx){
       if(project?.official_order_source==='zero19_pdv'&&product?.ref){const linked=await supabase.rpc('z19p_zero19_mark_art_ready',{p_project_id:project.id,p_personalization_sale_id:product.ref,p_asset_id:asset.id});if(linked.error)throw linked.error;}
       return {placementId,mockupId};
     }catch(error){
+      if(placementWritten)try{
+        if(previous)await supabase.from('z19p_asset_placements').update({...previous,updated_by:actor,updated_at:new Date().toISOString()}).eq('id',placementId).eq('owner_id',account).eq('production_state','pending').eq('mockup_asset_id',mockupId);
+        else await supabase.from('z19p_asset_placements').delete().eq('id',placementId).eq('owner_id',account).eq('production_state','pending');
+      }catch{}
       if(assetInserted)try{await supabase.from('z19p_assets').delete().eq('id',mockupId).eq('owner_id',account)}catch{}
       if(uploaded)try{await supabase.storage.from(ctx.bucket).remove([path])}catch{}
       throw error;
     }
   }
-  async function openPlacementWizard(asset,{workspace=state().currentWorkspace,project=null,manualGroup=null}={}){
+  async function openPlacementWizard(asset,{workspace=state().currentWorkspace,project=null,manualGroup=null,sequence=null}={}){
     if(!asset||!workspace)return null;
-    const positions=await loadPositions(),projects=(state().currentProjects||[]).filter(p=>p.workspace_id===workspace.id),official=project&&project.official_order_ref?project:projects.find(p=>p.official_order_ref)||null,products=productCards(official),groupPieces=(manualGroup?.garments||[]).filter(Boolean),firstPiece=groupPieces[0]||null;
+    const openingOwner=owner();
+    const [positions,profileResult,placementResult]=await Promise.all([
+      loadPositions(),
+      supabase.from('z19p_asset_print_profiles').select('*').eq('asset_id',asset.id).eq('owner_id',owner()).maybeSingle(),
+      supabase.from('z19p_asset_placements').select('*').eq('asset_id',asset.id).eq('owner_id',owner()).order('created_at',{ascending:false}).limit(1).maybeSingle()
+    ]);
+    if(profileResult.error)throw profileResult.error;if(placementResult.error)throw placementResult.error;
+    if(!openingOwner||owner()!==openingOwner)throw new Error('A conta mudou durante o carregamento. Abra a arte novamente.');
+    const projects=(state().currentProjects||[]).filter(p=>p.workspace_id===workspace.id),official=project&&project.official_order_ref?project:projects.find(p=>p.id===asset.project_id&&p.official_order_ref)||projects.find(p=>p.official_order_ref)||null,products=productCards(official),groupPieces=(manualGroup?.garments||[]).filter(Boolean),firstPiece=groupPieces[0]||null;
     const modal=document.createElement('div');modal.className='official-placement-backdrop';
-    const pdvMeta=asset.metadata||{},pdvPosition=positions.find(p=>p.code===String(pdvMeta.pdv_position_code||''))||null;
-    const ratio=(asset.width&&asset.height?asset.width/asset.height:1);
-    let initialWidth=Number(pdvMeta.pdv_width_cm)||0,initialHeight=Number(pdvMeta.pdv_height_cm)||0;
-    if(initialWidth>0&&!(initialHeight>0)&&ratio>0)initialHeight=initialWidth/ratio;
-    if(initialHeight>0&&!(initialWidth>0)&&ratio>0)initialWidth=initialHeight*ratio;
-    if(!(initialWidth>0)){initialWidth=9;initialHeight=9/ratio}
-    let selectedProduct=products[0]||null,model=firstPiece?.garment_model||modelFrom(selectedProduct||{}),color=firstPiece?.color||colorFrom(selectedProduct||{}),size=firstPiece?.size||selectedProduct?.size||'',category=firstPiece?.category||selectedProduct?.category||'',surface=pdvPosition?.surface||'front',position=null,widthCm=initialWidth,heightCm=initialHeight,busy=false,saveText='';
+    let finish;modal.closed=new Promise(resolve=>{finish=resolve});
+    const close=result=>{modal.remove();finish(result)};
+    const pdvMeta=asset.metadata||{},savedPlacement=placementResult.data,pinned=Boolean(pdvMeta.personalization_sale_id),pdvPosition=positions.find(p=>p.code===String(savedPlacement?.position_code||pdvMeta.shirt_placement?.position_code||pdvMeta.pdv_position_code||''))||null;
+    const {width:initialWidth,height:initialHeight,ratio}=placementDimensions(asset,profileResult.data,savedPlacement);
+    let selectedProduct=placementOrderProduct(asset,products,savedPlacement),model=firstPiece?.garment_model||modelFrom(selectedProduct||{}),color=firstPiece?.color||colorFrom(selectedProduct||{}),size=firstPiece?.size||selectedProduct?.size||'',category=firstPiece?.category||selectedProduct?.category||'',surface=pdvPosition?.surface||'front',position=null,widthCm=initialWidth,heightCm=initialHeight,busy=false,saveText='';
     const targetModels=()=>groupPieces.length?groupPieces.map(piece=>piece.garment_model==='oversized'?'oversized':'normal'):[model==='oversized'?'oversized':'normal'];
     const surfaceFits=s=>targetModels().every(value=>fits(value,s,widthCm,heightCm));
     const positionFitsAll=p=>targetModels().every(value=>positionFits(value,surface,widthCm,heightCm,p));
@@ -276,11 +314,19 @@ export function createOfficialOrderWorkflow(ctx){
       const groupSummary=groupPieces.length?'<div class="placement-group-summary"><b>Grupo selecionado · '+groupPieces.reduce((sum,p)=>sum+Number(p.quantity||1),0)+' camiseta(s)</b><div>'+groupPieces.map(piece=>'<span>'+manualPiecePreview(piece,surface)+'<small>'+esc(pieceTitle(piece))+' · '+piece.quantity+' un.</small></span>').join('')+'</div></div>':'';
       const officialProducts=products.length?'<div class="official-product-grid">'+products.map(p=>'<button class="official-product-card '+(selectedProduct?.ref===p.ref?'active':'')+'" data-product="'+esc(p.ref)+'">'+(p.image?'<img src="'+esc(p.image)+'" loading="lazy" decoding="async" alt="">':'<span class="official-product-placeholder">CAMISA</span>')+'<div><b>'+esc(p.name)+'</b><small>'+esc([p.category,p.colorName,p.size].filter(Boolean).join(' · '))+'</small><em>'+p.quantity+' un.</em></div></button>').join('')+'</div>':'';
       modal.innerHTML='<section class="official-placement-page"><header><div><div class="eyebrow">POSICIONAR ARTE</div><h2>'+esc(asset.name)+'</h2><p>Defina a medida real uma vez e aplique a mesma posição às camisetas selecionadas.</p></div><button class="btn ghost" data-close>Fechar</button></header>'+orderWarning+'<div class="official-placement-layout"><main><section class="official-step"><h3>1. Camiseta / grupo</h3>'+groupSummary+officialProducts+'</section><section class="official-step"><h3>2. Tamanho real da estampa</h3><div class="official-size-fields"><label>Largura (cm)<input data-width inputmode="decimal" value="'+String(Number(widthCm.toFixed(3))).replace('.',',')+'"></label><span>×</span><label>Altura (cm)<input data-height inputmode="decimal" value="'+String(Number(heightCm.toFixed(3))).replace('.',',')+'"></label></div><small>A proporção original é preservada. Você pode editar largura ou altura.</small></section><section class="official-step"><h3>3. Onde vai a estampa?</h3><div class="official-surface-buttons">'+['front','back','left_sleeve','right_sleeve'].map(s=>'<button class="'+(surface===s?'active':'')+'" data-surface="'+s+'" '+(availableSurfaces.includes(s)?'':'disabled')+'>'+esc(SURFACE_LABELS[s])+'</button>').join('')+'</div><div class="official-position-buttons">'+(surfacePositions.length?surfacePositions.map(p=>'<button class="'+(position?.id===p.id?'active':'')+'" data-position="'+p.id+'">'+esc(p.label)+'</button>').join(''):'<p>Esta estampa não cabe nesta área nas camisetas selecionadas. Reduza o tamanho ou escolha outra área.</p>')+'</div></section></main><aside>'+preview+'<div class="official-preview-summary"><b>'+esc(position?.label||'Escolha uma posição')+'</b><span>'+esc(groupPieces.length?pieceTitle(firstPiece):[GARMENT_MODELS[model]?.label,colorInfo(color).label,size].filter(Boolean).join(' · '))+'</span><small>'+Number(widthCm).toLocaleString('pt-BR',{maximumFractionDigits:2})+' × '+Number(heightCm).toLocaleString('pt-BR',{maximumFractionDigits:2})+' cm</small></div><div class="placement-save-progress '+(busy?'active':'')+'"><span></span><small>'+esc(saveText||'')+'</small></div><button class="btn primary official-save-placement" data-save '+(!position||busy?'disabled':'')+'>'+(busy?'Salvando…':'Salvar e enviar para Aguardando produção')+'</button></aside></div></section>';
-      modal.querySelector('[data-close]').onclick=()=>{if(!busy)modal.remove()};
+      const header=modal.querySelector('header p');
+      if(header)header.textContent=(sequence?'Arte '+sequence.index+' de '+sequence.total+' · ':'')+(selectedProduct?.raw?.name?selectedProduct.raw.name+' · ':'')+'As medidas abaixo serão mantidas ao salvar.';
+      modal.querySelectorAll('[data-product]').forEach(button=>{
+        const product=products.find(p=>p.ref===button.dataset.product),label=product?.raw?.name;
+        if(label){const line=document.createElement('small');line.className='official-product-art-label';line.textContent=label;button.querySelector('div')?.appendChild(line);}
+        if(pinned&&product?.ref!==selectedProduct?.ref){button.disabled=true;button.title='Outra arte do pedido. Feche para escolher essa arte na lista.';}
+      });
+      modal.querySelector('[data-close]').onclick=()=>{if(!busy)close({saved:false})};
       modal.querySelectorAll('[data-product]').forEach(button=>button.onclick=()=>{selectedProduct=products.find(p=>p.ref===button.dataset.product)||null;model=modelFrom(selectedProduct||{});color=colorFrom(selectedProduct||{});size=selectedProduct?.size||'';category=selectedProduct?.category||'';chooseDefault();draw()});
       const w=modal.querySelector('[data-width]'),h=modal.querySelector('[data-height]');w.onchange=()=>{const value=num(w.value);if(value>0){widthCm=value;heightCm=value/ratio;chooseDefault();draw()}};h.onchange=()=>{const value=num(h.value);if(value>0){heightCm=value;widthCm=value*ratio;chooseDefault();draw()}};
       modal.querySelectorAll('[data-surface]').forEach(button=>button.onclick=()=>{surface=button.dataset.surface;chooseDefault();draw()});modal.querySelectorAll('[data-position]').forEach(button=>button.onclick=()=>{position=positions.find(p=>p.id===button.dataset.position)||position;draw()});
       modal.querySelector('[data-save]').onclick=async()=>{
+        if(owner()!==openingOwner){ctx.toast('A conta mudou. Abra a arte novamente antes de salvar.','err');close({saved:false});return}
         if(!position||busy)return;busy=true;saveText='Preparando mockup…';draw();
         try{
           const targets=groupPieces.length?groupPieces:[null],results=[];
@@ -290,7 +336,9 @@ export function createOfficialOrderWorkflow(ctx){
               const overall=Math.round(((index+(Number(progress.percent||0)/100))/targets.length)*100);saveText='Camiseta '+(index+1)+'/'+targets.length+' · salvando mockup '+progress.percent+'% · total '+overall+'%';const bar=modal.querySelector('.placement-save-progress span');if(bar)bar.style.width=overall+'%';const label=modal.querySelector('.placement-save-progress small');if(label)label.textContent=saveText;
             });results.push(result);
           }
-          ctx.toast((groupPieces.length?groupPieces.reduce((sum,p)=>sum+Number(p.quantity||1),0):Number(selectedProduct?.quantity||1))+' camiseta(s) em Aguardando produção.','ok');modal.remove();await ctx.onSaved?.();
+          ctx.toast((groupPieces.length?groupPieces.reduce((sum,p)=>sum+Number(p.quantity||1),0):Number(selectedProduct?.quantity||1))+' camiseta(s) em Aguardando produção.','ok');
+          try{await ctx.onSaved?.()}catch(refreshError){console.warn('placement saved; refresh failed',refreshError);ctx.toast('Posição salva. Atualize a lista para conferir.','err')}
+          close({saved:true,results});
         }catch(error){busy=false;saveText='';draw();ctx.toast(error.message||'Não foi possível salvar a posição.','err')}
       };
     };
@@ -315,8 +363,10 @@ export function createOfficialOrderWorkflow(ctx){
       manualGroup=await chooseManualGroup(workspace);
       if(!manualGroup)throw new Error('As artes foram salvas, mas a escolha do grupo de camisetas foi cancelada.');
     }
-    for(const asset of arts){
-      await new Promise((resolve,reject)=>{let finished=false;const finish=error=>{if(finished)return;finished=true;clearInterval(watch);error?reject(error):resolve()};const watch=setInterval(()=>{if(!document.querySelector('.official-placement-backdrop'))finish()},180);openPlacementWizard(asset,{workspace,project:official,manualGroup}).catch(finish)})
+    for(const [index,asset] of arts.entries()){
+      const assetProject=projects.find(p=>p.id===asset.project_id&&p.official_order_ref)||official;
+      const modal=await openPlacementWizard(asset,{workspace,project:assetProject,manualGroup,sequence:{index:index+1,total:arts.length}});
+      if(!modal||!(await modal.closed)?.saved)break;
     }
   }
   async function pendingRows(){

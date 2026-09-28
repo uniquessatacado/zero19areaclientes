@@ -217,12 +217,12 @@ function calculateProductionPhase(snapshot={},options={}){
   const totalMinutes=Math.max(baselineBusy,...ordered.filter(x=>!x.invalid).map(x=>x.finish));
   const scheduledUnits=missingBacklog+ordered.filter(x=>!x.invalid).reduce((sum,x)=>sum+x.quantity,0);
   const pausedCount=new Set([...ordered.filter(x=>x.paused).map(x=>x.project_id),...pausedIds]).size,invalid=ordered.some(x=>x.invalid);
-  if(pausedCount)warnings.add(`${pausedCount} pedido(s) parado(s): todo o trabalho restante está reservado, mas a previsão depende da retomada e não inclui o tempo de espera desconhecido.`);
+  if(pausedCount)warnings.add(`${pausedCount} pedido(s) parado(s): a carga restante continua reservada na fila. O prazo prometido continua correndo; a estimativa considera o trabalho pendente, sem adivinhar o tempo de espera pela retomada.`);
   if(printerPaused)warnings.add('Manutenção ativa: prazo depende da retomada.');
   const conditionalNextAvailableAt=invalid?null:addProductionMinutes(now,totalMinutes||finite(snapshot.baseline_minutes_per_shirt,30),holidays).toISOString();
   return {settings,backlogUnits,totalMinutes:round(totalMinutes),estimatedMinutesPerUnit:scheduledUnits?round(totalMinutes/scheduledUnits):finite(snapshot.baseline_minutes_per_shirt,30),
-    nextAvailableAt:printerPaused||pausedCount||invalid?null:conditionalNextAvailableAt,conditionalNextAvailableAt,
-    projects:ordered.map(p=>({project_id:p.project_id,quantity:p.quantity,paused:p.paused,estimated:p.estimated,minutes:round(p.finish),predictedAt:pausedCount||printerPaused||p.invalid?null:addProductionMinutes(now,p.finish,holidays).toISOString(),conditionalPredictedAt:p.invalid?null:addProductionMinutes(now,p.finish,holidays).toISOString()})),
+    nextAvailableAt:printerPaused||invalid?null:conditionalNextAvailableAt,conditionalNextAvailableAt,
+    projects:ordered.map(p=>({project_id:p.project_id,quantity:p.quantity,paused:p.paused,estimated:p.estimated,minutes:round(p.finish),predictedAt:printerPaused||p.invalid?null:addProductionMinutes(now,p.finish,holidays).toISOString(),conditionalPredictedAt:p.invalid?null:addProductionMinutes(now,p.finish,holidays).toISOString()})),
     breakdown:Object.fromEntries(Object.entries(breakdown).map(([key,value])=>[key,round(value)])),warnings:[...warnings],pausedCount,printerPaused,
     invalid,pendingPreparationCount:active.filter(x=>preparationStages.has(currentStage(x.stage))).length};
 }
@@ -287,7 +287,7 @@ export function calculateProductionSchedule(snapshot={},options={}){
     offset+=part.totalMinutes;
   }
   const pausedIds=new Set((snapshot.pauses||[]).filter(x=>x.scope==='order'&&!x.ended_at).map(x=>x.project_id));
-  const pausedCount=pausedIds.size,printerPaused=parts.some(x=>x.printerPaused),invalid=parts.some(x=>x.invalid),unavailable=pausedCount>0||printerPaused||invalid;
+  const pausedCount=pausedIds.size,printerPaused=parts.some(x=>x.printerPaused),invalid=parts.some(x=>x.invalid),unavailable=printerPaused||invalid;
   const settings=parts[0].settings,backlogUnits=parts.reduce((sum,x)=>sum+x.backlogUnits,0),totalMinutes=round(offset);
   const newUnitReserveMinutes=finite(snapshot.baseline_minutes_per_shirt,30);
   const conditionalNextAvailableAt=invalid?null:addProductionMinutes(now,totalMinutes||newUnitReserveMinutes,holidays).toISOString();

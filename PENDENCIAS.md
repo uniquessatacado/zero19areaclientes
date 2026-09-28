@@ -28,6 +28,8 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Produção diária e prazos
 
+- [~] Incidente organizar artes/prazo 28/09: correções implementadas e testadas (identidade frente/costas, medidas, abertura assíncrona, balões e pausa individual sem bloquear previsão). Duas migrações APLICADAS: proteção de vínculo e leitura de originais PDV pela equipe Personalizações. 17 verificações SQL passaram com rollback; visual isolado desktop/mobile passou. #49322 reparado sem alterar arquivos, medidas, prazos, estoque ou pagamentos; zero vínculos ativos divergentes após reparo. Largura salva de 35 cm mantida, aguardando dono confirmar divergência com 28 cm original. Builds/tipos passaram. Falta publicar/confirmar 2.17.43. Evidências e limites em `docs/INCIDENTE_ORGANIZACAO_ARTES_2026-09-28.md`.
+
 - [~] Página inicial tem código de filtro e ordenação de trabalho aberto; confirmar com dados reais se vencidos/prazo/antigos estão na ordem correta e se nenhum cliente sem trabalho entra.
 - [~] Cards têm status/quantidade separados no HTML/CSS e contagem regressiva atualizada a cada segundo; ações usam atualização localizada e há modais de confirmação. Build passou; falta inspeção visual desktop/mobile e operação real sem perder filtro/posição.
 - [~] Pausa por pedido, motivo/tempo no card, gerenciamento criar/editar/excluir, reabrir escolhendo etapa e “Novo prazo” existem no código; tabelas e RPCs correspondentes existem no banco. Falta testar operações reais, permissões e motivo inicial em conta nova.

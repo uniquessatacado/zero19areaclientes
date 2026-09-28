@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {placementDimensions,placementOrderProduct,officialOrderItems} from '../official-order-workflow.js';
+
+const asset={width:1200,height:1800,metadata:{requested_width_cm:'28',requested_height_cm:'42'}};
+assert.deepEqual(placementDimensions(asset),{width:28,height:42,ratio:2/3});
+assert.equal(placementDimensions({...asset,metadata:{requested_width_cm:'28,4'}}).height,42.6);
+assert.equal(placementDimensions({...asset,metadata:{requested_height_cm:30}}).width,20);
+assert.equal(placementDimensions({...asset,metadata:{pdv_width_cm:9}}).height,13.5);
+assert.equal(placementDimensions(asset,{default_width_cm:35,default_height_cm:52.5}).width,35,'latest saved profile wins over original upload');
+assert.equal(placementDimensions(asset,null,{width_cm:33,height_cm:49.5}).width,33);
+assert.equal(placementDimensions({width:0,height:0,metadata:{}}).width,9);
+const products=officialOrderItems({official_order_payload:{items:[{id:'front',product_name:'Camisa',name:'Peito esquerdo'},{id:'back',product_name:'Camisa',name:'Costas · meio'}]}});
+assert.equal(placementOrderProduct({metadata:{personalization_sale_id:'back'}},products).ref,'back');
+assert.equal(placementOrderProduct({metadata:{personalization_sale_id:'back'}},products,{external_order_item_ref:'front'}).ref,'back','source identity beats a legacy incorrect placement');
+assert.throws(()=>placementOrderProduct({metadata:{personalization_sale_id:'missing'}},products),/outro item/);
+assert.equal(placementOrderProduct({metadata:{}},products,{external_order_item_ref:'back'}).ref,'back');
+const code=fs.readFileSync(new URL('../official-order-workflow.js',import.meta.url),'utf8');
+assert.ok(!code.includes("document.querySelector('.official-placement-backdrop')"),'no global modal watcher racing async loading');
+assert.match(code,/await modal.closed/);
+assert.match(code,/personalization_sale_id\)!==String\(product\?\.ref/,'saving independently protects the asset identity');
+const queue=fs.readFileSync(new URL('../zero19-pdv-sync.js',import.meta.url),'utf8');
+assert.match(queue,/orderArtworkItems\(summary\)\.length>1/);
+assert.match(queue,/STAGE_LABELS\[item.stage\]/);
+assert.ok(!queue.includes('STAGES[item.stage]'));
+console.log('Artwork dimensions, independent front/back identity, missing-item rejection and modal lifecycle regression checks passed.');

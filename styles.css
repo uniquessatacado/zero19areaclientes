@@ -251,6 +251,22 @@ html,body,#app,.app-shell{max-width:100%}.simple-container,.workspace-main,.work
 .z19-reason-list{display:grid;gap:7px;max-height:38vh;margin:12px 0;overflow:auto}.z19-reason-list>div{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}.z19-reason-list>div>.btn:first-child{justify-content:flex-start;text-align:left}
 html,body,.app-shell{max-width:100%;overflow-x:hidden}.container,.production-home,.production-home-hero,.production-open-section{min-width:0;max-width:100%}.production-home-hero>div:first-child{min-width:0;flex:1 1 420px}.production-home-actions{min-width:0;flex:1 1 520px;max-width:640px}.production-home-actions .btn{min-width:0;max-width:100%;white-space:normal;text-align:center;overflow-wrap:anywhere}.production-live-metrics>*{min-width:0}.production-stage-board{max-width:100%}
 .production-config-pending{flex:1 0 100%;color:#d7b486;font-size:10px;line-height:1.4;text-align:right}.production-home-actions:has(.production-config-pending){align-items:start}
+/* Equal-height order cards must not stretch the deadline pills. */
+.z19-zero19-grid .z19-zero19-card{align-content:start}
+.z19-zero19-card .z19-zero19-meta{align-items:center;align-content:flex-start;align-self:start}
+.z19-zero19-card .z19-zero19-meta>span{display:inline-flex;align-items:center;align-self:start;height:fit-content;line-height:1.25;max-width:100%;overflow-wrap:anywhere}
+.official-product-card .official-product-art-label{color:#ffb574;font-weight:800;white-space:normal}
+.official-placement-page .official-product-card b{font-size:13px;white-space:normal}
+.official-placement-page .official-product-card small,.official-placement-page .official-product-card em{font-size:12px;line-height:1.4}
+.z19-order-art-list{display:grid;gap:12px;min-width:0}
+.z19-order-art-row{display:grid;grid-template-columns:64px minmax(0,1fr);gap:12px;padding:12px;border:1px solid #364455;border-radius:14px;align-items:start}
+.z19-order-art-row img{display:block;width:64px;height:64px;object-fit:contain;background:#e6e9ed;border-radius:9px}
+.z19-order-art-row .z19-art-placeholder{display:grid;place-items:center;width:64px;height:64px;background:#202b37;border-radius:9px;font-size:11px}
+.z19-order-art-row>div{display:grid;gap:6px;min-width:0;overflow-wrap:anywhere}
+.z19-order-art-row small{color:#c1cedd}.z19-order-art-row .btn{justify-self:start;white-space:normal}
+.z19-order-art-picker .modal{width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow-y:auto;box-sizing:border-box}
+.z19-order-art-picker .modal-head{align-items:start}.z19-order-art-picker .modal-head>div{min-width:0}
+.z19-order-art-picker .modal-head p{line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:1180px){.production-home-hero{align-items:flex-start;flex-direction:column}.production-home-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;max-width:none}.production-config-pending{grid-column:1/-1;text-align:left}.production-stage-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}}
 @media(max-width:700px){.production-home-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.production-stage-board{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.production-stage-board button{width:100%;min-height:74px}.production-health{grid-template-columns:1fr}.production-health>span{grid-column:auto;white-space:normal}.z19-zero19-card,.z19-zero19-card-head,.z19-zero19-card-actions{min-width:0}.z19-zero19-card-actions{grid-template-columns:1fr!important}.z19-zero19-card-actions .btn{white-space:normal;overflow-wrap:anywhere}.production-open-head{min-width:0}}
 .z19-whatsapp-qr{display:grid;place-items:center;gap:10px;min-height:320px;padding:18px;border:1px solid #293544;border-radius:18px;background:#fff;color:#111;text-align:center}.z19-whatsapp-qr img{display:block;width:min(360px,100%);height:auto;image-rendering:pixelated}.z19-whatsapp-qr b{font-size:13px}.z19-whatsapp-qr-modal .z19-ready-message{margin-top:12px}
