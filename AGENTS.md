@@ -1,8 +1,11 @@
 # Regras do dono — Personalizações ZERO19
 
+- Cupons (29/09): acompanhamento do cliente por um código/QR do pedido, preservando IDs internos de cada arte. Via interna distingue peças físicas de aplicações, agrupando as peças e suas estampas. Emitir etiqueta compacta da sacola com pedido/cliente/WhatsApp/QR/prazo; confirmar destino do QR e separação antes de implementar. Reutilizar arte em outra posição não duplica a peça física.
+
 Leia antes de alterar o sistema e registre aqui novas regras permanentes que o dono estabelecer.
 
 - Antes de começar, ler `PENDENCIAS.md` deste repositório e o do NovoVenduss. Atualizar ambos quando um pedido mudar de estado; não trocar de frente deixando itens iniciados sem teste, registro de bloqueio ou próximo passo.
+- Carteira de clientes (29/09, implementada no NovoVenduss): saldos isolados por loja, uso opcional, diferença por outro pagamento, cancelamento com escolha explícita de estornar ou não e histórico auditável. Não criar repasse/recebimento ZERO19 apenas porque o cliente Venduss usou crédito. O erro de mensagens comunicado em 29/09 era na Venduss, não ZERO19.
 - Fonte Palmeiras/camisa azul: a altura informada (5,5 cm no exemplo JOÃO) corresponde ao corpo do O menor, não ao J alto. Manter escala uniforme, proporções e acentos; J e demais letras altas ficam maiores. Não aplicar essa calibração a outras fontes nem redimensionar números. Filmes antigos exigem recálculo explícito antes da nova exportação.
 
 - O objetivo é agilizar a linha de produção e organizar pedidos abertos. A página inicial mostra apenas trabalho em aberto, priorizado por prazo e etapa, sem clientes sem personalização ativa.
