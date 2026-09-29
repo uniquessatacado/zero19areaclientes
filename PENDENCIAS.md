@@ -32,6 +32,8 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 
 ## P0 — Produção diária e prazos
 
+- [x] 29/09 — GitHub confirmado: NovoVenduss `518959cb` com código de carteira/mensagens/cupons e Personalizações `7dec85e` com regras/pendências. Carteira passou visual isolado celular/desktop, tipos/build; teste de agrupamento do cupom passou. Crédito público ainda depende da migração bloqueada; servidor Venduss e impressão física não verificados. Não houve nova alteração de código/produção Personalizações nesta entrega.
+
 - [~] 29/09 — NovoVenduss, fechamento local: carteira visual isolada passou em celular/desktop; tipos/build passaram; cupom agora agrupa camisas/aplicações, cliente usa código agregado e etiqueta separada da sacola abre WhatsApp do cliente. Atalho permite mesma arte em outra posição com medidas/preço próprios. Teste: 2 camisas / 4 posições / 8 aplicações. Migração financeira pública bloqueada aguardando autorização; reversão manual de pagamento exige preservar parcela do crédito antes da ativação. Preparando Git; sem nova publicação Personalizações ou teste físico da impressão.
 
 - [~] 29/09 — Cupons no NovoVenduss: um código/QR por pedido para o cliente; via interna agrupada por peças físicas e suas aplicações, mais etiqueta compacta separada da sacola. Encontrado cálculo de aplicações rotulado como total de peças em `PaymentFlow.tsx`. Confirmar quantidade física/aplicações e destino do QR. Atalho para mesma arte em outra posição com tamanho/preço próprios. Preservar IDs individuais/progresso parcial; nada publicado nesta frente.
