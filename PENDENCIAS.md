@@ -4,6 +4,8 @@ Atualizado em 28/09/2026. Ler este arquivo e `AGENTS.md` antes de trabalhar. Atu
 
 Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com prova indicada.
 
+- [~] 01/10 — Incidente cruzado no NovoVenduss/Venduss: conferência de estoque não encontrava produtos porque a tela convertia SKU atual sem prefixo (`56203-M`) em legado (`00-56203-M`). RPC do NovoVenduss corrigida no banco para aceitar SKU atual/legado e EAN com isolamento por tenant; três leituras reais passaram com rollback e nenhuma contagem persistiu. Frontend local e build passaram; falta reteste no leitor físico e atualização do servidor Venduss pelo Git. Nenhuma alteração em produção, pedidos, estoque ou financeiro da Personalizações.
+
 ## P0 — Integração real com Venduss
 
 - [~] 29/09 — Carteira no NovoVenduss: dono confirmou isolamento por loja, uso opcional e decisão explícita de estorno ao cancelar. Erro das mensagens era VENDUSS (corrigido pelo dono), não ZERO19. Camada administrativa em implementação; sem mudança na produção ou repasse financeiro entre lojas. Reabertura anterior continua com bloqueio registrado.
