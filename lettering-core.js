@@ -3,7 +3,7 @@ const positive=(value,label)=>{const number=Number(value);if(!Number.isFinite(nu
 // The requested line height is the actual painted height, not the font's em box.
 // Every mapped vector wins over a font fallback for the same character.
 export function measureLetteringLine(text,{heightCm,trackingCm=0,glyphs=[],fontSource=null,fontSources=[],measureFont,glyphAspect}={}){
-  const value=String(text||'').trim(),height=positive(heightCm,'A altura'),tracking=Number(trackingCm);
+  const value=String(text||'').normalize('NFC').trim(),height=positive(heightCm,'A altura'),tracking=Number(trackingCm);
   if(!Number.isFinite(tracking)||tracking<0)throw new Error('O espaço entre caracteres deve ser zero ou maior.');
   if(!value)return {text:'',widthCm:0,heightCm:0,parts:[],fontCharacters:[],vectorCharacters:[]};
   const glyphMap=new Map(glyphs.map(glyph=>[glyph.glyph_key,glyph])),sources=new Map(fontSources.map(source=>[source.id,source]));

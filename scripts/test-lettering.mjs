@@ -37,4 +37,8 @@ const secondFont={id:'alternate',source_type:'otf'};
 const mapped=measureLetteringLine('A',{...resources,heightCm:5.5,fontSources:[secondFont],glyphs:[{glyph_key:'A',source_kind:'font',font_source_id:'alternate'}]});
 assert.equal(mapped.parts[0].source.id,'alternate');
 
-console.log('lettering regression tests: mixed SVG/font priority, physical bounds, spacing, accents, absent mappings and standalone numbers passed');
+const punctuation=measureLetteringLine('#JOÃO, SIM!',{...resources,heightCm:5.5});
+assert.equal(punctuation.text,'#JOÃO, SIM!','punctuation must survive the complete lettering/film layout');
+assert.deepEqual(punctuation.parts.map(part=>part.char),[...'#JOÃO, SIM!']);
+
+console.log('lettering regression tests: mixed SVG/font priority, physical bounds, spacing, accents, punctuation, absent mappings and standalone numbers passed');
