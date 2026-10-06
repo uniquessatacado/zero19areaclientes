@@ -8,7 +8,7 @@ import {fileURLToPath} from 'node:url';
 // Deterministic, checked pre-build transform. No runtime loaders, remote source,
 // eval, compressed JS or modifications to the original source checkout.
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const version='2.17.46';
+const version='2.17.47';
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'z19p-v21715-'));
 const output=path.join(root,'dist');
 const skip=new Set(['.git','.vercel','node_modules','dist','output','tmp','.agents','.codex']);
@@ -62,6 +62,7 @@ if(!filmPreview.includes("data-delete")||!filmPreview.includes("event.key==='Del
 const spotExport=fs.readFileSync(path.join(temp,'film-spot-export.js'),'utf8');
 if(!spotExport.includes("streaming?950:700"))throw new Error('Regressão: orçamento direto-em-disco de 4 GB não foi atualizado.');
 const appSource=fs.readFileSync(path.join(temp,'app.js'),'utf8'),studioActions=fs.readFileSync(path.join(temp,'asset-studio-actions.js'),'utf8'),artStudio=fs.readFileSync(path.join(temp,'art-studio.js'),'utf8');
+for(const module of ['production-v217.js','zero19-pdv-sync.js'])if(!appSource.includes('./'+module+'?v='+version))throw new Error('Cache-bust ausente no módulo de produção: '+module);
 if(!appSource.includes('garment_studio_enabled')||!appSource.includes('Nome do cliente *')||!appSource.includes('Pedidos do cliente'))throw new Error('Regressão: simplificação de clientes v2.17.15 ausente.');
 if(!studioActions.includes('garmentEnabled=handlers.garmentEnabled!==false'))throw new Error('Regressão: chave Montar camiseta/3D não está aplicada às ações.');
 if(!artStudio.includes('data-size="43" data-back-only')||!artStudio.includes('ctx.isGarmentStudioEnabled?.()'))throw new Error('Regressão: provador v2.17.15 incompleto.');

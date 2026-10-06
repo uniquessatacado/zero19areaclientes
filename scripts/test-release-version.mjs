@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const read=name=>fs.readFileSync(new URL('../'+name,import.meta.url),'utf8');
+const build=read('scripts/build-v2176.mjs'),app=read('app.js'),html=read('index.html');
+const version=build.match(/const version='(2\.17\.\d+)'/)?.[1];
+assert(version,'Build has an explicit release identifier');
+assert.equal(app.match(/const APP_VERSION = '([^']+)'/)?.[1],version);
+assert(html.includes(`name="z19-version" content="${version}"`));
+assert(html.includes(`Versão ${version}`));
+assert(html.includes(`import('/app.js?v=${version}')`));
+assert(build.includes("Cache-bust ausente no módulo de produção:"),'Built critical imports are checked before publishing');
+const config=JSON.parse(read('vercel.json'));
+const cacheHeader=source=>config.headers.find(row=>row.source===source)?.headers.find(row=>row.key.toLowerCase()==='cache-control')?.value;
+assert.match(cacheHeader('/(.*)'),/no-cache.*must-revalidate/);
+assert.match(cacheHeader('/'),/no-store/);
+assert.match(cacheHeader('/index.html'),/no-store/);
+assert(read('zero19-pdv-sync.js').includes('async function pendingVdrFilmRows()'));
+assert(read('zero19-pdv-sync.js').includes('async function prepareVdrFilmItem(workItemId)'));
+assert(read('production-v217.js').includes('ctx.zero19Orders.prepareVdrFilmItem(entry.row.id)'));
+console.log('PASS release '+version+': entry/build version aligned, critical module cache-bust checked, HTML no-store and JS revalidation, VDR private PNG consumer present.');
