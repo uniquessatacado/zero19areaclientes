@@ -553,10 +553,15 @@ export function createZero19PdvSync(ctx){
     const [asset,current]=await Promise.all([supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',owner).single(),supabase.from('z19p_zero19_work_items').select('stage,asset_id,metadata').eq('id',item.id).eq('owner_id',owner).single()]);
     if(asset.error||current.error)throw asset.error||current.error;
     if(owner!==accountOwnerId()||current.data.stage!=='ready_production'||current.data.asset_id!==item.asset_id||JSON.stringify(current.data.metadata?.details?.[0]?.production)!==JSON.stringify(production))throw new Error('O pedido ou a liberação mudou. Abra a seleção novamente.');
+    const storageBucket=production.storage_bucket||asset.data.metadata?.storage_bucket||'z19p-assets';
+    if(!['z19p-private','z19p-assets'].includes(storageBucket))throw new Error('O armazenamento desta aplicação VDR não está disponível para o filme. Confira a arte vinculada.');
+    // A later library edit must not replace the prepared PNG sold in this order.
+    // Clone for selection only; keep the reusable asset and its profile intact.
+    const filmAsset={...asset.data,processed_path:production.file_path||asset.data.processed_path,metadata:{...asset.data.metadata,storage_bucket:storageBucket}};
     const companyName=item.summary.workspace?.client_name||item.summary.workspace?.company_name||'Cliente ZERO19';
     // Per-order measures must never overwrite the reusable source-art profile.
     const profile={asset_id:asset.data.id,default_width_cm:width,default_height_cm:height,aspect_ratio:width/height,halftone:Boolean(production.needs_halftone),rotation_policy:'180',allow_internal_nesting:!production.needs_halftone,ready_for_print:true};
-    return {...filmItemFromLibraryAsset(asset.data,profile,{quantity:item.quantity,companyName}),storageBucket:production.storage_bucket||asset.data.metadata?.storage_bucket||'z19p-assets',officialProjectId:item.project_id,officialOrderRef:orderNo(item.summary.project),externalOrderItemRef:item.personalization_sale_id,productionGroupKeys:['order:'+item.project_id],zero19WorkItemId:item.id};
+    return {...filmItemFromLibraryAsset(filmAsset,profile,{quantity:item.quantity,companyName}),storageBucket,officialProjectId:item.project_id,officialOrderRef:orderNo(item.summary.project),externalOrderItemRef:item.personalization_sale_id,productionGroupKeys:['order:'+item.project_id],zero19WorkItemId:item.id};
   }
   async function prepareVendussFilmItem(workItemId){
     const owner=accountOwnerId(),item=(await pendingVendussFilmRows()).find(row=>row.id===workItemId);
