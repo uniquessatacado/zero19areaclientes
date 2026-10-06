@@ -22,9 +22,16 @@ button.dataset={separateFilmPhrase:'phrase'};context.filmItems=[structuredClone(
 changing=true;await button.onclick();assert.equal(context.filmItems,original,'Typing/quantity edits during async layout cannot overwrite the newer film');assert.equal(button.disabled,false);changing=false;
 current=false;const readsBefore=readCount;await button.onclick();assert.equal(readCount,readsBefore,'Detached route cannot split');current=true;
 
-const htmlStart=source.indexOf('  function filmItemsHTML()'),htmlEnd=source.indexOf('\n  async function openFilmVectorColorEditor(',htmlStart),htmlContext={filmItems:[structuredClone(base)],filmItemPreview:()=>'<span>Preview</span>',hasEditableVectorColor:()=>false,h:value=>String(value||'').replaceAll('<','&lt;').replaceAll('>','&gt;'),canSeparateFilmPhrase};
+const editableStart=source.indexOf('  function editableFilmLetterHeight('),editableEnd=source.indexOf('  function openFilmLetterHeightEditor(',editableStart);
+assert(editableStart>0&&editableEnd>editableStart,'The actual lettering size eligibility helper is tested');
+const editableFilmLetterHeight=runInNewContext(source.slice(editableStart,editableEnd)+';editableFilmLetterHeight');
+const htmlStart=source.indexOf('  function filmItemsHTML()'),htmlEnd=source.indexOf('\n  async function openFilmVectorColorEditor(',htmlStart),htmlContext={filmItems:[structuredClone(base)],filmItemPreview:()=>'<span>Preview</span>',hasEditableVectorColor:()=>false,h:value=>String(value||'').replaceAll('<','&lt;').replaceAll('>','&gt;'),canSeparateFilmPhrase,editableFilmLetterHeight};
 const html=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',htmlContext);assert.match(html,/data-separate-film-phrase="phrase"/);assert.match(html,/Cliente &lt;teste&gt;/);assert.doesNotMatch(html,/data-reunite-film-phrase/);
 const split=separateFilmPhrase([base],'phrase');const wordHtml=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',{...htmlContext,filmItems:split.items});assert.equal((wordHtml.match(/data-reunite-film-phrase=/g)||[]).length,4);assert.doesNotMatch(wordHtml,/data-separate-film-phrase/);assert.equal((wordHtml.match(/class="film-item-qty"[^>]+ disabled/g)||[]).length,4);assert.match(wordHtml,/Palavra 1\/4/);assert.match(wordHtml,/Uma só aplicação/);
+assert.equal((wordHtml.match(/edit-film-item[^>]+ disabled/g)||[]).length,0,'Tamanho is enabled for a whole-word group without unlocking application quantity');
+assert.match(wordHtml,/Tamanho ajusta a altura do conjunto inteiro/);
+assert.equal(editableFilmLetterHeight({...base,number:'22'}),false,'A number/unified composition never enters the phrase-only height editor');
+assert.equal(editableFilmLetterHeight({...split.items[0],vectorSource:{path:'drawing.svg'}}),false,'A whole illustration keeps its image size editor');
 const linked={...base,zero19WorkItemId:'work',applicationQuantity:2,letteringProductionSnapshot:{top_text:base.name},letteringApplicationParts:[]};linked.letteringApplicationParts=[letteringApplicationPart(linked)];
 const linkedHtml=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',{...htmlContext,filmItems:[linked]});assert.match(linkedHtml,/class="film-item-qty"[^>]+ disabled/);assert.match(linkedHtml,/duplicate-film-item[^>]+ disabled/);assert.match(linkedHtml,/Escrita e quantidade do pedido/);
 const css=readFileSync(new URL('../production-v217.css',import.meta.url),'utf8');assert.match(css,/\[data-separate-film-phrase\].*min-height:44px!important;background:#fff;color:#111113/,'Full-width legible 44px touch actions');

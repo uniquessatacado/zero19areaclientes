@@ -100,6 +100,57 @@ export function reuniteFilmPhrase(items,manifestId){
   return {items:next,item:restored};
 }
 
+// Explicit film-only editing: every whole word of the same phrase keeps one
+// nominal letter height. Never infer a smaller height from the roll width or
+// mutate the order's production snapshot. The caller measures each returned
+// part with the official renderer before committing the replacement list.
+export function resizeFilmPhraseHeight(items,localId,heightCm,{id=freshId,manifestId=null,sourceLayout=null}={}){
+  const height=Number(heightCm);
+  if(!Number.isFinite(height)||height<=0||height>100)throw new Error('Informe uma altura das letras maior que zero e até 100 cm.');
+  assertCompleteFilmPhrases(items);
+  const selected=items.find(item=>item.localId===localId);
+  const selectedManifestId=manifestId||selected?.phrasePart?.manifestId;
+  const manifest=(selected?.phraseManifests||[]).find(candidate=>candidate.id===selectedManifestId);
+  if(!selected||!manifest)throw new Error('Escolha uma palavra da frase para ajustar a altura de todo o conjunto.');
+  if(sourceLayout&&(!Number.isFinite(Number(sourceLayout.widthCm))||Number(sourceLayout.widthCm)<=0||!Number.isFinite(Number(sourceLayout.heightCm))||Number(sourceLayout.heightCm)<=0))throw new Error('A medida real da frase precisa ser conferida antes de salvar a nova altura.');
+  const revisionId=id();
+  if(!revisionId||revisionId===manifest.revisionId)throw new Error('Não foi possível identificar o ajuste da frase. Tente novamente.');
+  const touchedIds=[...manifest.partIds],touched=new Set(touchedIds);
+  const next=items.map(item=>{
+    const changed=clone(item);
+    if(touched.has(item.localId)){
+      changed.nameHeightCm=height;changed.sizeOverride=true;
+      changed.phrasePart.revisionId=revisionId;
+      delete changed.previewDataUrl;delete changed.previewQualityVersion;delete changed.symbolFallbackCharacters;
+    }
+    return changed;
+  });
+  const resized=new Map(next.filter(item=>touched.has(item.localId)).map(item=>[item.localId,item]));
+  for(const item of next)for(const candidate of item.phraseManifests||[]){
+    if(candidate.id===manifest.id){
+      candidate.nameHeightCm=height;candidate.revisionId=revisionId;
+      // With fixed tracking, the line's width is not a uniform multiple of
+      // its old width. Only accept dimensions supplied by the real renderer.
+      // Otherwise keep the last measurement until the caller remeasures.
+      if(sourceLayout){candidate.sourceWidthCm=Number(sourceLayout.widthCm);candidate.sourceHeightCm=Number(sourceLayout.heightCm);}
+    }
+    candidate.requiredPeers=candidate.requiredPeers.map(peer=>resized.has(peer.localId)?peerRecipe(resized.get(peer.localId)):peer);
+  }
+  assertCompleteFilmPhrases(next);
+  return {items:next,touchedIds,parts:next.filter(item=>touched.has(item.localId)),manifest:next.find(item=>touched.has(item.localId)).phraseManifests.find(candidate=>candidate.id===manifest.id)};
+}
+
+// Read the source's nominal physical height, never a width-fitted film value.
+// Returning null is intentional: unknown legacy recipes require an explicit
+// operator choice instead of an invented default or an automatic migration.
+export function filmPhraseNominalHeight(item,fontDefaultHeightCm=null){
+  const production=item?.letteringProductionSnapshot||{};
+  for(const value of [production.letter_height_cm,production.name_height_cm,fontDefaultHeightCm]){
+    const height=Number(value);if(Number.isFinite(height)&&height>0&&height<=100)return height;
+  }
+  return null;
+}
+
 export function assertCompleteFilmPhrases(items,layout=null){
   assertCompleteLetteringApplications(items,layout);
   const manifests=manifestsFromItems(items);

@@ -48,6 +48,11 @@ const allRestored=reuniteFilmPhrase(firstRestored.items,bothLinesSplit.manifest.
 assert.equal(allRestored.items.length,4);assert.equal(assertCompleteFilmPhrases(allRestored.items),true);
 const repeated=separateFilmPhrase([{...base,localId:'repeat',zero19WorkItemId:'repeat-work',name:'EU EU #SIM'}],'repeat',{id});
 assert.deepEqual(repeated.parts.map(part=>part.name),['EU','EU','#SIM']);assert.equal(new Set(repeated.parts.map(part=>part.localId)).size,3);assert.equal(assertCompleteFilmPhrases(repeated.items),true,'Repeated words are distinct required pieces, not deduped glyphs');
+const longPhrase={...base,localId:'long',zero19WorkItemId:'long-work',name:'IGUAL A PISCINA: SE ACHA QUE DÁ PÉ, SÓ VEM!',nameHeightCm:5.5,widthCm:97,heightCm:6.9};
+const longWords=separateFilmPhrase([longPhrase],'long',{id});
+assert.equal(longWords.parts[0].name,'IGUAL','A complete word is never divided into vertical glyph items');
+assert(longWords.parts.every(part=>part.nameHeightCm===5.5),'A wide phrase never makes the split helper reduce the nominal letter height');
+assert.deepEqual(longWords.parts.map(part=>part.name).join(' '),longPhrase.name,'Spaces alone are the cut points; accent and punctuation stay attached to each word');
 const removedCopy=removeFilmEntry(split.items,layout,{id:split.parts[0].localId,copy:0});assert.throws(()=>assertCompleteFilmPhrases(removedCopy.items,removedCopy.layout),/quantidade|cópias/,'Deleting one copy cannot release a multi-copy application');
 assert.throws(()=>separateFilmPhrase([{...base,orderLink:{quoteItemId:'unsupported-ledger'}}],'full',{id}),/Escolha uma frase/,'Asset export ledger is never split into duplicated allocations');
 assert.equal(assertCompleteFilmPhrases(original),true,'No manifest: historical film unchanged');
