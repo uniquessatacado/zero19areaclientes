@@ -9,8 +9,8 @@ import {exportCanvasWithSpot,spotCanvasGeometry,throwIfSpotCancelled} from './fi
 import {createInkCurveLut,loadCurveLibrary,removeCurveProfile,setDefaultCurve,STANDARD_CURVE_ID,upsertCurveProfile} from './film-curve.js?v=2.17.9';
 import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.12';
 import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.5';
-import {letteringFontForCharacter} from './lettering-symbols.js?v=2.17.48';
-import {bindPendingProducedActions} from './film-pending-produced.js?v=2.17.48';
+import {letteringFontForCharacter} from './lettering-symbols.js?v=2.17.49';
+import {bindPendingProducedActions} from './film-pending-produced.js?v=2.17.49';
 import {openCustomizationPreparer} from './customization-preparer.js?v=2.17.5';
 import {resolveFilmDraftMedia} from './film-draft.js?v=2.17.5';
 import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.5';
@@ -1031,7 +1031,20 @@ export function createProductionModule(ctx){
       modal.querySelectorAll('.close').forEach(node=>node.onclick=close);
       modal.onkeydown=event=>{if(event.key==='Escape')close();};
       modal.querySelectorAll('[data-entry]').forEach(input=>input.onchange=()=>{const entry=entries[Number(input.dataset.entry)];if(entry.alreadyInFilm)return;input.checked?selected.add(entry.key):selected.delete(entry.key);updateCount();});
-      const showPreviewFailure=img=>{const label=document.createElement('small');label.textContent='Prévia indisponível';img.replaceWith(label);};
+      const showPreviewFailure=(img,error)=>{
+        const preview=img.classList?.contains('film-pending-preview')?img:img.closest('.film-pending-preview');
+        const entry=entries[Number(preview?.dataset.preview)];
+        if(!preview||entry?.completed||!modal.isConnected||!pageCurrent())return;
+        const label=document.createElement('small');label.textContent='Não carregou';preview.replaceChildren(label);preview.title=error?.message||entry?.row?._artworkPreviewError||'Não foi possível carregar a imagem. A produção não foi alterada.';
+        if(!['vdr','venduss'].includes(entry?.kind)||!ctx.zero19Orders?.refreshArtworkPreview)return;
+        preview.style.flexDirection='column';preview.style.justifyContent='center';
+        const retry=document.createElement('button');retry.type='button';retry.className='btn small';retry.textContent='Tentar novamente';retry.style.cssText='min-height:44px;padding:4px;font-size:10px;background:#fff;color:#111';preview.appendChild(retry);
+        retry.onclick=async event=>{event.preventDefault();event.stopPropagation();if(busy||entry.completed||!pageCurrent())return;retry.disabled=true;label.textContent='Carregando…';
+          try{const url=await ctx.zero19Orders.refreshArtworkPreview(entry.row.id);if(!modal.isConnected||!pageCurrent()||entry.completed)return;
+            const image=document.createElement('img');image.width=72;image.height=72;image.style.cssText='display:block;width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain';image.alt='Prévia da estampa deste pedido';image.onerror=()=>showPreviewFailure(image);image.src=url;preview.title='';preview.replaceChildren(image);
+          }catch(failure){if(modal.isConnected&&pageCurrent()&&!entry.completed)showPreviewFailure(preview,failure);}
+        };
+      };
       modal.querySelectorAll('img').forEach(img=>img.onerror=()=>showPreviewFailure(img));
       button.onclick=async()=>{
         if(busy||!pageCurrent())return;busy=true;updateCount();button.textContent='Preparando artes…';
@@ -1052,6 +1065,7 @@ export function createProductionModule(ctx){
         finally{busy=false;button.textContent='Adicionar selecionados ao filme';modal.querySelectorAll('input').forEach(input=>input.disabled=input.hasAttribute('data-entry')&&entries[Number(input.dataset.entry)].alreadyInFilm);updateCount();}
       };
       document.body.appendChild(modal);updateCount();
+      entries.forEach((entry,index)=>{if(['vdr','venduss'].includes(entry.kind)&&!entry.image)showPreviewFailure(modal.querySelector('[data-preview="'+index+'"]'));});
       // Small sequential previews reuse the real font renderer without blocking selection.
       void (async()=>{for(let index=0;index<entries.length;index++){
         const entry=entries[index];if(entry.kind!=='font'||entry.completed)continue;if(!modal.isConnected||!pageCurrent())break;

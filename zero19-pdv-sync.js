@@ -2,6 +2,7 @@ import {calculateProductionSchedule} from './production-scheduler.js';
 import {createProductionPlanningUI} from './production-planning-ui.js';
 import {filmItemFromLibraryAsset} from './film-picker.js';
 import {orderItemProgress} from './order-item-progress.js';
+import {hydrateProductionArtworkPreviews} from './production-artwork-previews.js?v=2.17.49';
 const STAGE_ORDER=['awaiting_release','awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production','ready_pickup'];
 const STAGE_LABELS={
   awaiting_release:'Venduss · pendente de liberação',
@@ -113,6 +114,7 @@ export function createZero19PdvSync(ctx){
   }
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
+    const actor=state().session?.user?.id,previewCurrent=()=>owner===accountOwnerId()&&actor===state().session?.user?.id;
     if(!force&&cache&&Date.now()-cacheAt<12000)return cache;
     void ensureAutomaticSync(false);
     const [wi,sla,libraryResult,pauseResult,reasonsResult]=await Promise.all([
@@ -125,19 +127,7 @@ export function createZero19PdvSync(ctx){
     const firstError=wi.error||libraryResult.error;if(firstError)throw firstError;
     let items=wi.data||[];const saleIds=[...new Set(items.map(row=>row.personalization_sale_id).filter(Boolean))];
     if(saleIds.length){const source=await supabase.from('personalization_sales').select('id,public_tracking_token,personalization_code').in('id',saleIds);if(!source.error){const sourceMap=new Map((source.data||[]).map(row=>[row.id,row]));items=items.map(item=>({...item,metadata:{...(item.metadata||{}),public_tracking_token:sourceMap.get(item.personalization_sale_id)?.public_tracking_token||item.metadata?.public_tracking_token,personalization_code:sourceMap.get(item.personalization_sale_id)?.personalization_code||item.metadata?.personalization_code}}))}}
-    const vendussPaths=[...new Set(items.filter(item=>item.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks').map(item=>item.source_file_path).filter(Boolean))];
-    if(vendussPaths.length){
-      const previews=await supabase.storage.from('venduss-print-artworks').createSignedUrls(vendussPaths,600);
-      const previewMap=new Map((previews.data||[]).map(row=>[row.path,row.signedUrl]));
-      items=items.map(item=>({...item,_artworkPreview:previewMap.get(item.source_file_path)||null}));
-    }
-    const privatePaths=[...new Set(items.filter(item=>item.metadata?.details?.[0]?.production?.storage_bucket==='z19p-private').map(item=>item.source_file_path||item.metadata?.details?.[0]?.production?.file_path).filter(Boolean))];
-    if(privatePaths.length){
-      const previews=await supabase.storage.from('z19p-private').createSignedUrls(privatePaths,600);
-      if(previews.error)throw previews.error;
-      const previewMap=new Map((previews.data||[]).map(row=>[row.path,row.signedUrl]));
-      items=items.map(item=>({...item,_artworkPreview:previewMap.get(item.source_file_path||item.metadata?.details?.[0]?.production?.file_path)||item._artworkPreview||null}));
-    }
+    items=await hydrateProductionArtworkPreviews({supabase,items,isCurrent:previewCurrent});
     const projectIds=[...new Set(items.map(row=>row.project_id).filter(Boolean))];
     const pr=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds).order('source_order_created_at',{ascending:false,nullsFirst:false}):{data:[],error:null};
     if(pr.error)throw pr.error;
@@ -545,6 +535,15 @@ export function createZero19PdvSync(ctx){
     const data=await load(true);
     return data.items.filter(item=>item.stage==='ready_production'&&item.asset_id&&item.metadata?.details?.[0]?.production?.vdr_bundle_id).map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
   }
+  async function refreshArtworkPreview(workItemId){
+    const owner=accountOwnerId(),actor=state().session?.user?.id;
+    const current=()=>owner===accountOwnerId()&&actor===state().session?.user?.id;
+    const result=await supabase.from('z19p_zero19_work_items').select('id,owner_id,source_file_path,metadata').eq('id',workItemId).eq('owner_id',owner).single();
+    if(result.error)throw result.error;
+    const [row]=await hydrateProductionArtworkPreviews({supabase,items:[result.data],isCurrent:current});
+    if(!row?._artworkPreview)throw new Error(row?._artworkPreviewError||'Não foi possível carregar o PNG preparado deste pedido.');
+    return row._artworkPreview;
+  }
   async function prepareVdrFilmItem(workItemId){
     const owner=accountOwnerId(),item=(await pendingVdrFilmRows()).find(row=>row.id===workItemId);
     if(!item)throw new Error('A estampa VDR não está mais aguardando produção. Atualize a seleção.');
@@ -781,5 +780,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,refreshArtworkPreview,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
 }
