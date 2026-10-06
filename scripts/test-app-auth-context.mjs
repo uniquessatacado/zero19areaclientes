@@ -15,7 +15,7 @@ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);re
 const user=(id='one')=>({user:{id},access_token:'fixture-token'}),profile=(id='one',account='owner-one',role='admin')=>({id,account_owner_id:account,active:true,role});
 function fixture(){
   const counts={profiles:0,teams:0,render:0,config:0,film:0,teamsView:0,queue:0,nav:0,studio:0,legacy:0,clear:0,modals:0,signOut:0,costCreates:0,events:0},storage=new Map();
-  const context={console:{error(){}},URLSearchParams,Event,DOMException,Promise,setTimeout,clearTimeout,clearInterval,queueMicrotask,
+  const context={assetUrls:{clear(){counts.privateURLsClear=(counts.privateURLsClear||0)+1}},console:{error(){}},URLSearchParams,Event,DOMException,Promise,setTimeout,clearTimeout,clearInterval,queueMicrotask,
     session:user(),currentProfile:profile(),garmentStudioEnabled:true,accountContextEpoch:0,teamContextPending:null,routeAccessCheck:null,teamProfiles:[profile()],workspaces:[{}],currentWorkspace:{},currentProjects:[{}],currentAssets:[{}],currentFolders:[{}],currentQuotes:[{}],auditEntries:[{}],statuses:[{}],products:[{}],folderTemplates:[{}],libraryWorkspaces:{old:true},myCommissionSummary:{enabled:true},myCommissionRules:[{}],commissionTiers:[{}],dashboardAgingTimer:null,
     productionCosts:{destroy(){counts.clear++}},productionCostOwner:'owner-one',projectAdvisor:{invalidate(){}},productionModule:{resetAccountState(){},renderFilm(){counts.film++},renderTeams(){counts.teamsView++},renderQueue(){counts.queue++}},
     window:{dispatchEvent(){counts.events++}},document:{querySelectorAll(){return [{remove(){counts.modals++}}]},body:{style:{overflow:'hidden'}}},sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},

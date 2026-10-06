@@ -34,6 +34,7 @@ export function createArtStudio(ctx){
 
   async function openMockup(asset,options={}){
     if(!asset||asset.asset_type!=='arte')return;
+    await ctx.assetUrls?.hydrate([asset]);
     const dialog=mountDialog('Veja sua arte na peça',asset.name,`<div class="studio-loading">Preparando o provador…</div>`,'<span>Escala física ajustável • frente, costas e mangas</span>','shirt-studio');
     try{
       const [profile,image]=await Promise.all([getProfile(asset),loadImage(assetUrl(asset))]);if(!dialog.modal.isConnected)return;
@@ -92,6 +93,7 @@ export function createArtStudio(ctx){
 
   async function openEditor(asset,options={}){
     if(!asset||asset.asset_type!=='arte')return;
+    await ctx.assetUrls?.hydrate([asset]);
     const dialog=mountDialog('Editar arte',asset.name,'<div class="studio-loading">Abrindo a arte em alta resolução…</div>','<span>O original é preservado em cada revisão.</span>','color-studio');
     try{
       const [image,profile]=await Promise.all([loadImage(assetUrl(asset)),getProfile(asset)]);if(!dialog.modal.isConnected)return;
@@ -131,12 +133,13 @@ export function createArtStudio(ctx){
   async function persistEdit(asset,profile,blob,{duplicate,name,rules,width,height,signal}){
     assertActive(signal);
     const id=duplicate?crypto.randomUUID():asset.id,revision=crypto.randomUUID(),path=`${owner()}/${asset.workspace_id}/${id}/edits/${revision}.png`,now=new Date().toISOString();
-    const upload=await supabase.storage.from('z19p-assets').upload(path,blob,{contentType:'image/png',upsert:false});assertActive(signal);if(upload.error)throw upload.error;
+    const bucket=asset.metadata?.storage_bucket==='z19p-private'?'z19p-private':'z19p-assets';
+    const upload=await supabase.storage.from(bucket).upload(path,blob,{contentType:'image/png',upsert:false});assertActive(signal);if(upload.error)throw upload.error;
     const metadata={...(asset.metadata||{}),manual_color_edit:{rules,edited_at:now,edited_by:user(),previous_path:asset.processed_path||asset.original_path,source_asset_id:asset.id},revision_paths:[...new Set([...(asset.metadata?.revision_paths||[]),asset.processed_path||asset.original_path].filter(Boolean))]};
     let response;
     if(duplicate){const row={id,owner_id:owner(),workspace_id:asset.workspace_id,project_id:asset.project_id||null,folder_id:asset.folder_id||null,name:name===asset.name?`${name} — editada`:name,asset_type:'arte',original_path:path,processed_path:path,mime_type:'image/png',size_bytes:blob.size,width,height,dpi:300,alpha_trimmed:asset.alpha_trimmed||false,background_removed:false,maximized:asset.maximized||false,metadata,created_by:user(),updated_by:user()};response=await supabase.from('z19p_assets').insert(row).select().single()}
     else{let query=supabase.from('z19p_assets').update({name,processed_path:path,mime_type:'image/png',size_bytes:blob.size,width,height,dpi:300,metadata,updated_by:user(),updated_at:now}).eq('id',id);if(asset.updated_at)query=query.eq('updated_at',asset.updated_at);response=await query.select().single()}
-    assertActive(signal);if(response.error){await supabase.storage.from('z19p-assets').remove([path]);throw new Error(response.error.code==='PGRST116'?'Esta arte mudou em outra tela. Reabra o editor para salvar a versão mais recente.':response.error.message)}
+    assertActive(signal);if(response.error){await supabase.storage.from(bucket).remove([path]);throw new Error(response.error.code==='PGRST116'?'Esta arte mudou em outra tela. Reabra o editor para salvar a versão mais recente.':response.error.message)}
     if(duplicate&&profile){const {error}=await supabase.from('z19p_asset_print_profiles').insert({asset_id:id,owner_id:owner(),project_id:asset.project_id||null,default_width_cm:profile.default_width_cm,default_height_cm:profile.default_height_cm,aspect_ratio:profile.aspect_ratio,halftone:profile.halftone,allow_internal_nesting:profile.allow_internal_nesting,rotation_policy:profile.rotation_policy,ready_for_print:profile.ready_for_print,created_by:user(),updated_by:user()});if(error)ctx.toast('A cópia foi salva. Abra Medida de produção para cadastrar sua liberação.','err')}
     assertActive(signal);await ctx.logEvent(duplicate?'asset_duplicated':'asset_edited',`${duplicate?'Duplicou':'Editou'} arte com remoção manual de cor`,{workspaceId:asset.workspace_id,projectId:asset.project_id,entityType:'asset',entityId:id,metadata:{source_asset_id:asset.id,removed_colors:rules.length}});
     return response.data;

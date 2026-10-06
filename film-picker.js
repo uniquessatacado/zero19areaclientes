@@ -45,7 +45,7 @@ export function filmItemFromSelection(entry, selection = {}) {
     workspaceId:entry.workspaceId,companyName:entry.companyName,
     widthCm, heightCm, quantity:quantityOf(selection.quantity), halftone:Boolean(entry.profile.halftone),
     allowInternalNesting:Boolean(entry.profile.allow_internal_nesting), rotationPolicy:entry.profile.rotation_policy || 'none',
-    path:entry.path, sizeOverride:Math.abs(widthCm-entry.widthCm) > .0001 || Math.abs(heightCm-entry.heightCm) > .0001
+    path:entry.path, storageBucket:entry.asset?.metadata?.storage_bucket||'z19p-assets', sizeOverride:Math.abs(widthCm-entry.widthCm) > .0001 || Math.abs(heightCm-entry.heightCm) > .0001
   };
 }
 

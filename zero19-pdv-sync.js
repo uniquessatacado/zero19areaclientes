@@ -34,6 +34,7 @@ function installStyles(){
   const style=document.createElement('style');style.id='zero19PdvSyncStyles';
   style.textContent='.z19-sync-strip{margin:18px 0 24px;padding:18px;border:1px solid #27272a;border-radius:22px;background:linear-gradient(145deg,#111113,#171719);box-shadow:0 18px 50px rgba(0,0,0,.18)}.z19-order-picker-toolbar{display:grid;grid-template-columns:1fr auto;gap:10px;margin:12px 0}.z19-order-picker-toolbar input{min-width:0}.z19-order-picker-row{display:grid;gap:4px}.z19-order-picker-row b{font-size:14px}.z19-order-picker-row strong{color:#ff8a5b;font-size:12px}.z19-order-picker-row .phone{font-weight:800;color:#d4d4d8}.z19-order-picker-footer{display:flex;justify-content:center;padding-top:10px}.z19-sync-head{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}.z19-sync-head h2{margin:2px 0 0;font-size:20px}.z19-sync-head p{margin:4px 0 0;color:#a1a1aa;font-size:13px}.z19-sync-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}.z19-sync-count{border:1px solid #303036;border-radius:16px;padding:12px;background:#0c0c0e;text-align:left;color:inherit}.z19-sync-count strong{display:block;font-size:24px;line-height:1}.z19-sync-count span{display:block;margin-top:7px;font-size:11px;color:#b8b8c0;line-height:1.25}.z19-sync-count.danger{border-color:#7f1d1d;background:#1c0c0c}.z19-sync-count.warn{border-color:#854d0e;background:#1d1406}.z19-zero19-page{display:grid;gap:18px}.z19-zero19-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}.z19-zero19-summary button{min-height:84px;border:1px solid #303036;border-radius:18px;background:#111113;color:inherit;text-align:left;padding:14px;cursor:pointer}.z19-zero19-summary b{display:block;font-size:26px}.z19-zero19-summary span{font-size:11px;color:#aaa}.z19-zero19-section{display:grid;gap:10px}.z19-zero19-section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.z19-zero19-section-head h2{margin:0}.z19-zero19-section-head p{margin:4px 0 0;color:#9f9fa8;font-size:13px}.z19-zero19-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.z19-zero19-card{border:1px solid #2d2d32;border-radius:20px;background:#111113;padding:16px;display:grid;gap:12px}.z19-zero19-card.overdue{border-color:#991b1b;box-shadow:inset 0 0 0 1px rgba(239,68,68,.16)}.z19-zero19-card-head{display:flex;justify-content:space-between;gap:12px}.z19-zero19-card h3{margin:0;font-size:18px}.z19-zero19-card small{color:#a1a1aa}.z19-zero19-order{font-size:12px;color:#fb923c;font-weight:800}.z19-zero19-meta{display:flex;gap:7px;flex-wrap:wrap}.z19-zero19-meta span{border:1px solid #303036;border-radius:999px;padding:5px 9px;font-size:11px;color:#c7c7cc}.z19-zero19-items{display:grid;gap:6px}.z19-zero19-item{padding:9px 10px;border-radius:12px;background:#0a0a0c;font-size:12px;color:#c7c7cc}.z19-zero19-item b{color:#fff}.z19-zero19-card-actions{display:flex;gap:8px;flex-wrap:wrap}.z19-sync-overdue{font-size:11px;font-weight:800;color:#fca5a5}.z19-sync-settings{margin-top:12px}.z19-sync-settings-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}.z19-transfer-list{display:grid;gap:9px;max-height:55dvh;overflow:auto}.z19-transfer-row{border:1px solid #333;border-radius:14px;padding:12px;text-align:left;background:#121214;color:inherit;cursor:pointer}.z19-transfer-row b,.z19-transfer-row span,.z19-transfer-row small{display:block}.z19-transfer-row span{margin-top:3px}.z19-transfer-row small{margin-top:5px;color:#aaa}.z19-transfer-button{margin-left:auto}.z19-ready-message{white-space:pre-wrap;background:#0b0b0d;border:1px solid #2d2d32;border-radius:14px;padding:12px;font-size:12px;line-height:1.5;color:#d4d4d8}@media(max-width:780px){.z19-sync-head{align-items:flex-start;flex-direction:column}.z19-sync-counts,.z19-zero19-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.z19-zero19-summary button:last-child,.z19-sync-count:last-child{grid-column:1/-1}.z19-zero19-grid{grid-template-columns:1fr}.z19-zero19-card-actions .btn{flex:1 1 44%;justify-content:center}.z19-sync-settings-row{grid-template-columns:1fr}.z19-sync-settings-row .btn{width:100%;justify-content:center}}';
   document.head.appendChild(style);
+  style.textContent+='.z19-zero19-item{min-width:0;overflow-wrap:anywhere;display:flow-root}.z19-produced-action{display:flex;justify-content:flex-end;clear:both;margin-top:9px}.z19-produced-action .btn{min-height:44px;max-width:100%;white-space:normal;background:#fff;color:#111113;border:1px solid #fff;font-weight:800}.z19-produced-action .btn:disabled{opacity:.55;cursor:not-allowed}.z19-produced-action .btn:focus-visible{outline:3px solid #facc15;outline-offset:3px}@media(max-width:420px){.z19-produced-action .btn{width:100%;justify-content:center}}';
 }
 function digits(v){return String(v||'').replace(/\D/g,'')}
 function h(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -75,6 +76,7 @@ export function createZero19PdvSync(ctx){
   installStyles();
   const {supabase,app,shell,bindCommon,accountOwnerId,nav,toast,bucket,state,startUploadForWorkspace,startStandaloneHalftone,offerAfterUpload,queueTeamToFilm,queueAssetToFilm}=ctx;
   let cache=null,cacheAt=0,lastAutoSyncAt=0,autoSyncPromise=null,homeSelected='all',homeQuery='',countdownTimer=null,liveTimer=null,liveBusy=false;
+  const producedItemLocks=new Set();
   const planningUI=createProductionPlanningUI({supabase,load,toast,onSaved:async()=>{invalidate();if(productionViewActive())await refreshProductionViewAt(window.scrollY)}});
   function ensureLiveRefresh(){
     if(liveTimer)return;
@@ -129,6 +131,13 @@ export function createZero19PdvSync(ctx){
       const previewMap=new Map((previews.data||[]).map(row=>[row.path,row.signedUrl]));
       items=items.map(item=>({...item,_artworkPreview:previewMap.get(item.source_file_path)||null}));
     }
+    const privatePaths=[...new Set(items.filter(item=>item.metadata?.details?.[0]?.production?.storage_bucket==='z19p-private').map(item=>item.source_file_path||item.metadata?.details?.[0]?.production?.file_path).filter(Boolean))];
+    if(privatePaths.length){
+      const previews=await supabase.storage.from('z19p-private').createSignedUrls(privatePaths,600);
+      if(previews.error)throw previews.error;
+      const previewMap=new Map((previews.data||[]).map(row=>[row.path,row.signedUrl]));
+      items=items.map(item=>({...item,_artworkPreview:previewMap.get(item.source_file_path||item.metadata?.details?.[0]?.production?.file_path)||item._artworkPreview||null}));
+    }
     const projectIds=[...new Set(items.map(row=>row.project_id).filter(Boolean))];
     const pr=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds).order('source_order_created_at',{ascending:false,nullsFirst:false}):{data:[],error:null};
     if(pr.error)throw pr.error;
@@ -178,10 +187,11 @@ export function createZero19PdvSync(ctx){
   function invalidate(){cache=null;cacheAt=0}
   function productionViewActive(){const path=(location.hash.slice(1).split('?')[0]||'/');return path==='/'||path==='/zero19-fila'}
   function counts(summaries,standaloneHalftones=[]){const out={};for(const s of STAGE_ORDER)out[s]=0;for(const row of summaries)for(const stage of new Set(row.items.map(item=>item.stage)))if(out[stage]!=null)out[stage]++;out.awaiting_halftone+=(standaloneHalftones||[]).length;return out}
-  function itemLine(item){
+  function itemLine(item,{paused=false}={}){
     const title=item.text_value||item.garment_name||item.kind||'Personalização',garment=[item.garment_name,item.garment_color,item.garment_size].filter(Boolean).join(' · ');
     const production=item.metadata?.details?.[0]?.production||{};
-    return '<div class="z19-zero19-item">'+(item._artworkPreview?'<img src="'+h(item._artworkPreview)+'" loading="lazy" alt="Estampa do pedido" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:8px;float:left;margin:0 10px 8px 0">':'')+'<b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+(production.position_label?'<br><strong>Posição: '+h(production.position_label)+'</strong>':'')+(production.venduss_display_id?'<br>VENDUSS #'+h(production.venduss_display_id):'')+'</div>';
+    const canMarkProduced=['awaiting_art','art_received','awaiting_halftone','awaiting_font','ready_production','production'].includes(item.stage);
+    return '<div class="z19-zero19-item">'+(item._artworkPreview?'<img src="'+h(item._artworkPreview)+'" loading="lazy" alt="Estampa do pedido" style="width:64px;height:64px;object-fit:contain;background:#fff;border-radius:8px;float:left;margin:0 10px 8px 0">':'')+'<b>'+h(title)+'</b> · '+h(item.quantity)+' un.'+(garment?' · '+h(garment):'')+(production.position_label?'<br><strong>Posição: '+h(production.position_label)+'</strong>':'')+(production.venduss_display_id?'<br>VENDUSS #'+h(production.venduss_display_id):'')+(canMarkProduced?'<div class="z19-produced-action"><button class="btn" data-z19-produced-item="'+h(item.id)+'" aria-label="Já está pronta: '+h(title)+'"'+(paused?' disabled title="Retome a produção antes de concluir esta aplicação"':' title="Confirmar que somente esta aplicação já foi produzida"')+'>✓ Já está pronta</button></div>':'')+'</div>';
   }
   function card(summary){
     const p=summary.project,w=summary.workspace||{},stage=summary.stage,phone=digits(w.phone),actions=[],paused=Boolean(summary.pause||summary.printerPause),requiresProduction=!['ready_pickup','delivered','cancelled'].includes(stage);
@@ -189,7 +199,6 @@ export function createZero19PdvSync(ctx){
     const trackingItem=summary.items.find(item=>item.metadata?.public_tracking_token)||summary.items[0],trackingToken=trackingItem?.metadata?.public_tracking_token,trackingCode=trackingItem?.metadata?.personalization_code;
     for(const item of summary.items){
       const label=h(item.text_value||item.garment_name||'Personalização');
-      if(item.stage==='production')actions.push('<button class="btn primary" data-z19-complete-item="'+h(item.id)+'">Concluir · '+label+'</button>');
       if(item.stage==='awaiting_art')actions.push('<button class="btn primary" data-z19-upload-workspace="'+h(w.id)+'" data-project-id="'+h(p.id)+'" data-work-item-id="'+h(item.id)+'" data-sale-id="'+h(item.personalization_sale_id)+'">Subir arte · '+label+'</button>');
       if(item.stage==='art_received')actions.push('<button class="btn primary" data-z19-import-source="'+h(item.id)+'">Organizar · '+label+'</button>');
       if(item.stage==='awaiting_halftone')actions.push('<button class="btn primary" '+(item.asset_id?'data-z19-halftone-ready':'data-z19-import-source')+'="'+h(item.id)+'">'+(item.asset_id?'Halftone pronto':'Importar para halftone')+' · '+label+'</button>');
@@ -199,7 +208,7 @@ export function createZero19PdvSync(ctx){
     if(stage==='ready_production'){
       const fontSet=stageItem?.metadata?.font_set_id||stageItem?.metadata?.details?.[0]?.production?.font_set_id;
       if(fontSet&&['NAME_NUMBER','PHRASE'].includes(String(stageItem?.kind||'').toUpperCase()))actions.push('<button class="btn primary" data-z19-team-film="'+h(stageItem.id)+'">Adicionar ao filme</button>');
-      else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&stageItem?.without_application)actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
+      else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&(stageItem?.without_application||stageItem?.metadata?.details?.[0]?.production?.vdr_bundle_id))actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
       else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     }
     if(summary.items.every(item=>item.stage==='production'))actions.push('<button class="btn" data-z19-ready="'+h(p.id)+'">Concluir todas as personalizações</button>');
@@ -214,7 +223,7 @@ export function createZero19PdvSync(ctx){
     if(phone&&(trackingToken||trackingCode))actions.push('<button class="btn ghost" data-z19-status-link="'+h(trackingToken||'')+'" data-z19-status-code="'+h(trackingCode||'')+'" data-z19-status-phone="'+h(w.phone||'')+'" data-z19-status-order="'+h(orderNo(p))+'">Enviar acompanhamento</button>');
     const itemCount=Math.max(1,Number(summary.qty)||1),deadline=summary.promised?'<span class="z19-deadline-countdown" data-deadline-countdown="'+h(summary.promised)+'"></span><span>Entrega '+h(dt(summary.promised))+'</span>':'<span>Entrega sem prazo definido</span>';
     const pauseNotice=[summary.pause,summary.printerPause].filter(Boolean).map(pause=>'<div class="z19-order-pause"><strong>'+(pause.scope==='printer'?'Produção parada · impressora em manutenção':'Pedido parado')+' · '+h(pause.reason||'Motivo não registrado')+'</strong><span data-pause-elapsed="'+h(pause.started_at)+'"></span>'+(pause.note&&pause.note!==pause.reason?'<small>'+h(pause.note)+'</small>':'')+'</div>').join('');
-    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue ':'')+(paused?'is-paused':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div class="z19-card-stage" data-stage="'+h(stage)+'"'+(paused?' data-paused="true"':'')+'><b>'+h(paused?'Pedido parado':STAGE_LABELS[stage]||stage)+'</b><small><strong>'+h(itemCount)+'</strong> '+(itemCount===1?'item':'itens')+'</small></div></div>'+pauseNotice+'<div class="z19-zero19-meta">'+deadline+(summary.risk&&!summary.overdue?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'</div>'+(summary.progress?.total?'<div style="padding:10px;border-radius:12px;background:#182c29;color:#c7f9df;font-size:12px"><strong>'+h(summary.progress.label)+'</strong><br>'+h(summary.progress.detail)+'</div>':'')+'<div class="z19-zero19-items">'+summary.items.map(item=>itemLine(item)+'<small>'+h(STAGE_LABELS[item.stage]||item.stage)+'</small>').join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
+    return '<article class="z19-zero19-card '+(summary.overdue||summary.risk?'overdue ':'')+(paused?'is-paused':'')+'" data-stage="'+h(stage)+'"><div class="z19-zero19-card-head"><div><div class="z19-zero19-order">PEDIDO #'+h(orderNo(p))+'</div><h3>'+h(w.client_name||w.company_name||'Cliente')+'</h3><small>'+h(w.phone||'Sem WhatsApp')+'</small></div><div class="z19-card-stage" data-stage="'+h(stage)+'"'+(paused?' data-paused="true"':'')+'><b>'+h(paused?'Pedido parado':STAGE_LABELS[stage]||stage)+'</b><small><strong>'+h(itemCount)+'</strong> '+(itemCount===1?'item':'itens')+'</small></div></div>'+pauseNotice+'<div class="z19-zero19-meta">'+deadline+(summary.risk&&!summary.overdue?'<span class="z19-sync-overdue">RISCO DE ATRASO · previsão '+h(dt(summary.predicted))+'</span>':'')+'</div>'+(summary.progress?.total?'<div style="padding:10px;border-radius:12px;background:#182c29;color:#c7f9df;font-size:12px"><strong>'+h(summary.progress.label)+'</strong><br>'+h(summary.progress.detail)+'</div>':'')+'<div class="z19-zero19-items">'+summary.items.map(item=>itemLine(item,{paused})+'<small>'+h(STAGE_LABELS[item.stage]||item.stage)+'</small>').join('')+'</div><div class="z19-zero19-card-actions">'+actions.join('')+'</div></article>';
   }
   async function enhanceDashboard(){
     try{
@@ -276,6 +285,7 @@ export function createZero19PdvSync(ctx){
     root.querySelectorAll('[data-z19-asset-film]').forEach(b=>b.onclick=()=>addAssetToFilm(b.dataset.z19AssetFilm));
     root.querySelectorAll('[data-z19-ready]').forEach(b=>b.onclick=()=>markReady(b.dataset.z19Ready,b));
     root.querySelectorAll('[data-z19-complete-item]').forEach(b=>b.onclick=()=>completeItem(b.dataset.z19CompleteItem,b));
+    root.querySelectorAll('[data-z19-produced-item]').forEach(b=>b.onclick=()=>markItemProduced(b.dataset.z19ProducedItem,b));
     root.querySelectorAll('[data-z19-force-ready]').forEach(b=>b.onclick=()=>forceReady(b.dataset.z19ForceReady));
     root.querySelectorAll('[data-z19-notify]').forEach(b=>b.onclick=()=>notifyProject(b.dataset.z19Notify));
     root.querySelectorAll('[data-z19-delivered]').forEach(b=>b.onclick=()=>markDelivered(b.dataset.z19Delivered));
@@ -531,6 +541,23 @@ export function createZero19PdvSync(ctx){
     const data=await load(true);
     return data.items.filter(item=>item.stage==='ready_production'&&item.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks').map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
   }
+  async function pendingVdrFilmRows(){
+    const data=await load(true);
+    return data.items.filter(item=>item.stage==='ready_production'&&item.asset_id&&item.metadata?.details?.[0]?.production?.vdr_bundle_id).map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
+  }
+  async function prepareVdrFilmItem(workItemId){
+    const owner=accountOwnerId(),item=(await pendingVdrFilmRows()).find(row=>row.id===workItemId);
+    if(!item)throw new Error('A estampa VDR não está mais aguardando produção. Atualize a seleção.');
+    const production=item.metadata?.details?.[0]?.production||{},width=Number(production.width_cm),height=Number(production.height_cm);
+    if(!(width>0&&height>0))throw new Error('Confira as medidas desta aplicação VDR antes de montar o filme.');
+    const [asset,current]=await Promise.all([supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',owner).single(),supabase.from('z19p_zero19_work_items').select('stage,asset_id,metadata').eq('id',item.id).eq('owner_id',owner).single()]);
+    if(asset.error||current.error)throw asset.error||current.error;
+    if(owner!==accountOwnerId()||current.data.stage!=='ready_production'||current.data.asset_id!==item.asset_id||JSON.stringify(current.data.metadata?.details?.[0]?.production)!==JSON.stringify(production))throw new Error('O pedido ou a liberação mudou. Abra a seleção novamente.');
+    const companyName=item.summary.workspace?.client_name||item.summary.workspace?.company_name||'Cliente ZERO19';
+    // Per-order measures must never overwrite the reusable source-art profile.
+    const profile={asset_id:asset.data.id,default_width_cm:width,default_height_cm:height,aspect_ratio:width/height,halftone:Boolean(production.needs_halftone),rotation_policy:'180',allow_internal_nesting:!production.needs_halftone,ready_for_print:true};
+    return {...filmItemFromLibraryAsset(asset.data,profile,{quantity:item.quantity,companyName}),storageBucket:production.storage_bucket||asset.data.metadata?.storage_bucket||'z19p-assets',officialProjectId:item.project_id,officialOrderRef:orderNo(item.summary.project),externalOrderItemRef:item.personalization_sale_id,productionGroupKeys:['order:'+item.project_id],zero19WorkItemId:item.id};
+  }
   async function prepareVendussFilmItem(workItemId){
     const owner=accountOwnerId(),item=(await pendingVendussFilmRows()).find(row=>row.id===workItemId);
     if(!item)throw new Error('O pedido Venduss não está mais aguardando produção. Atualize a seleção.');
@@ -559,7 +586,7 @@ export function createZero19PdvSync(ctx){
     queueAssetToFilm?.({
       workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
       personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
-      assetId,quantity:item.quantity||1
+      assetId,quantity:item.quantity||1,vdrBundleId:item.metadata?.details?.[0]?.production?.vdr_bundle_id||null
     });
   }
   async function addTeamToFilm(workItemId){
@@ -570,7 +597,7 @@ export function createZero19PdvSync(ctx){
     queueTeamToFilm?.({
       workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
       personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
-      fontSetId,name:production.top_text||'',number:production.number||'',quantity:item.quantity||1
+      fontSetId,name:production.top_text||'',number:production.number||'',quantity:item.quantity||1,letterHeightCm:production.letter_height_cm||production.name_height_cm||null,nameMaxWidthCm:production.name_max_width_cm||production.max_text_width_cm||null
     });
   }
   async function markFontReady(id){
@@ -585,7 +612,7 @@ export function createZero19PdvSync(ctx){
     });
   }
   async function forceReady(projectId){
-    if(!projectId||!await confirmAction({eyebrow:'FINALIZAR PEDIDO INTEIRO',title:'Todas as personalizações estão concluídas?',message:'Esta ação conclui TODAS, inclusive itens que aparecem com pendências. Para concluir apenas uma, use o botão Concluir ao lado dela. Confirme somente se o pedido inteiro já estiver pronto.',confirmLabel:'Sim, todas estão prontas'}))return;
+    if(!projectId||!await confirmAction({eyebrow:'FINALIZAR PEDIDO INTEIRO',title:'Todas as personalizações estão concluídas?',message:'Esta ação conclui TODAS, inclusive itens que aparecem com pendências. Para concluir apenas uma, use o botão Já está pronta ao lado dela. Confirme somente se o pedido inteiro já estiver pronto.',confirmLabel:'Sim, todas estão prontas'}))return;
     const {error}=await supabase.rpc('z19p_zero19_force_stage',{p_project_id:projectId,p_stage:'ready_pickup'});
     if(error)return toast(error.message,'err');
     invalidate();toast('Pedido finalizado e movido para Pronto para retirada.','ok');
@@ -598,6 +625,19 @@ export function createZero19PdvSync(ctx){
       const {error}=await supabase.rpc('z19p_zero19_complete_work_item',{p_work_item_id:id});if(error)throw error;
       invalidate();toast('Personalização concluída. As demais etapas foram preservadas.','ok');await refreshProductionViewAt(scrollTop);
     }catch(error){toast(error.message,'err');button.disabled=false;}
+  }
+  async function markItemProduced(id,button){
+    if(!id||producedItemLocks.has(id)||button?.disabled)return;
+    producedItemLocks.add(id);if(button)button.disabled=true;
+    const scrollTop=window.scrollY;
+    try{
+      const confirmed=await confirmAction({eyebrow:'APLICAÇÃO JÁ PRODUZIDA',title:'Esta aplicação já foi produzida?',message:'Ela sairá da fila; demais aplicações permanecem. Confirme somente se esta aplicação já está pronta, não apenas o arquivo da arte.',confirmLabel:'Sim, já está pronta'});
+      if(!confirmed)return;
+      const {error}=await supabase.rpc('z19p_zero19_mark_work_item_produced',{p_work_item_id:id});if(error)throw error;
+      invalidate();toast('Aplicação concluída. As demais aplicações permanecem no fluxo.','ok');
+      if(productionViewActive())await refreshProductionViewAt(scrollTop);
+    }catch(error){toast(error?.message||'Não foi possível concluir esta aplicação. Tente novamente.','err');}
+    finally{producedItemLocks.delete(id);if(button)button.disabled=false;}
   }
   async function refreshProductionViewAt(scrollTop){
     if(location.hash.includes('/zero19-fila'))await renderQueue({loading:false});else await renderHome({loading:false});
@@ -734,5 +774,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress};
 }

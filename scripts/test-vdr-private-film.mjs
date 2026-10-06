@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {createAssetUrlResolver} from '../private-asset-urls.js';
+import {filmItemFromLibraryAsset} from '../film-picker.js';
+import {sanitizeFilmDraft} from '../film-draft.js';
+
+let clock=1000,calls=0,publicCalls=0;
+const signed=path=>({path,signedUrl:'https://fixture.invalid/signed/'+(++calls)+'/'+path});
+const resolver=createAssetUrlResolver({now:()=>clock,publicUrl:path=>{publicCalls++;return 'https://fixture.invalid/public/'+path},supabase:{storage:{from:bucket=>{assert.equal(bucket,'z19p-private');return {createSignedUrl:async path=>({data:signed(path)}),createSignedUrls:async paths=>({data:paths.map(signed)})}}}}});
+const asset={id:'vdr-art',asset_type:'arte',name:'Estampa importada',width:3543,height:4252,original_path:'owner/original.png',processed_path:'owner/prepared.png',metadata:{storage_bucket:'z19p-private'}};
+assert.equal(resolver.pathUrl('legacy.png'),'https://fixture.invalid/public/legacy.png');
+resolver.register(asset);assert.equal(resolver.pathUrl(asset.processed_path),'','Never expose a private path using a public-bucket URL');
+await resolver.hydrate([asset]);assert.match(await resolver.sourceUrl(asset),/signed/);assert.equal(calls,2);assert.equal(publicCalls,1);
+clock+=850000;assert.equal(resolver.pathUrl(asset.processed_path),'');assert.match(await resolver.sourceUrl(asset),/signed\/3\//);
+const item=filmItemFromLibraryAsset(asset,{asset_id:asset.id,default_width_cm:30,default_height_cm:36,ready_for_print:true},{quantity:2,companyName:'Cliente'});
+assert.equal(item.path,asset.processed_path);assert.equal(item.storageBucket,'z19p-private');assert.equal(item.widthCm,30);assert.equal(item.heightCm,36);assert.equal(item.quantity,2);
+const restored=sanitizeFilmDraft({version:1,ownerId:'owner',items:[item],settings:{}}).data.items[0];assert.equal(restored.storageBucket,'z19p-private');assert.equal(restored.path,asset.processed_path);assert.ok(!JSON.stringify(restored).includes('signed/'));
+const production=fs.readFileSync(new URL('../production-v217.js',import.meta.url),'utf8');
+assert.match(production,/await ctx\.assetUrls\?\.hydrate\(filmItems\)/);
+assert.match(production,/image\.src=await ctx\.assetUrls\?\.sourceUrl\(\{\.\.\.item,path:source\}\)/);
+assert.match(production,/const source=item\.type==='asset'.*await ctx\.assetUrls\?\.sourceUrl\(item\)/);
+const sync=fs.readFileSync(new URL('../zero19-pdv-sync.js',import.meta.url),'utf8');assert.match(sync,/const profile=\{asset_id:asset\.data\.id,/);
+const editor=fs.readFileSync(new URL('../art-studio.js',import.meta.url),'utf8');assert.match(editor,/const bucket=asset\.metadata\?\.storage_bucket==='z19p-private'\?'z19p-private':'z19p-assets'/);assert.match(editor,/storage\.from\(bucket\)\.upload/);
+resolver.clear();assert.equal(resolver.isPrivatePath(asset.processed_path),false);
+console.log('PASS VDR private assets: no public fallback, expiring memory signatures, per-application film dimensions, private bucket persists in drafts, PNG/TIFF/masks use signed source, source profile unchanged');
