@@ -1,5 +1,7 @@
 # Regras do dono — Personalizações ZERO19
 
+- Estúdio — compatibilidade da prévia (06/10, incidente): PNG gerado pelo próprio navegador não deve bloquear a finalização por informações numéricas legítimas de cor. Preparar somente a prévia recém-renderizada em sRGB, removendo metadados acessórios sem alterar pixels/escala, originais ou arquivos de produção. Validar o contrato captura → servidor, incluindo RGB/RGBA e encoders móveis; preservar montagem e frete em falhas recuperáveis, sem exibir instruções técnicas de arquivo ao cliente.
+
 - Endereço/frete (06/10, incidente): preservar bairro/complemento completos do cadastro de envio na continuidade para PDV. Limites legados de banco não devem truncar endereço silenciosamente; limite de provedor deve ser comprovado e tratado somente no payload correspondente, sem apagar cadastro/pedido/original. Imagem Docker do frontend valida `nginx -t` antes de publicação.
 
 - Filme — altura e espaços (06/10, correção urgente): frases longas NUNCA reduzem automaticamente a altura das letras para caber na largura da camisa/filme. Conservar corpo físico da fonte/snapshot; separação opt-in somente nos espaços, cada palavra inteira movimentável/rotacionável. Tamanho permite editar a altura de todas as palavras do conjunto; restaurar altura padrão de rascunho antigo é explícito, não reescrever filmes/históricos automaticamente.
