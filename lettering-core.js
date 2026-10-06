@@ -20,7 +20,7 @@ export function measureLetteringLine(text,{heightCm,trackingCm=0,glyphs=[],fontS
     if(char===' ')return {kind:'space',char,metrics,source};
     const ascent=Number(metrics.actualBoundingBoxAscent),descent=Number(metrics.actualBoundingBoxDescent),left=Number(metrics.actualBoundingBoxLeft),right=Number(metrics.actualBoundingBoxRight);
     if(![ascent,descent,left,right].every(Number.isFinite)||ascent+descent<=0||left+right<=0)throw new Error(`Não foi possível medir o desenho de “${char}”. Confira a fonte ou cadastre o SVG deste caractere.`);
-    return {kind:'font',char,source,metrics:{ascent,descent,left,right}};
+    return {kind:'font',char,source,...(metrics.fontFamily?{fontFamily:metrics.fontFamily}:{}),...(metrics.symbolFallback?{symbolFallback:true}:{}),metrics:{ascent,descent,left,right}};
   });
   const fontParts=parts.filter(part=>part.kind==='font'),maxAscent=Math.max(0,...fontParts.map(part=>part.metrics.ascent)),maxDescent=Math.max(0,...fontParts.map(part=>part.metrics.descent)),fontInkHeight=maxAscent+maxDescent;
   let cursor=0;

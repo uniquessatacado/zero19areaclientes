@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {measureLetteringItem} from '../lettering-core.js';
+import {letteringFontForCharacter,SYMBOL_FONT_FALLBACK} from '../lettering-symbols.js';
+import {parseFontCmap} from '../font-cmap.js';
+const coverage={hasGlyph:char=>/^[A-ZÁÉÇ0-9.]$/.test(char)};
+for(const char of ['“','”','#',',','?','!','–','&'])assert.deepEqual(letteringFontForCharacter(char,'official',coverage),{fontFamily:SYMBOL_FONT_FALLBACK,fallback:true});
+for(const char of ['H','Á','2','.'])assert.deepEqual(letteringFontForCharacter(char,'official',coverage),{fontFamily:'"official"',fallback:false});
+for(const char of ['Ж','œ','\u200b','\u0000'])assert.throws(()=>letteringFontForCharacter(char,'official',coverage));
+assert.throws(()=>letteringFontForCharacter('H','',coverage));
+const source=fs.readFileSync(new URL('../production-v217.js',import.meta.url),'utf8');
+const layoutFunction=source.includes('  async function prepareLegacyLetteringLayout(')?'prepareLegacyLetteringLayout':'prepareLetteringLayout';
+const start=source.indexOf(`  async function ${layoutFunction}(`),end=source.indexOf('  function customizationDefaults(',start);
+assert(start>=0&&end>start,'real renderer boundaries present in source and transformed release');
+const drawCalls=[];
+const measure={measureText(char){return {width:char===' '?300:500,actualBoundingBoxAscent:700,actualBoundingBoxDescent:0,actualBoundingBoxLeft:0,actualBoundingBoxRight:char===' '?0:500};}};
+const context={measureLetteringItem,letteringFontForCharacter,loadOfficialFont:async()=> 'official',fontCoverageByFamily:new Map([['official',coverage]]),document:{createElement:()=>({getContext:()=>measure})},glyphAspect:()=>.6};
+const api=vm.runInNewContext(source.slice(start,end)+`;({prepareLetteringLayout:${layoutFunction},drawPreparedLetteringLine})`,context);
+const item={name:'“IGUAL, SIM!” #',number:'22',nameHeightCm:5.5,numberHeightCm:28,fontSource:{id:'font'},fontSources:[],glyphs:[]};
+const layout=await api.prepareLetteringLayout(item);
+assert.equal(layout.nameLine.text,item.name);assert.equal(layout.numberLine.text,'22');
+const context2={save(){},restore(){},translate(){},scale(){},fillText(char){drawCalls.push({char,font:this.font});}};
+await api.drawPreparedLetteringLine(context2,layout.nameLine,layout.families,0,0,'#267B3B');
+for(const call of drawCalls)assert.equal(call.font,`1000px ${coverage.hasGlyph(call.char)?'"official"':SYMBOL_FONT_FALLBACK}`);
+assert.equal(layout.nameLine.parts.filter(p=>p.symbolFallback).length,5);
+const mapped=await api.prepareLetteringLayout({...item,name:'#H',number:'',glyphs:[{glyph_key:'#',svg_markup:'<svg/>',source_kind:'vector'}]});
+assert.equal(mapped.nameLine.parts[0].kind,'vector','mapped official SVG wins over fallback');
+assert(!mapped.nameLine.parts[0].symbolFallback);
+assert.match(source,/settings:orderCustomizationSettings\(entry.row.set,p\)/,'thumbnail uses the order physical recipe');
+assert.match(source,/Fonte alternativa apenas nos sinais/,'fallback is explicit, not silent');
+if(process.argv[2]){
+ const actual=parseFontCmap(fs.readFileSync(process.argv[2]));
+ for(const char of ['A','B','H','2'])assert(actual.hasGlyph(char),'official font contains '+char);
+ for(const char of ['“','”','#',',','?','!'])assert.equal(letteringFontForCharacter(char,'official',actual).fallback,!actual.hasGlyph(char));
+ console.log(JSON.stringify({realOfficialFontChecked:true,format:actual.format,quotesPresent:actual.hasGlyph('“')&&actual.hasGlyph('”'),officialLettersPreserved:true}));
+}
+console.log('PASS real lettering renderer: curly quotes/#/punctuation retain text, official letters/digits/SVG remain official, thumbnail/film share fonts and order measures; no production writes.');

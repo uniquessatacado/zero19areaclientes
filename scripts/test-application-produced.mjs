@@ -23,8 +23,8 @@ assert.match(source,/root\.querySelectorAll\('\[data-z19-produced-item\]'\)/,'cl
 
 const handlerSource=source.slice(source.indexOf('  async function markItemProduced('),source.indexOf('  async function refreshProductionViewAt('));
 const locks=new Set(),calls=[],toasts=[],refreshes=[];
-let confirmation=true,rpcError=null,confirmCalls=0,invalidateCalls=0,active=true,confirmationSpec;
-const context={producedItemLocks:locks,window:{scrollY:725},confirmAction:async spec=>{confirmCalls++;confirmationSpec=spec;return typeof confirmation==='function'?confirmation():confirmation;},supabase:{rpc:async(name,args)=>{calls.push({name,args});return {error:rpcError};}},invalidate:()=>invalidateCalls++,toast:(...args)=>toasts.push(args),productionViewActive:()=>active,refreshProductionViewAt:async value=>refreshes.push(value)};
+let confirmation=true,rpcError=null,confirmCalls=0,invalidateCalls=0,active=true,confirmationSpec,actor='employee',owner='owner';
+const context={state:()=>({session:{user:{id:actor}}}),accountOwnerId:()=>owner,producedItemLocks:locks,window:{scrollY:725},confirmAction:async spec=>{confirmCalls++;confirmationSpec=spec;return typeof confirmation==='function'?confirmation():confirmation;},supabase:{rpc:async(name,args)=>{calls.push({name,args});return {error:rpcError};}},invalidate:()=>invalidateCalls++,toast:(...args)=>toasts.push(args),productionViewActive:()=>active,refreshProductionViewAt:async value=>refreshes.push(value)};
 const action=vm.runInNewContext(handlerSource+';markItemProduced',context);
 const button={disabled:false};
 confirmation=false;await action('one',button);
@@ -43,6 +43,13 @@ rpcError={message:'Retome a produção antes de concluir.'};confirmation=true;aw
 assert.equal(toasts.at(-1)[1],'err');assert.equal(button.disabled,false);assert.equal(locks.size,0);assert.equal(invalidateCalls,2,'error keeps data cache');
 rpcError=null;await action('error',button);assert.equal(invalidateCalls,3,'retry recovers');
 active=false;await action('route-changed',button);assert.equal(refreshes.length,3,'completion cannot redraw a different page');
+const callsBeforeScopeChange=calls.length;
+confirmation=()=>new Promise(resolve=>{releaseConfirm=resolve;});
+const staleActor=action('stale-actor',button);actor='new-employee';releaseConfirm(true);await staleActor;
+assert.equal(calls.length,callsBeforeScopeChange,'changed account cannot execute an old confirmation');
+let currentRoute=true;const staleRoute=action('stale-route',button,()=>currentRoute);currentRoute=false;releaseConfirm(true);await staleRoute;
+assert.equal(calls.length,callsBeforeScopeChange,'film route change cannot execute an old confirmation');
+assert.equal(button.disabled,false);assert.equal(locks.size,0);
 
 const migration=fs.readFileSync(new URL('../supabase/migrations/20261006122406_zero19_mark_application_produced.sql',import.meta.url),'utf8');
 assert.doesNotMatch(migration,/update public\.z19p_assets\b/,'shared files remain unchanged');

@@ -631,17 +631,19 @@ export function createZero19PdvSync(ctx){
       invalidate();toast('Personalização concluída. As demais etapas foram preservadas.','ok');await refreshProductionViewAt(scrollTop);
     }catch(error){toast(error.message,'err');button.disabled=false;}
   }
-  async function markItemProduced(id,button){
-    if(!id||producedItemLocks.has(id)||button?.disabled)return;
+  async function markItemProduced(id,button,isCurrent=()=>true){
+    const actor=state()?.session?.user?.id,account=accountOwnerId();
+    if(!id||!actor||!account||!isCurrent()||producedItemLocks.has(id)||button?.disabled)return false;
     producedItemLocks.add(id);if(button)button.disabled=true;
     const scrollTop=window.scrollY;
     try{
       const confirmed=await confirmAction({eyebrow:'APLICAÇÃO JÁ PRODUZIDA',title:'Esta aplicação já foi produzida?',message:'Ela sairá da fila; demais aplicações permanecem. Confirme somente se esta aplicação já está pronta, não apenas o arquivo da arte.',confirmLabel:'Sim, já está pronta'});
-      if(!confirmed)return;
+      if(!confirmed||!isCurrent()||actor!==state()?.session?.user?.id||account!==accountOwnerId())return false;
       const {error}=await supabase.rpc('z19p_zero19_mark_work_item_produced',{p_work_item_id:id});if(error)throw error;
       invalidate();toast('Aplicação concluída. As demais aplicações permanecem no fluxo.','ok');
       if(productionViewActive())await refreshProductionViewAt(scrollTop);
-    }catch(error){toast(error?.message||'Não foi possível concluir esta aplicação. Tente novamente.','err');}
+      return true;
+    }catch(error){toast(error?.message||'Não foi possível concluir esta aplicação. Tente novamente.','err');return false;}
     finally{producedItemLocks.delete(id);if(button)button.disabled=false;}
   }
   async function refreshProductionViewAt(scrollTop){
@@ -779,5 +781,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
 }
