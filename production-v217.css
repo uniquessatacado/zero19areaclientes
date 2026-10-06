@@ -69,3 +69,4 @@
 .film-pending-error{padding:10px;border:1px solid #da7878;border-radius:10px;color:#ffc7c7}
 .film-pending-modal .modal-footer{flex-wrap:wrap;flex-shrink:0;gap:8px}
 @media(max-width:520px){.film-pending-row{grid-template-columns:18px 64px minmax(0,1fr);gap:8px;padding:9px}.film-pending-preview{height:64px}.film-pending-copy{font-size:12px}.film-pending-modal .modal-footer .primary{width:100%;white-space:normal}}
+.film-item-edit [data-separate-film-phrase],.film-item-edit [data-reunite-film-phrase]{grid-column:1/-1;min-height:44px!important;background:#fff;color:#111113;border:1px solid #94a3b8;font-size:12px!important;font-weight:750}.film-phrase-note{display:block;margin-top:8px;font-size:11px!important;line-height:1.45;color:#bcc6d5}

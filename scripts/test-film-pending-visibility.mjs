@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
+import {assertCompleteFilmPhrases} from '../film-phrase-parts.js';
 
 const source=readFileSync(new URL('../production-v217.js',import.meta.url),'utf8');
 const start=source.indexOf('    const drawOrders=()=>{'),end=source.indexOf('    const refreshOrders=async()=>',start);
@@ -28,7 +29,7 @@ assert.match(button.innerHTML,/>0<\/b>/,'VDR leaves the counter only when no lon
 const workflow=readFileSync(new URL('../official-order-workflow.js',import.meta.url),'utf8');
 const groupStart=workflow.indexOf('  function exportGroups('),groupEnd=workflow.indexOf('\n  return {loadPositions',groupStart);
 assert(groupStart>=0&&groupEnd>groupStart);
-const calls=[],api=runInNewContext(workflow.slice(groupStart,groupEnd)+'\n({markProduction})',{supabase:{rpc:async(name,args)=>{calls.push({name,args});return {data:{projects:1,placements:0}};}}});
+const calls=[],api=runInNewContext(workflow.slice(groupStart,groupEnd)+'\n({markProduction})',{assertCompleteFilmPhrases,supabase:{rpc:async(name,args)=>{calls.push({name,args});return {data:{projects:1,placements:0}};}}});
 const items=[{officialProjectId:'zero19-a'},{officialProjectId:'zero19-b'},{officialProjectId:'venduss'}];
 await api.markProduction(items,[]);assert.equal(calls.length,0,'unchecked export changes no production status');
 await api.markProduction(items,['order:venduss']);

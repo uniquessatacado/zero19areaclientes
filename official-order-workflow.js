@@ -1,5 +1,7 @@
 import {loadBlankShirtCatalog,realMockupPreview,renderPieceMockup,colorForCatalog,modelForCatalog} from './manual-shirt-catalog.js?v=2.17.22';
 import {preparePrintArt} from './print-art-preparation.js?v=2.17.44';
+import {assertCompleteFilmPhrases} from './film-phrase-parts.js?v=2.17.50';
+import {verifyFilmLetteringRevisions} from './film-lettering-revisions.js?v=2.17.50';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -464,11 +466,14 @@ export function createOfficialOrderWorkflow(ctx){
     }
     return [...groups.values()].map(group=>({...group,placementIds:[...new Set(group.placementIds)]}));
   }
-  async function markProduction(items,selectedGroupKeys){
+  async function markProduction(items,selectedGroupKeys,layout=null){
+    assertCompleteFilmPhrases(items,layout);
     const selected=new Set(selectedGroupKeys||[]),groups=exportGroups(items).filter(group=>selected.has(group.key));if(!groups.length)return {projects:0,placements:0};
     const projectIds=[...new Set(groups.map(group=>group.projectId).filter(Boolean))],placementIds=[...new Set(groups.flatMap(group=>group.placementIds))];
     const saleIds=[...new Set(items.filter(item=>item.zero19WorkItemId&&projectIds.includes(item.officialProjectId||item.projectId)).map(item=>item.externalOrderItemRef).filter(value=>/^[0-9a-f-]{36}$/i.test(String(value))))];
-    const {data,error}=await supabase.rpc('z19p_mark_selected_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds,p_sale_ids:saleIds});if(error)throw error;return data||{projects:0,placements:0};
+    const lettering=items.filter(item=>item.type==='team_customization'&&item.zero19WorkItemId&&projectIds.includes(item.officialProjectId||item.projectId)),expected=[...new Map(lettering.map(item=>[item.zero19WorkItemId,{work_item_id:item.zero19WorkItemId,personalization_sale_id:item.externalOrderItemRef,lettering_revision:item.letteringRevision??null,quantity:Number(item.applicationQuantity??item.quantity),font_set_id:item.customizationSetId||item.sourceId,production:item.letteringProductionSnapshot}])).values()];
+    if(expected.length){const account=owner(),actor=user();await verifyFilmLetteringRevisions({supabase,ownerId:account,items:lettering,isCurrent:()=>account===owner()&&actor===user()});}
+    const {data,error}=await supabase.rpc(expected.length?'z19p_mark_selected_order_production_lettering':'z19p_mark_selected_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds,p_sale_ids:saleIds,...(expected.length?{p_expected_lettering:expected}:{})});if(error)throw error;return data||{projects:0,placements:0};
   }
   return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows,pendingFilmItems:(rows,quantities)=>filmItemsFromPending(rows,quantities)};
 }

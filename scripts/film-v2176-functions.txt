@@ -43,7 +43,7 @@
     const page=app.querySelector('.film-page');if(!page)return;
     let tools=page.querySelector('[data-film-tools]');if(tools)tools.remove();
     tools=document.createElement('section');tools.dataset.filmTools='';tools.className='film-draft-toolbar';
-    const hasNames=filmItems.some(i=>i.type==='team_customization'&&(i.name||i.number)&&!i.vectorSource);
+    const hasNames=filmItems.some(i=>i.type==='team_customization'&&(i.name||i.number)&&!i.vectorSource&&!i.phraseManifests?.length&&!i.zero19WorkItemId);
     tools.innerHTML='<div class="film-draft-toolbar-title"><div><small>ARQUIVO DE TRABALHO</small><b>Filme atual</b></div><span>O rascunho fica salvo na nuvem enquanto você trabalha.</span></div><div class="film-draft-toolbar-actions"><button class="btn" data-save-named '+(!filmItems.length?'disabled':'')+'>Salvar rascunho</button><button class="btn primary" data-new-film>Novo filme</button><button class="btn" data-open-named>Abrir rascunhos</button><button class="btn film-clear-button" data-clear-film '+(!filmItems.length?'disabled':'')+'>Limpar filme</button><button class="btn film-proof-button" data-proof-names '+(!hasNames?'disabled':'')+'>Conferir nomes</button></div>';
     page.querySelector('.simple-hero').insertAdjacentElement('afterend',tools);
     const saved=createSavedFilmDrafts({supabase,owner,user:uid});
@@ -88,7 +88,7 @@
       mountFilmTools(media);filmDraftBanner();ctx.toast('Filme limpo.','ok');
     };
     tools.querySelector('[data-proof-names]').onclick=()=>{
-      const candidates=filmItems.filter(item=>item.type==='team_customization'&&(item.name||item.number)&&!item.vectorSource);
+      const candidates=filmItems.filter(item=>item.type==='team_customization'&&(item.name||item.number)&&!item.vectorSource&&!item.phraseManifests?.length&&!item.zero19WorkItemId);
       if(!candidates.length)return;
       const modal=document.createElement('div'),focus=document.activeElement;modal.className='modal-backdrop film-proof-backdrop';
       modal.innerHTML='<div class="modal wide film-proof-modal" role="dialog" aria-modal="true"><div class="modal-head"><div><div class="eyebrow">CONFERÊNCIA ANTES DE IMPRIMIR</div><h2>Conferir e editar nomes</h2><p>Corrija nome, número ou quantidade. Você também pode remover uma linha do filme.</p></div><button class="btn ghost small" data-close aria-label="Fechar">×</button></div><div class="film-proof-list">'+candidates.map((item,index)=>'<article class="film-proof-row" data-proof-id="'+h(item.localId)+'"><span class="film-proof-index">'+h(index+1)+'</span><div class="field"><label>Nome</label><input data-proof-name value="'+h(item.name||'')+'" autocomplete="off"></div><div class="field"><label>Número</label><input data-proof-number value="'+h(item.number||'')+'" autocomplete="off"></div><div class="field film-proof-qty"><label>Qtd.</label><input data-proof-quantity type="number" min="1" max="999" value="'+h(item.quantity||1)+'" inputmode="numeric"></div><button class="btn film-proof-remove" data-remove-proof type="button">Remover</button></article>').join('')+'</div><p class="film-proof-note">Ao salvar, o sistema refaz a prévia e atualiza o encaixe. A medida física configurada para letras e números é preservada.</p><div class="modal-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" data-save-proof>Salvar e atualizar filme</button></div></div>';

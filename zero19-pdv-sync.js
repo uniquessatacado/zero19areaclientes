@@ -601,7 +601,7 @@ export function createZero19PdvSync(ctx){
     queueTeamToFilm?.({
       workItemId:item.id,projectId:summary.project.id,orderRef:orderNo(summary.project),
       personalizationSaleId:item.personalization_sale_id,clientName:summary.workspace?.client_name||summary.workspace?.company_name||'Cliente ZERO19',
-      fontSetId,name:production.top_text||'',number:production.number||'',quantity:item.quantity||1,letterHeightCm:production.letter_height_cm||production.name_height_cm||null,nameMaxWidthCm:production.name_max_width_cm||production.max_text_width_cm||null
+      fontSetId,name:production.top_text||'',number:production.number||'',quantity:item.quantity||1,letteringRevision:item.metadata?.lettering_revision??null,applicationQuantity:Number(item.quantity)||1,letteringProductionSnapshot:structuredClone(production),letterHeightCm:production.letter_height_cm||production.name_height_cm||null,nameMaxWidthCm:production.name_max_width_cm||production.max_text_width_cm||null
     });
   }
   async function markFontReady(id){

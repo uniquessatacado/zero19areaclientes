@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {removeFilmEntry} from '../film-edit-core.js';
 import {rotatedBoundsMm} from '../nesting-core.js';
 import {mountFilmPreview as mountRealPreview} from '../film-preview.js';
+import {assertCompleteFilmPhrases} from '../film-phrase-parts.js';
 
 const clone=value=>JSON.parse(JSON.stringify(value));
 const items=[{localId:'a',sourceId:'asset-a',type:'asset',quantity:3,widthCm:2,heightCm:1,rotationPolicy:'90',label:'A'},{localId:'b',sourceId:'asset-b',type:'asset',quantity:1,widthCm:3,heightCm:2,rotationPolicy:'none',label:'B'}];
@@ -34,7 +35,7 @@ assert.deepEqual({items,layout},before,'original snapshot never mutated');
 // Use the actual export/job snapshot validator, not a parallel reimplementation.
 const source=await readFile(new URL('../production-v217.js',import.meta.url),'utf8');
 const snapshotCode=source.slice(source.indexOf('  function checkedFilmSnapshot('),source.indexOf('  function reviewLegacyFilmLettering('));
-const checked=new Function('rotatedBoundsMm',snapshotCode+';return checkedFilmSnapshot;')(rotatedBoundsMm);
+const checked=new Function('rotatedBoundsMm','assertCompleteFilmPhrases',snapshotCode+';return checkedFilmSnapshot;')(rotatedBoundsMm,assertCompleteFilmPhrases);
 for(const result of [all,bRemoved,...[0,1,2].map(copy=>removeFilmEntry(items,layout,{id:'a',copy}))]){
   const checkedSnapshot=checked({filmItems:result.items,lastFilm:result.layout});
   assert.equal(checkedSnapshot.layout.lengthMm,400,'export remains valid at the exact original film length');
