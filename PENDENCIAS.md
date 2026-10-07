@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 07/10 — Git conferido: NovoVenduss b41ef6bf4098ec6fb34791a84b751174c000662a entrega cupons/QR/controles/checklist; registro deste sistema fd976a47949cb5405748631ae5306890a915b347 enviado/remoto confirmado. Vercel permanece READY produção39e4528/2.17.54 (nenhuma nova mudança de código). Servidor NovoVenduss precisa rebuild, não apenas reiniciar; pronto automático/quantidade parcial e demais pendências seguem abertas.
+
 - [x] 07/10 — Gate NovoVenduss final: cupons/QR/controles com AppTS0, unidadesPASS, seis QA desktop/celular e build4597módulos/3m49s EXIT0 em cópia da fonte do Git. Vercel Personalizações reconferida produçãoREADY/39e4528, sem nova alteração de código aqui. Git do pacote/cupons em fechamento, servidor NovoVenduss ainda exige rebuild.
 
 - [~] 07/10 — Conferência geral no NovoVenduss docs/CHECKLIST_DONO_2026-10-07.md: cupons físicos/cores/tamanhos/públicos/posições/sacola, QR prévia e confirmação interna, pergunta após pagar e cards testados; RPC aplicada com rollback/replay e pedido #49672 preservado. Git/frontend em fechamento separado; Personalizações2.17.54 já Vercel, sem novo código do filme neste pacote.
