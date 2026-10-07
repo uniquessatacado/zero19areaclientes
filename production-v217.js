@@ -578,7 +578,7 @@ export function createProductionModule(ctx){
     }
   }
   function customizationDefaults(set){return {nameHeightCm:Number(set.default_name_height_cm)||5.5,numberHeightCm:Number(set.default_number_height_cm)||28,gapCm:Number(set.name_number_gap_cm??1.5),nameTrackingCm:Number(set.letter_tracking_cm??.15),digitSpacingCm:Number(set.digit_spacing_cm??.2),widthCm:Number(set.default_width_cm)||((set._kind||customizationKind(set))==='sponsors'?28:15)}}
-  function orderCustomizationSettings(set,production={}){const settings=customizationDefaults(set),height=Number(production.letter_height_cm||production.name_height_cm),maxWidth=Number(production.name_max_width_cm||production.max_text_width_cm);if(height>0)settings.nameHeightCm=height;if(maxWidth>0)settings.maxTextWidthCm=maxWidth;return settings;}
+  function orderCustomizationSettings(set,production={}){const settings=customizationDefaults(set),height=Number(production.letter_height_cm||production.name_height_cm),maxWidth=Number(production.name_max_width_cm||production.max_text_width_cm);if(height>0)settings.nameHeightCm=height;if(maxWidth>0)settings.maxTextWidthCm=maxWidth;if(/^#[0-9a-f]{6}$/i.test(production.ink_color||''))settings.inkColor=production.ink_color;if(production.studio_text_layout==='TWENTY_LETTERS')settings.maxNameHeightReductionCm=.5;return settings;}
   function openCustomizationComposer(sets,{testMode=false,onSubmit}={}){
     const available=(sets||[]).filter(set=>testMode||(set.status==='ready'&&set.tested_at));
     if(!available.length){ctx.toast('Nenhuma personalização testada e liberada. Abra a camisa, faça o teste e libere para produção.','err');return Promise.resolve(null)}
@@ -645,7 +645,7 @@ export function createProductionModule(ctx){
       type:'team_customization',customizationKind:'lettering',sourceId:set.id,quantity:1,
       halftone:Boolean(set.halftone),allowInternalNesting:!set.halftone,rotationPolicy:'90',
       name:cleanName,number:cleanNumber,fontSource:set._source||null,fontSources:set._sources||[],
-      glyphs:set._glyphs||[],palette:set._palette||[],compositionMode,pieceType,compositionGroupId:groupId||crypto.randomUUID(),
+      glyphs:set._glyphs||[],palette:set._palette||[],inkColor:settings.inkColor,compositionMode,pieceType,compositionGroupId:groupId||crypto.randomUUID(),
       nameHeightCm:Number(settings.nameHeightCm),numberHeightCm:Number(settings.numberHeightCm),
       gapCm:compositionMode==='unified'?Number(settings.gapCm):0,
       nameTrackingCm:Number(settings.nameTrackingCm),
@@ -655,7 +655,14 @@ export function createProductionModule(ctx){
     item.label=pieceType==='name'?`${labelBase} • Nome ${cleanName}`:pieceType==='digit'?`${labelBase} • Número ${cleanNumber}`:`${labelBase} • ${[cleanName,cleanNumber].filter(Boolean).join(' ')}`;
     // Film lettering keeps its physical height. A shirt-preview safe width is
     // not a print size: long phrases can be moved/rotated or separated at spaces.
-    const layout=await prepareLetteringLayout(item);
+    let layout=await prepareLetteringLayout(item);
+    // Explicit opt-in on NEW studio snapshots only. Never rewrite an old film.
+    if(cleanName&&settings.maxNameHeightReductionCm>0&&Number(settings.maxTextWidthCm)>0&&layout.widthCm>settings.maxTextWidthCm){
+      const minimum=Math.max(.1,Number(settings.nameHeightCm)-Math.min(.5,settings.maxNameHeightReductionCm));
+      item.nameHeightCm=Math.max(minimum,item.nameHeightCm*settings.maxTextWidthCm/layout.widthCm);
+      layout=await prepareLetteringLayout(item);
+      if(layout.widthCm>settings.maxTextWidthCm&&item.nameHeightCm>minimum){item.nameHeightCm=minimum;layout=await prepareLetteringLayout(item);}
+    }
     item.defaultNameHeightCm=Number(settings.nameHeightCm);
     item.widthCm=layout.widthCm;item.heightCm=layout.heightCm;
     item.symbolFallbackCharacters=[...new Set([...layout.nameLine.parts,...layout.numberLine.parts].filter(part=>part.symbolFallback).map(part=>part.char))];
@@ -1224,8 +1231,18 @@ export function createProductionModule(ctx){
     const set=row.set;if(!set)throw new Error('A fonte vinculada a este pedido não está mais liberada.');
     const production=row.metadata?.details?.[0]?.production||{},rawName=String(production.top_text||'').trim(),number=String(production.number||'').trim(),lines=rawName.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
     if(!lines.length&&!number)throw new Error('O pedido não possui nome, frase ou número para produzir.');
-    const settings=orderCustomizationSettings(set,production),groupId=crypto.randomUUID(),items=[];
-    for(const line of lines)items.push(await makeFilmLetteringPiece(set,{name:line,settings,compositionMode:'split',pieceType:'name',groupId}));
+    const settings=orderCustomizationSettings(set,production),groupId=crypto.randomUUID(),items=[],preparedLines=[];
+    for(const line of lines){
+      if(!settings.maxNameHeightReductionCm){preparedLines.push(line);continue;}
+      let current='';
+      for(const word of line.split(/\s+/)){
+        const candidate=current?current+' '+word:word;
+        const measured=await prepareLetteringLayout({name:candidate,number:'',fontSource:set._source||null,fontSources:set._sources||[],glyphs:set._glyphs||[],nameHeightCm:settings.nameHeightCm-.5,numberHeightCm:settings.numberHeightCm,nameTrackingCm:settings.nameTrackingCm,digitSpacingCm:0,gapCm:0});
+        if(current&&measured.widthCm>settings.maxTextWidthCm){preparedLines.push(current);current=word;}else current=candidate;
+      }
+      if(current)preparedLines.push(current);
+    }
+    for(const line of preparedLines)items.push(await makeFilmLetteringPiece(set,{name:line,settings,compositionMode:'split',pieceType:'name',groupId}));
     for(const digit of number)items.push(await makeFilmLetteringPiece(set,{number:digit,settings,compositionMode:'split',pieceType:'digit',groupId}));
     const qty=Math.max(1,Number(row.quantity)||1),project=row.project||{},workspace=row.workspace||{},orderRef=project.official_order_payload?.display_id||project.official_order_ref||String(project.id||'').slice(0,8),company=workspace.company_name||workspace.client_name||'Cliente';
     const result=items.map(item=>({...item,localId:crypto.randomUUID(),quantity:qty,applicationQuantity:qty,customizationSetId:item.sourceId,letteringProductionSnapshot:structuredClone(production),projectId:row.project_id,officialProjectId:row.project_id,officialOrderRef:String(orderRef),externalOrderItemRef:row.personalization_sale_id,productionGroupKeys:['order:'+row.project_id],companyName:company,zero19WorkItemId:row.id,letteringRevision:row.metadata?.lettering_revision??null,label:company+' • Pedido #'+orderRef+' • '+item.label}));
@@ -1332,7 +1349,7 @@ export function createProductionModule(ctx){
       }});
     if(ctx.getCostUI?.()){let slot=app.querySelector('#filmCostSummary');if(!slot){slot=document.createElement('section');slot.id='filmCostSummary';app.querySelector('.film-workspace').insertAdjacentElement('afterend',slot)}filmCostPanel?.destroy();filmCostPanel=ctx.getCostUI().mountFilmCost(slot,{getLayout:()=>lastFilm,getItems:()=>filmItems,getImageUrl:item=>item.previewDataUrl||(item.path?ctx.publicUrl(item.path):null),getCommission:()=>ctx.getFilmCommissions?.(filmItems)})}
   }
-  const colorFor=(item,role)=>item.palette?.find(color=>color.role===role)?.color_hex||item.palette?.find(color=>color.role==='primary')?.color_hex||'#ffffff';
+  const colorFor=(item,role)=>/^#[0-9a-f]{6}$/i.test(item.inkColor||'')?item.inkColor:item.palette?.find(color=>color.role===role)?.color_hex||item.palette?.find(color=>color.role==='primary')?.color_hex||'#ffffff';
   function drawPlacedImage(g,image,x,y,w,height,rotation=0,sourceW=w,sourceH=height){g.save();g.translate(x+w/2,y+height/2);g.rotate(rotation*Math.PI/180);g.drawImage(image,-sourceW/2,-sourceH/2,sourceW,sourceH);g.restore()}
   async function drawVectorLine(g,text,glyphMap,x,y,maxWidth,heightCm,spacingCm){
     const line=measureLetteringLine(text,{heightCm,trackingCm:spacingCm??0,glyphs:[...glyphMap.values()],glyphAspect:glyph=>glyphAspect(glyph.svg_markup)}),pixelsPerCm=300/2.54;
