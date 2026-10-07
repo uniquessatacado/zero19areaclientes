@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {packageDigit} from './prepare-brasil-numbers.mjs';
+const png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.write('IHDR',12);png.writeUInt32BE(12,16);png.writeUInt32BE(28,20);
+const svg='<svg width="120mm" height="280mm" viewBox="0 0 12 28"><image xlink:href="numero 1_Images\\numero 1_ImgID1.png"/></svg>';
+const ready=packageDigit(svg,png,1);
+assert.equal(ready.meta.height_cm,28);assert.equal(ready.meta.width_cm,12);assert(ready.standalone.includes('data:image/png;base64,'));assert(!ready.standalone.includes('numero 1_Images'));
+assert.throws(()=>packageDigit(svg,png,2),/does not match/);
+assert.throws(()=>packageDigit(svg.replace('numero 1_Images\\numero 1_ImgID1.png','https://evil.invalid/a.png'),png,1),/does not match/);
+assert.throws(()=>packageDigit(svg.replace('<image','<script/> <image'),png,1),/Active/);
+assert.throws(()=>packageDigit(svg.replace('<image','<image onload="evil()"'),png,1),/Active/);
+assert.throws(()=>packageDigit(svg,Buffer.from('not PNG'),1));
+assert.throws(()=>packageDigit(svg.replace('280mm','250mm'),png,1),/height/);
+assert.throws(()=>packageDigit(svg.replace('viewBox="0 0 12 28"','viewBox="0 0 0 0"'),png,1),/viewBox/);
+console.log('PASS digit packaging: PNG bytes preserved, correct dependency/measurements, external paths/active SVG/invalid PNG refused. No network or source writes.');

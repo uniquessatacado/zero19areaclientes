@@ -578,7 +578,7 @@ export function createProductionModule(ctx){
     }
   }
   function customizationDefaults(set){return {nameHeightCm:Number(set.default_name_height_cm)||5.5,numberHeightCm:Number(set.default_number_height_cm)||28,gapCm:Number(set.name_number_gap_cm??1.5),nameTrackingCm:Number(set.letter_tracking_cm??.15),digitSpacingCm:Number(set.digit_spacing_cm??.2),widthCm:Number(set.default_width_cm)||((set._kind||customizationKind(set))==='sponsors'?28:15)}}
-  function orderCustomizationSettings(set,production={}){const settings=customizationDefaults(set),height=Number(production.letter_height_cm||production.name_height_cm),maxWidth=Number(production.name_max_width_cm||production.max_text_width_cm);if(height>0)settings.nameHeightCm=height;if(maxWidth>0)settings.maxTextWidthCm=maxWidth;if(/^#[0-9a-f]{6}$/i.test(production.ink_color||''))settings.inkColor=production.ink_color;if(production.studio_text_layout==='TWENTY_LETTERS')settings.maxNameHeightReductionCm=.5;return settings;}
+  function orderCustomizationSettings(set,production={},options={}){const settings=customizationDefaults(set),height=Number(production.letter_height_cm||production.name_height_cm),maxWidth=Number(production.name_max_width_cm||production.max_text_width_cm);if(height>0)settings.nameHeightCm=height;if(maxWidth>0)settings.maxTextWidthCm=maxWidth;if(/^#[0-9a-f]{6}$/i.test(production.ink_color||''))settings.inkColor=production.ink_color;if(production.studio_text_layout==='TWENTY_LETTERS'&&!options.preserveHeight)settings.maxNameHeightReductionCm=.5;return settings;}
   function openCustomizationComposer(sets,{testMode=false,onSubmit}={}){
     const available=(sets||[]).filter(set=>testMode||(set.status==='ready'&&set.tested_at));
     if(!available.length){ctx.toast('Nenhuma personalização testada e liberada. Abra a camisa, faça o teste e libere para produção.','err');return Promise.resolve(null)}
@@ -1054,7 +1054,7 @@ export function createProductionModule(ctx){
       const close=()=>{if(!busy)modal.remove();};
       bindPendingProducedActions({entries,modal,isCurrent:pageCurrent,getBusy:()=>busy,setBusy:value=>{busy=value},selected,updateCount,markProduced:ctx.zero19Orders?.markItemProduced,onError:error=>ctx.toast(error.message||'Aplicação salva; tente atualizar a lista.','err'),onProduced:async()=>{await refreshOrders();if(!modal.isConnected||!pageCurrent())return;const currentProgress=await ctx.zero19Orders?.orderProgress?.(entries.filter(entry=>!entry.completed).map(progressProject));for(const entry of entries){const progress=currentProgress?.get(progressProject(entry));if(progress&&entry.progressBadge?.isConnected)entry.progressBadge.textContent=progress.label+' — '+progress.detail;}}});
       bindPendingLetteringActions({entries,modal,isCurrent:pageCurrent,getActor:uid,getOwner:owner,getBusy:()=>busy,setBusy:value=>{busy=value},updateCount,supabase,
-        makePreview:(row,values)=>makeFilmLetteringPiece(row.set,{...values,settings:orderCustomizationSettings(row.set,row.metadata?.details?.[0]?.production||{}),compositionMode:'unified',previewTargetPx:420}),
+        makePreview:(row,values)=>makeFilmLetteringPiece(row.set,{...values,settings:orderCustomizationSettings(row.set,row.metadata?.details?.[0]?.production||{},{preserveHeight:true}),compositionMode:'unified',previewTargetPx:420}),
         onSaved:async(entry,result,item,index)=>{if(!pageCurrent()||!modal.isConnected)return;entry.previewGeneration=(entry.previewGeneration||0)+1;entry.row.text_value=result.text_value;entry.row.metadata=result.metadata;entry.detail=[result.metadata?.details?.[0]?.production?.top_text,result.metadata?.details?.[0]?.production?.number].filter(Boolean).join(' · ')||result.text_value;
           const row=modal.querySelector('[data-entry="'+index+'"]')?.closest('.film-pending-row'),detail=row?.querySelector('.film-pending-copy > span:not(.film-pending-preview)');if(detail)detail.textContent=entry.detail;
           const preview=modal.querySelector('[data-preview="'+index+'"]');if(preview){renderWritingPreview(preview,item,entry.row.metadata?.details?.[0]?.production?.ink_color);}
@@ -1233,7 +1233,7 @@ export function createProductionModule(ctx){
     const set=row.set;if(!set)throw new Error('A fonte vinculada a este pedido não está mais liberada.');
     const production=row.metadata?.details?.[0]?.production||{},rawName=String(production.top_text||'').trim(),number=String(production.number||'').trim(),lines=rawName.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
     if(!lines.length&&!number)throw new Error('O pedido não possui nome, frase ou número para produzir.');
-    const settings=orderCustomizationSettings(set,production),groupId=crypto.randomUUID(),items=[],preparedLines=[];
+    const settings=orderCustomizationSettings(set,production,{preserveHeight:!!row.metadata?.lettering_revision}),groupId=crypto.randomUUID(),items=[],preparedLines=[];
     for(const line of lines){
       if(!settings.maxNameHeightReductionCm){preparedLines.push(line);continue;}
       let current='';

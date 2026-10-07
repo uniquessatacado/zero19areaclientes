@@ -31,5 +31,8 @@ for(const height of [5.5,5,4]){
  assert.equal(fitted.nameHeightCm,height-.5);assert.equal(fitted.defaultNameHeightCm,height);
  const legacy=await make({id:'font'},{name:'PALAVRA',settings:settings({},{letter_height_cm:height,max_text_width_cm:24}),pieceType:'name'});
  assert.equal(legacy.nameHeightCm,height);
+ const editSettings=settings({},{letter_height_cm:height,max_text_width_cm:24,studio_text_layout:'TWENTY_LETTERS'},{preserveHeight:true});
+ const edited=await make({id:'font'},{name:'FRASE MUITO LONGA COM ACENTUAÇÃO',settings:editSettings,pieceType:'name'});
+ assert.equal(edited.nameHeightCm,height,'Editing a phrase or accent never reapplies width-based height reduction');
 }
 console.log('PASS studio ink -> production settings -> film preview/render colour -> whole words/draft; blue/white/black/red/yellow/green, legacy palette preserved. Raster and physical printer require visual QA.');
