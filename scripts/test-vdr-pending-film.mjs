@@ -21,6 +21,10 @@ const context={
 };
 const api=vm.runInNewContext(source.slice(start,end)+';({pendingVdrFilmRows,prepareVdrFilmItem})',context);
 const rows=await api.pendingVdrFilmRows();assert.deepEqual(Array.from(rows,row=>row.id),['application-png']);
+const checkoutProduction={...production,vdr_bundle_id:undefined,checkout_application_id:'checkout-art',art_source:'CHECKOUT_CATALOG_ASSET'};
+items.push(item('checkout-ready',{metadata:{details:[{production:checkoutProduction}]}}),item('checkout-in-production',{stage:'production',metadata:{details:[{production:checkoutProduction}]}}),item('checkout-cancelled',{stage:'cancelled',metadata:{details:[{production:checkoutProduction}]}}));
+assert.deepEqual(Array.from(await api.pendingVdrFilmRows(),row=>row.id),['application-png','checkout-ready'],'Paid checkout central art joins the same protected film selector; production/cancelled do not');
+items.splice(-3);
 const film=await api.prepareVdrFilmItem(ready.id);
 assert.equal(film.type,'asset');assert.equal(film.sourceId,asset.id);assert.equal(film.path,production.file_path);assert.equal(film.storageBucket,'z19p-private');
 assert.equal(film.widthCm,29.63);assert.equal(film.heightCm,28);assert.equal(film.quantity,2);

@@ -76,8 +76,9 @@ export function bindPendingLetteringActions({entries,modal,isCurrent,getActor,ge
   let wrapper=row.closest('.film-pending-application');
   if(!wrapper){wrapper=document.createElement('div');wrapper.className='film-pending-application';row.before(wrapper);wrapper.appendChild(row);}
   const action=document.createElement('button');action.type='button';action.className='btn small';action.dataset.pendingLettering=entry.row.id;action.textContent='✎ Editar escrita';
-  action.style.cssText='display:block;min-height:44px;width:100%;max-width:100%;margin-top:6px;white-space:normal;background:#a8caff;color:#071426;border:1px solid #a8caff;font-weight:800';
-  action.disabled=entry.alreadyInFilm;action.title=entry.alreadyInFilm?'Remova esta aplicação do filme para editar a escrita na origem.':'Editar somente esta aplicação antes de adicionar ao filme';wrapper.appendChild(action);
+  action.style.cssText='display:inline-flex;min-height:44px;width:auto;max-width:100%;padding:6px 8px;white-space:normal;background:#e7effb;color:#27466e;border:1px solid #c5d5eb;font-size:10px;font-weight:700;border-radius:9px';
+  if(!wrapper._pendingActions){const actions=document.createElement('div');actions.className='film-pending-actions';actions.style.cssText='display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 0;align-items:center';wrapper._pendingActions=actions;(row.querySelector?.('.film-pending-copy')||wrapper).appendChild(actions);}
+  action.disabled=entry.alreadyInFilm;action.title=entry.alreadyInFilm?'Remova esta aplicação do filme para editar a escrita na origem.':'Editar somente esta aplicação antes de adicionar ao filme';wrapper._pendingActions.appendChild(action);
   action.onclick=event=>{
    event.preventDefault();event.stopPropagation();if(getBusy()||!isCurrent()||action.disabled||entry.completed)return;
    setBusy(true);updateCount();

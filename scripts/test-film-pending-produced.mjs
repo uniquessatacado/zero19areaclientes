@@ -21,6 +21,6 @@ assert.equal(entries[0].completed,true);assert(!selected.has('font:a'));assert(s
 assert.equal(modal.querySelectorAll().length,2);assert.equal(busy,false);
 await buttons[1].onclick(event);assert.deepEqual(calls,['a','a'],'an item already in the film cannot be manually completed');
 current=false;await buttons[2].onclick(event);assert.deepEqual(calls,['a','a']);
-assert(updates>=5);assert.match(buttons[0].style.cssText,/min-height:44px/);assert.match(buttons[0].style.cssText,/background:#fff;color:#111113/);
+assert(updates>=5);assert.match(buttons[0].style.cssText,/min-height:44px/);assert.match(buttons[0].style.cssText,/background:#e8f3e9;color:#205831/);assert.match(buttons[0].style.cssText,/width:auto/);assert.equal(buttons[0].parent.className,'film-pending-actions');
 delete globalThis.document;
 console.log('PASS pending selector produced action: confirmed application only, cancel/route/draft guards, siblings/selection preserved, visible touch target.');

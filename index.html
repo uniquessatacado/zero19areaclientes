@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
   <meta name="theme-color" content="#09090b">
   <meta name="color-scheme" content="dark">
-  <meta name="z19-version" content="2.17.52">
+  <meta name="z19-version" content="2.17.53">
   <meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
   <title>019 Personalizações</title>
   <link rel="icon" href="/zero19-logo.png?v=2.17" type="image/png">
@@ -38,14 +38,14 @@
           <img src="/zero19-logo.png?v=2.17" alt="Zero 19" style="width:180px;max-width:70vw;height:46px;object-fit:contain">
         </span>
         <div><b>Carregando sistema…</b></div>
-        <small style="color:#92939d">Versão 2.17.52</small>
+        <small style="color:#92939d">Versão 2.17.53</small>
       </div>
     </div>
   </div>
   <div id="toast-root" aria-live="polite"></div>
   <script src="/qrcode-browser.js?v=2.17.38"></script>
   <script type="module">
-    import('/app.js?v=2.17.52').catch((error) => {
+    import('/app.js?v=2.17.53').catch((error) => {
       console.error(error);
       document.getElementById('app').innerHTML = '<div style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#09090b;color:#fff;font-family:system-ui"><div style="max-width:520px;text-align:center"><h2>Não foi possível iniciar o sistema</h2><p id="bootError" style="color:#9797a4"></p><button onclick="location.reload()" style="border:0;border-radius:12px;background:#ff6428;color:#111;font-weight:800;padding:12px 18px">Tentar novamente</button></div></div>';
       document.getElementById('bootError').textContent=String(error?.message||error||'Erro inesperado');

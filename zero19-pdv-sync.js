@@ -198,7 +198,7 @@ export function createZero19PdvSync(ctx){
     if(stage==='ready_production'){
       const fontSet=stageItem?.metadata?.font_set_id||stageItem?.metadata?.details?.[0]?.production?.font_set_id;
       if(fontSet&&['NAME_NUMBER','PHRASE'].includes(String(stageItem?.kind||'').toUpperCase()))actions.push('<button class="btn primary" data-z19-team-film="'+h(stageItem.id)+'">Adicionar ao filme</button>');
-      else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&(stageItem?.without_application||stageItem?.metadata?.details?.[0]?.production?.vdr_bundle_id))actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
+      else if(stageItem?.metadata?.details?.[0]?.production?.storage_bucket==='venduss-print-artworks'||stageItem?.asset_id&&(stageItem?.without_application||stageItem?.metadata?.details?.[0]?.production?.vdr_bundle_id||stageItem?.metadata?.details?.[0]?.production?.checkout_application_id))actions.push('<button class="btn primary" data-z19-asset-film="'+h(stageItem.id)+'">Adicionar estampa ao filme</button>');
       else actions.push('<button class="btn primary" data-z19-film>Abrir montar filme</button>');
     }
     if(summary.items.every(item=>item.stage==='production'))actions.push('<button class="btn" data-z19-ready="'+h(p.id)+'">Concluir todas as personalizações</button>');
@@ -533,7 +533,7 @@ export function createZero19PdvSync(ctx){
   }
   async function pendingVdrFilmRows(){
     const data=await load(true);
-    return data.items.filter(item=>item.stage==='ready_production'&&item.asset_id&&item.metadata?.details?.[0]?.production?.vdr_bundle_id).map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
+    return data.items.filter(item=>{const p=item.metadata?.details?.[0]?.production;return item.stage==='ready_production'&&item.asset_id&&(p?.vdr_bundle_id||p?.checkout_application_id&&p?.art_source==='CHECKOUT_CATALOG_ASSET');}).map(item=>({...item,summary:data.summaries.find(row=>row.project.id===item.project_id)})).filter(item=>item.summary);
   }
   async function refreshArtworkPreview(workItemId){
     const owner=accountOwnerId(),actor=state().session?.user?.id;
@@ -546,9 +546,9 @@ export function createZero19PdvSync(ctx){
   }
   async function prepareVdrFilmItem(workItemId){
     const owner=accountOwnerId(),item=(await pendingVdrFilmRows()).find(row=>row.id===workItemId);
-    if(!item)throw new Error('A estampa VDR não está mais aguardando produção. Atualize a seleção.');
+    if(!item)throw new Error('A estampa deste pedido não está mais aguardando produção. Atualize a seleção.');
     const production=item.metadata?.details?.[0]?.production||{},width=Number(production.width_cm),height=Number(production.height_cm);
-    if(!(width>0&&height>0))throw new Error('Confira as medidas desta aplicação VDR antes de montar o filme.');
+    if(!(width>0&&height>0))throw new Error('Confira as medidas desta aplicação antes de montar o filme.');
     const [asset,current]=await Promise.all([supabase.from('z19p_assets').select('*').eq('id',item.asset_id).eq('owner_id',owner).single(),supabase.from('z19p_zero19_work_items').select('stage,asset_id,metadata').eq('id',item.id).eq('owner_id',owner).single()]);
     if(asset.error||current.error)throw asset.error||current.error;
     if(owner!==accountOwnerId()||current.data.stage!=='ready_production'||current.data.asset_id!==item.asset_id||JSON.stringify(current.data.metadata?.details?.[0]?.production)!==JSON.stringify(production))throw new Error('O pedido ou a liberação mudou. Abra a seleção novamente.');
