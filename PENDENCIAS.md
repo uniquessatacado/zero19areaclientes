@@ -1,5 +1,13 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 07/10 — Gate NovoVenduss final: cupons/QR/controles com AppTS0, unidadesPASS, seis QA desktop/celular e build4597módulos/3m49s EXIT0 em cópia da fonte do Git. Vercel Personalizações reconferida produçãoREADY/39e4528, sem nova alteração de código aqui. Git do pacote/cupons em fechamento, servidor NovoVenduss ainda exige rebuild.
+
+- [~] 07/10 — Conferência geral no NovoVenduss docs/CHECKLIST_DONO_2026-10-07.md: cupons físicos/cores/tamanhos/públicos/posições/sacola, QR prévia e confirmação interna, pergunta após pagar e cards testados; RPC aplicada com rollback/replay e pedido #49672 preservado. Git/frontend em fechamento separado; Personalizações2.17.54 já Vercel, sem novo código do filme neste pacote.
+- [ ] 07/10 — Permanecem: pronto automático ao imprimir TODAS as aplicações/quantidades e produção parcial da quantidade no TIFF, prioridade pelo maior trânsito do frete, archive endereços, avulsa dupla lisa, emissor DC-e e preparo101artes sem autorização específica. Não confundir correção da guarda de fila2.17.54 com conclusão destas tarefas.
+
+- [~] 07/10 — Gestão NovoVenduss → cupom #49672 retomado com urgência: UMA camisa MASC/M, escrita verde + arte22 no banco; print continua legado. Fechar vias por peça/sacola/QR e publicar caminho de gestão, sem esquecer automações/quantidades/alertas no registro operacional.
+- [!] 07/10 — SmartEnvios DC-e automática exigida pelo dono, token da loja já configurado. Contrato emissor automático não comprovado, API oficial exige chave emitida e proxy inspecionado só encaminha. Não houve compra/emissão; identificar API emissora/configuração antes de remover guarda fiscal. Trabalho de cupons priorizado após novo incidente, sem declarar DC-e resolvida.
+
 - [~] 07/10 — Registro geral atualizado em docs/OPERACAO_URGENTE_2026-10-07.md: cupons, QR/botão, pergunta após pagamento, alertas/parcial/pronto, quantidades, urgência, arquivar endereço e publicações. CheckoutEdgev7 ACTIVE/JWT: quatro artes novas/Pix/cartão/entrega/retirada/replay PASS; 12QA cancelados sem estoque/pagamento/produção. Preparo preventivo de104artes BLOQUEADO pela revisão automática; restam101, precisa autorização específica. Lote não executado/endpoint desativado403; não afirmar todas as artes resolvidas.
 - [x] 07/10 — Personalizações2.17.54/39e4528 PUBLICADA: Vercel dpl_C4BxUyEB56qytCbTbSGegtzk9CAH READY, alias oficial/commit exato e cinco arquivosHTTP200 iguais ao dist/build porSHA256 normalizadoUTF8-LF. A publicação supersede a conferência pendente abaixo; não inclui quantidade parcial/conclusão automática nem cupons NovoVenduss.
 

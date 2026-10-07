@@ -1,5 +1,11 @@
 # Operação urgente — pedidos do dono, 07/10
 
+## Conferência consolidada / pacote dos cupons
+
+NovoVenduss docs/CHECKLIST_DONO_2026-10-07.md discrimina todo o histórico e os limites atuais. Cupom Gestão e PDV corrigido por camisa física, cor/público/tamanho/posições, prévia QR e sacola; pagamento oferece duas vias e cards distinguem não iniciado/parcial/pronto. QR interno exige login/confirmar, RPC aplicada e QA antes/depois com rollback/repetição preservou #49672. Unit/navegador1280/320/tipos/lint0erros passaram; sem impressão física ou sequência de login QR autenticado verificada. Código NovoVenduss em fechamento no Git, rollout do servidor separado.
+
+Personalizações2.17.54 já Vercel, sem alteração de código do filme neste pacote. Continuam pendentes pronto automático após todas as aplicações/quantidades exportadas, produção parcial1de3, prioridade pelo maior trânsito do frete, archive de cadastro de endereço, avulsa dupla de lisa, emissor DC-e e preparo preventivo101artes sem autorização específica. Não dizer que tudo foi concluído; registros históricos abaixo não substituem o checklist atual.
+
 Não trocar de frente sem registrar teste, bloqueio ou próximo passo. Este registro não significa que a função já foi publicada.
 
 ## Prioridade imediata: checkout bloqueando vendas
