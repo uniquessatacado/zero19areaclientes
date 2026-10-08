@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 07/10 — Companion TV ENVIADO ao Git NovoVenduss1b1048ce6e9c3c8af1a2be3dec946b92c40b6b55/main remota conferida. Refresh5min/ranking10–20/ciclo60s/ao vivo até pausa30s ou conclusão/saída, contadores online+montando; Brasil/lisa/avulsa/escritos completos autorizados e dados do cadastro excluídos. Backendv8 ACTIVE/fonte remota idêntica, migração/QA rollback PASS/zero fixtures, público200 e privado401. React real1366×768/720×1280/320×740 PASS, dois ciclos5min/sem camadas/contadores/ranking legíveis; Temp/z19-tv-live-qa-U2WWO4. Regressão primeira peça de3 correta; AppTS0/lint0/unidades0/build4605/57,70s0. Dono precisa reconstruir frontend do servidor. Apenas AGENTS/PENDENCIAS deste repositório mudaram: fonte/medida/filme/pedido/aplicativo Personalizações preservados; demais pendências seguem abertas.
+
 - [x] 07/10 — Companion Estúdio PDV ENVIADO ao Git NovoVenduss39bcbbc2a210904299b6ebd2b920fdc5d60b2863/main remota conferida; função do banco corrigida/QA rollback pós-aplicação PASS/zero fixtures. Dono precisa reconstruir frontend do servidor. Este companion não altera aplicativo/fontes/filmes/Vercel Personalizações; pendências anteriores preservadas.
 
 - Checkpoint atual companion Estúdio PDV: quatro destinos/quantidade parcial da sacola concluídos e backend aplicado. Build final NovoVenduss4600/52,63s EXIT0; servidor exige rebuild. Registros antigos abaixo são históricos; quantidade parcial da sacola não significa implementação da quantidade parcial do TIFF.
