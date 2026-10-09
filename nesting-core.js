@@ -212,13 +212,19 @@ function calculateLayout(expanded,settings){
   if(bw*bh>64e6)throw new Error('O filme excede o limite seguro de cálculo. Reduza o comprimento ou aumente a célula de cálculo.');
   const useBoard=maximum||lockedPlacements.length>0,board=useBoard?new Uint8Array(bw*bh):null,placements=[],prepared=new Map(),searchPrepared=new Map(),lockedKeys=new Set();
   let usedRows=0,shelfX=0,shelfY=0,shelfH=0,lengthMm=0,occupiedCells=0,angleChecks=0,positionChecks=0;
+  // Livre por linha do filme: pula linhas onde a primeira linha da arte não cabe,
+  // e o limite de busca vale por arte (antes era global e, com muitas artes,
+  // desistia do encaixe por pixels e voltava para a fila simples).
+  const rowFree=useBoard?new Int32Array(bh).fill(bw):null;
+  const refreshRows=(from,to)=>{if(!rowFree)return;for(let yy=Math.max(0,from);yy<Math.min(bh,to);yy++){let free=0;const base=yy*bw;for(let x=0;x<bw;x++)if(!board[base+x])free++;rowFree[yy]=free;}};
+  const topRow=raw=>{if(raw.topCount==null){const runs=maskRuns(raw);raw.topRow=runs.length?runs[0][0]:0;raw.topCount=runs.filter(run=>run[0]===raw.topRow).reduce((sum,run)=>sum+run[2]-run[1],0);}return raw;};
   if(lockedPlacements.length){
     const itemByKey=new Map(expanded.map(item=>[placementKey(item.id,item.copy),item]));
     for(const proposed of lockedPlacements){
       const resolved=resolvePlacement({...proposed,locked:true},itemByKey,prepared,settings);
       if(lockedKeys.has(resolved.key))throw new Error('Uma mesma cópia foi travada mais de uma vez.');
       if(collides(board,bw,bh,resolved.option.raw,resolved.x,resolved.y))throw new Error(`A posição travada de ${resolved.item.label||resolved.item.id} colide com outra arte ou com a distância mínima.`);
-      stampWithGap(board,bw,bh,resolved.option.raw,resolved.x,resolved.y,gapCells);
+      stampWithGap(board,bw,bh,resolved.option.raw,resolved.x,resolved.y,gapCells);refreshRows(resolved.y-gapCells,resolved.y+resolved.option.raw.h+gapCells+1);
       lockedKeys.add(resolved.key);placements.push(resolved.placement);usedRows=Math.max(usedRows,resolved.y+resolved.option.raw.h);
       occupiedCells+=maskCount(resolved.option.raw);
     }
@@ -231,12 +237,15 @@ function calculateLayout(expanded,settings){
     let found=null;
     const searchAngles=searchFreeRotation&&item.rotationPolicy==='free';
     if(useBoard){
-      const lastY=Math.min(bh-1,usedRows+gapCells);
+      const lastY=Math.min(bh-1,usedRows+gapCells);let itemChecks=0;
+      for(const option of options)topRow(option.raw);
       outer:for(let y=0;y<=lastY;y++){
+        if(options.every(option=>y+option.raw.topRow>=bh||rowFree[y+option.raw.topRow]<option.raw.topCount))continue;
         for(let x=0;x<bw;x++)for(const option of options){
-          if(++positionChecks>2e6)throw new Error('A busca de contornos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
+          if(rowFree[y+option.raw.topRow]<option.raw.topCount)continue;
+          if(++itemChecks>2e6||++positionChecks>4e7)throw new Error('A busca de contornos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(x*cell+option.widthMm>width+EPSILON||y*cell+option.heightMm>maxLength+EPSILON)continue;
-          if(searchAngles&&++angleChecks>2e6)throw new Error('A busca de ângulos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
+          if(searchAngles&&++angleChecks>4e7)throw new Error('A busca de ângulos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(!collides(board,bw,bh,option.raw,x,y)){
             const candidate={x,y,...option};
             // Mesmo sem rotação livre, políticas ortogonais como 0°/90° precisam
@@ -256,7 +265,7 @@ function calculateLayout(expanded,settings){
       if(shelfY*cell+option.heightMm<=maxLength+EPSILON){found={x:shelfX,y:shelfY,...option};shelfX+=option.raw.w+gapCells;shelfH=Math.max(shelfH,option.raw.h);}
     }
     if(!found)throw new Error(`O item ${item.label||item.id} não cabe no comprimento seguro do filme.`);
-    if(useBoard)stampWithGap(board,bw,bh,found.raw,found.x,found.y,gapCells);
+    if(useBoard){stampWithGap(board,bw,bh,found.raw,found.x,found.y,gapCells);refreshRows(found.y-gapCells,found.y+found.raw.h+gapCells+1);}
     usedRows=Math.max(usedRows,found.y+found.raw.h);
     occupiedCells+=maskCount(found.raw);
     const placement={id:item.id,copy:item.copy,xMm:found.x*cell,yMm:found.y*cell,widthMm:found.widthMm,heightMm:found.heightMm,sourceWidthMm:item.widthMm,sourceHeightMm:item.heightMm,rotation:found.rotation,locked:Boolean(item.locked),label:item.label||''};
@@ -290,7 +299,12 @@ function rectangleCandidates(expanded,settings,locked){
   const uniqueOrders=[],seen=new Set();
   for(const order of orders){const signature=order.map(item=>canonical.get(placementKey(item.id,item.copy))).join(',');if(!seen.has(signature)){seen.add(signature);uniqueOrders.push(order);}}
   // Count work, not elapsed time: repeatable layouts across fast/slow devices.
-  let work=0,limited=false;const budget=3e6,results=[];
+  // Além da escolha livre por peça, testar todas giradas 90° e todas em pé: quando
+  // em pé + deitada não cabem lado a lado (ex.: 29,6 + 28 cm + distância > 58 cm),
+  // duas deitadas cabem (28 + 28 cm) e o filme fica pela metade.
+  const orientationChoices=new Map([['any',choices]]);
+  for(const [mode,rotation] of [['rot',90],['flat',0]]){const variant=new Map();for(const [key,list] of choices){const only=list.filter(option=>option.rotation===rotation);variant.set(key,only.length?only:list);}orientationChoices.set(mode,variant);}
+  let work=0,limited=false;const budget=2e7,results=[];
   const spend=()=>{if(++work>budget)throw new Error('rectangle-search-budget');};
   const contains=(a,b)=>b.x>=a.x&&b.y>=a.y&&b.x+b.w<=a.x+a.w&&b.y+b.h<=a.y+a.h;
   function reserve(free,occupied){
@@ -307,13 +321,14 @@ function rectangleCandidates(expanded,settings,locked){
     return split.filter((rect,index)=>!split.some((other,otherIndex)=>{spend();return otherIndex!==index&&contains(other,rect)&&(otherIndex<index||!contains(rect,other));}));
   }
   const better=(score,best)=>{if(!best)return true;for(let index=0;index<score.length;index++){if(score[index]!==best[index])return score[index]<best[index];}return false;};
-  search:for(const {order,strategy} of uniqueOrders.flatMap(order=>['bottom','short-side'].map(strategy=>({order,strategy})))){
+  search:for(const {order,strategy,orientation} of [...orientationChoices.keys()].flatMap(orientation=>uniqueOrders.flatMap(order=>['bottom','short-side'].map(strategy=>({order,strategy,orientation}))))){
+    const choicesFor=orientationChoices.get(orientation);
     let free=[{x:0,y:0,w:bw+clearance,h:bh+clearance}],placements=locked.map(entry=>({...entry.placement})),lengthMm=placements.reduce((length,p)=>Math.max(length,p.yMm+p.heightMm),0);
     try{
       for(const entry of locked)free=reserve(free,{x:entry.x,y:entry.y,w:entry.option.raw.w+clearance,h:entry.option.raw.h+clearance});
       for(const item of order){
         let selected=null,score=null;
-        for(const rect of free)for(const option of choices.get(item.originalIndex)){
+        for(const rect of free)for(const option of choicesFor.get(item.originalIndex)){
           spend();
           if(option.w>rect.w||option.h>rect.h||rect.x*cell+option.widthMm>width+EPSILON||rect.y*cell+option.heightMm>maxLength+EPSILON)continue;
           const bottom=Math.max(lengthMm,rect.y*cell+option.heightMm),short=Math.min(rect.w-option.w,rect.h-option.h),long=Math.max(rect.w-option.w,rect.h-option.h);

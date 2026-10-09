@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.61: encaixe do filme não desperdiça mais a lateral. Causas: limite global da busca por pixels (agora por arte, pulando linhas cheias) e encaixe por retângulos que só testava a escolha peça a peça (agora também todas giradas 90°/todas em pé). Caso real 58 cm + arte 29,63×28 + distância 5 mm: 6 artes de 170,5 → 90 cm. Distância padrão continua 3 mm.
+
 - [x] 09/10 — 2.17.60: em Aguardando produção, cada arte de um pedido com várias artes tem “Selecionar pedido inteiro (N artes)”/“Desmarcar este pedido”, ignorando o que já está no filme. 2.17.59: disco cheio no TIFF vira mensagem clara (causa real: C: com 0,1 GB livre; limpas pastas temporárias de teste do 019, ficou 10,7 GB). Navegador desktop/320 PASS.
 
 - [x] 09/10 — 2.17.58: em Aguardando produção, itens já no filme (fonte, VDR, Venduss, arte posicionada e pedido inteiro já adicionado) ficam travados, com borda verde e “Já está neste filme”; Selecionar todos ignora esses itens. Navegador desktop/320 PASS.
