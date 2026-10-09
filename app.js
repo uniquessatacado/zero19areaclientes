@@ -29,7 +29,7 @@ const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
 const BUCKET = 'z19p-assets';
 const BRAND_LOGO = '/zero19-logo.png?v=2.17';
 const ZERO19_LIBRARY_DESCRIPTION = 'Artes próprias da marca, separadas dos clientes';
-const APP_VERSION = '2.17.63';
+const APP_VERSION = '2.17.64';
 function brandLogoHTML(cls='brand-logo-ui'){ return `<img class="${cls}" src="${BRAND_LOGO}" alt="Zero 19">`; }
 const QUALITY_PRESETS = { original: 0, alta: 4032, ultra: 6000, maxima: 8192 };
 const DEFAULT_QUALITY = 'auto300';

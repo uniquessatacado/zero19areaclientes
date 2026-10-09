@@ -1,7 +1,7 @@
 import {loadBlankShirtCatalog,realMockupPreview,renderPieceMockup,colorForCatalog,modelForCatalog} from './manual-shirt-catalog.js?v=2.17.22';
 import {preparePrintArt} from './print-art-preparation.js?v=2.17.44';
 import {assertCompleteFilmPhrases} from './film-phrase-parts.js?v=2.17.50';
-import {verifyFilmLetteringRevisions} from './film-lettering-revisions.js?v=2.17.50';
+import {verifyFilmLetteringRevisions} from './film-lettering-revisions.js?v=2.17.64';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();

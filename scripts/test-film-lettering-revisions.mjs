@@ -25,7 +25,7 @@ for(const patch of [{quantity:1},{metadata:{...row.metadata,font_set_id:'changed
   readRows=[{...row,...patch}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/mudou|alterada/);
 }
 readRows=[row];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,letteringProductionSnapshot:null}]}),/rascunho antigo.*Remova/);
-for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.5,heightCm:3}]){await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]}),/menor.*altura do pedido.*Corrigir altura/,'Do not export a shrunken body or stale smaller print geometry');}
+for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.4,heightCm:5.4}]){await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]}),/menor.*altura do pedido.*Corrigir altura/,'Do not export a shrunken letter body');}
 readRows=[{...row,stage:'cancelled'}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/cancelada.*nenhum arquivo/,'Cancelled application cannot render old PNG/TIFF');
 for(const stage of ['production','ready_pickup','delivered']){readRows=[{...row,stage}];await verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems});}
 readRows=[];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/confirmar/);
@@ -70,6 +70,7 @@ console.log('PASS film lettering snapshots: owner-scoped dedupe, source/revision
   const star={name:'*',nameHeightCm:5.5,heightCm:2.29,letteringProductionSnapshot:{letter_height_cm:5.5}};
   assert.equal(letteringHeightProblem(star),null,'Asterisco sozinho é proporcional à letra de 5,5 cm, não é erro');
   assert.ok(letteringHeightProblem({...star,nameHeightCm:4}),'Corpo da letra menor continua bloqueado');
-  assert.ok(letteringHeightProblem({...star,name:'ANA *'}),'Texto com letras mantém a conferência');
-  console.log('PASS sinais sozinhos (*) não acusam altura menor.');
+  assert.equal(letteringHeightProblem({...star,name:'13+9',heightCm:5.39}),null,'13+9 com corpo 5,5 cm não trava: + e números menores são proporcionais');
+  assert.ok(letteringHeightProblem({...star,name:'13+9',nameHeightCm:5.2,heightCm:5.1}),'Corpo menor que o pedido continua bloqueado com números');
+  console.log('PASS sinais sozinhos (*) e números com + (13+9) não acusam altura menor; corpo continua conferido.');
 }
