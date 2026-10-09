@@ -96,8 +96,16 @@ export async function writeSpotCanvas({canvas,bounds,converter,write,signal,colo
   return writeSpotRows({bounds,converter,write,signal,colorMode,onProgress,readRows:(y,rows)=>context.getImageData(bounds.x,bounds.y+y,bounds.width,rows).data});
 }
 
-export async function writeSpotRows({bounds,readRows,converter,write,signal,colorMode='cmyk',onProgress=()=>{}}){
+// Falta de espaço no disco aparece no Chrome como QuotaExceededError (texto em inglês).
+export function spotDiskSpaceError(error,totalBytes){
+  if(error?.name!=='QuotaExceededError'&&!/quota|storage|no space|espaço/i.test(String(error?.message||'')))return error;
+  const gb=(totalBytes/1e9).toLocaleString('pt-BR',{maximumFractionDigits:1});
+  return new Error('Sem espaço no disco para salvar este TIFF de '+gb+' GB. Libere espaço no computador (o Chrome precisa de pelo menos '+gb+' GB livres) ou salve em outro disco/pendrive com espaço. O PNG do mesmo filme é bem menor. Nenhum pedido foi alterado.');
+}
+
+export async function writeSpotRows({bounds,readRows,converter,write:rawWrite,signal,colorMode='cmyk',onProgress=()=>{}}){
   const header=createSpotTiffHeader({width:bounds.width,height:bounds.height,dpi:300,colorMode});
+  const write=async bytes=>{try{await rawWrite(bytes)}catch(error){throw spotDiskSpaceError(error,header.totalBytes)}};
   let written=0;throwIfSpotCancelled(signal);
   await write(header.header);written+=header.header.byteLength;
   for(let y=0;y<bounds.height;y+=ROWS){
@@ -150,7 +158,7 @@ export async function exportCanvasWithSpot({name,geometry,renderCanvas,renderBan
       result=await writeSpotCanvas({canvas,bounds,converter,signal,colorMode,onProgress,write});
     }
     onProgress({stage:'finish',done:0,total:0});throwIfSpotCancelled(signal);
-    if(sink){await sink.close();sink=null;return {...result,saved:true,name}}
+    if(sink){try{await sink.close()}catch(error){throw spotDiskSpaceError(error,result.bytes)}sink=null;return {...result,saved:true,name}}
     const blob=new Blob(parts,{type:'image/tiff'});parts=[];
     if(blob.size!==result.bytes)throw new Error('O download TIFF ficou incompleto.');
     return {...result,saved:false,name,blob};

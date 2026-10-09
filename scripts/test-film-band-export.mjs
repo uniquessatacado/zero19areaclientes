@@ -47,3 +47,13 @@ const tiffBytes=new Uint8Array(await tiff.blob.arrayBuffer()),pixels=tiffBytes.s
 assert.deepEqual([...pixels.slice(0,4)],pixel(1,5));
 assert.deepEqual([...pixels.slice(pixels.length-4)],pixel(2,39990));
 console.log('film band export: PASS (rendered bands '+rendered+')');
+{
+  const {spotDiskSpaceError}=await import('../film-spot-export.js');
+  const quota=new DOMException('The operation failed because it would cause the application to exceed its storage quota.','QuotaExceededError');
+  const friendly=spotDiskSpaceError(quota,2_400_000_000);
+  assert.match(friendly.message,/Sem espaço no disco.*2,4 GB/);
+  const other=new Error('outro erro');assert.equal(spotDiskSpaceError(other,1),other);
+  const full=await exportCanvasWithSpot({name:'cheio.tif',geometry:{width,height,placements:[{}]},trim:true,colorMode:'rgb',renderBand,renderCanvas:async()=>{throw new Error('x')},picker:async()=>({createWritable:async()=>({write:async()=>{throw quota},abort:async()=>{},close:async()=>{}})})}).catch(error=>error);
+  assert.match(full.message,/Sem espaço no disco/,'Disco cheio vira mensagem clara em português');
+  console.log('PASS disco cheio: mensagem clara com tamanho do TIFF.');
+}
