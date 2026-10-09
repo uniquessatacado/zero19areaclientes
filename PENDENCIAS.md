@@ -1,5 +1,9 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.64 publicada (Vercel conferida, arquivo no ar): "13+9" não trava mais o filme. Conferência de altura agora é só no corpo da letra (5,5 cm); a altura total do desenho (5,39 por causa dos números/+ da fonte) não bloqueia. Corpo menor que o pedido continua bloqueado.
+
+- [~] 09/10 — Prazo 23/10 no NovoVenduss (Aguardando pagamento com 2 alertas + página Prioridade 23/10): ver PENDENCIAS do NovoVenduss; falta rebuild do servidor pelo dono.
+
 - [x] 09/10 — 2.17.63: encaixe testa girar só as artes grandes (≥20% da largura), deixando nomes/frases compridos deitados numa faixa fina; aviso técnico de limite da busca removido da tela (2.17.62). Caso 4×22 + nomes, distância 5 mm: 90 → 71,9 cm. Pendente: comprovar no filme real do dono.
 
 - [x] 09/10 — 2.17.61: encaixe do filme não desperdiça mais a lateral. Causas: limite global da busca por pixels (agora por arte, pulando linhas cheias) e encaixe por retângulos que só testava a escolha peça a peça (agora também todas giradas 90°/todas em pé). Caso real 58 cm + arte 29,63×28 + distância 5 mm: 6 artes de 170,5 → 90 cm. Distância padrão continua 3 mm.
