@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.57: janela Aguardando produção do filme abre tudo desmarcado; botão Selecionar todos/Limpar seleção e Adicionar selecionados. Teste navegador desktop/320 PASS.
+
 - [x] 09/10 — 2.17.56 publicada (Vercel conferida, arquivo igual ao build): "*" sozinho não acusa mais "letra menor que a do pedido". Venda sem estoque do Estampa Política fica para a sessão aberta no NovoVenduss (roteiro no PENDENCIAS de lá).
 
 - [~] 08/10 — Pedido do dono: (1) filme longo PNG/TIFF sem limite de ~2,7 m — 019 2.17.55 gera em faixas, teste sintético 40.000 px PNG/TIFF PASS, build completo PASS; impressão física/RIP de filme longo ainda não conferida. (2) Botão Corrigir altura no item/Corrigir todas e mínimo infantil 4 cm (019 + PDV NovoVenduss). (3) Aguardando pagamento: abas/Já chamei/datas/status no NovoVenduss; migration 20261008200000_zero19_payment_followups.sql PENDENTE de aplicação no banco (sem acesso nesta sessão), página mostra aviso até aplicar. (4) Cor da letra invisível no estúdio do PDV: CSS escopado em .political corrigido. Servidor NovoVenduss exige rebuild pelo dono.
