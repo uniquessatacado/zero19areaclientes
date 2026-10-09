@@ -11,7 +11,10 @@ export function letteringHeightLimits(item){
 export function letteringHeightProblem(item){
   const limits=letteringHeightLimits(item);if(!limits)return null;
   const body=Number(item.nameHeightCm);
-  return !(body>=limits.minimum-.001)||Number(item.heightCm)<body-.001?limits:null;
+  // Sinais sozinhos (*, !, -, ...) são menores que a letra por natureza: a altura total
+  // só é conferida quando há letra ou número; o corpo da letra continua obrigatório.
+  const hasLetter=/[\p{L}\p{N}]/u.test(String(item.name));
+  return !(body>=limits.minimum-.001)||(hasLetter&&Number(item.heightCm)<body-.001)?limits:null;
 }
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 export function assertCurrentLetteringSnapshots(items,rows){

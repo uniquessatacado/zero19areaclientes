@@ -65,3 +65,11 @@ console.log('PASS film lettering snapshots: owner-scoped dedupe, source/revision
   assert.equal(letteringHeightLimits({...men,letteringProductionSnapshot:{letter_height_cm:5,studio_text_layout:'TWENTY_LETTERS'}}).minimum,4.5,'Feminino 5 → 4,5');
   console.log('PASS altura mínima por pedido: masculino 5, feminino 4,5, infantil 4 e botão Corrigir altura.');
 }
+{
+  const {letteringHeightProblem}=await import('../film-lettering-revisions.js');
+  const star={name:'*',nameHeightCm:5.5,heightCm:2.29,letteringProductionSnapshot:{letter_height_cm:5.5}};
+  assert.equal(letteringHeightProblem(star),null,'Asterisco sozinho é proporcional à letra de 5,5 cm, não é erro');
+  assert.ok(letteringHeightProblem({...star,nameHeightCm:4}),'Corpo da letra menor continua bloqueado');
+  assert.ok(letteringHeightProblem({...star,name:'ANA *'}),'Texto com letras mantém a conferência');
+  console.log('PASS sinais sozinhos (*) não acusam altura menor.');
+}
