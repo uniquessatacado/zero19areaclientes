@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.60: em Aguardando produção, cada arte de um pedido com várias artes tem “Selecionar pedido inteiro (N artes)”/“Desmarcar este pedido”, ignorando o que já está no filme. 2.17.59: disco cheio no TIFF vira mensagem clara (causa real: C: com 0,1 GB livre; limpas pastas temporárias de teste do 019, ficou 10,7 GB). Navegador desktop/320 PASS.
+
 - [x] 09/10 — 2.17.58: em Aguardando produção, itens já no filme (fonte, VDR, Venduss, arte posicionada e pedido inteiro já adicionado) ficam travados, com borda verde e “Já está neste filme”; Selecionar todos ignora esses itens. Navegador desktop/320 PASS.
 
 - [x] 09/10 — 2.17.57: janela Aguardando produção do filme abre tudo desmarcado; botão Selecionar todos/Limpar seleção e Adicionar selecionados. Teste navegador desktop/320 PASS.

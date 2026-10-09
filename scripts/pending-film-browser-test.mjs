@@ -33,5 +33,13 @@ try{
    assert.equal(all.before,'Selecionar todos');assert.equal(all.checked,alreadyAdded?1:3);assert.equal(all.label,'Limpar seleção');assert.equal(all.add,false);assert.equal(all.cleared,0);
    assert.match(await evaluate("document.querySelector('.film-pending-modal').textContent"),/1\/3 concluídas · 33%/);
    const shot=await send('Page.captureScreenshot',{format:'png'}),file=path.join(output,viewport.name+(alreadyAdded?'-already-added':'')+'.png');await fs.writeFile(file,Buffer.from(shot.data,'base64'));console.log(JSON.stringify({viewport:viewport.name,alreadyAdded,...result,...selection,screenshot:file}));
- }}
+ }
+   // Mesmo pedido com várias artes: botão Selecionar pedido inteiro marca todas.
+   await send('Page.navigate',{url:'about:blank'});await delay(150);
+   const sameFrame=await send('Page.getFrameTree');await send('Page.setDocumentContent',{frameId:sameFrame.frameTree.frame.id,html:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'</style><body></body>'});
+   await evaluate('(async()=>{'+fixture.replace("project:{id:'project'+i,","project:{id:'project1',")+'})()');await delay(250);
+   const order=await evaluate(`(()=>{const buttons=[...document.querySelectorAll('[data-select-order]')];const before=buttons.map(b=>b.textContent);buttons[0].click();const after={checked:document.querySelectorAll('[data-entry]:checked').length,label:buttons[0].textContent,other:buttons[1]?.textContent,scroll:document.documentElement.scrollWidth,width:innerWidth};buttons[0].click();return {count:buttons.length,before,...after,cleared:document.querySelectorAll('[data-entry]:checked').length};})()`);
+   assert.equal(order.count,2,'Botão aparece nas duas artes do mesmo pedido');assert.match(order.before[0],/Selecionar pedido inteiro \(2 artes\)/);assert.equal(order.checked,2,'Marca as duas artes do pedido, não a do outro pedido');assert.equal(order.label,'Desmarcar este pedido');assert.equal(order.other,'Desmarcar este pedido');assert.equal(order.cleared,0);assert(order.scroll<=order.width+1);
+   const orderShot=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,viewport.name+'-same-order.png'),Buffer.from(orderShot.data,'base64'));console.log(JSON.stringify({viewport:viewport.name,sameOrder:order}));
+ }
 }finally{try{if(socket?.readyState===1)await send('Browser.close');}catch{}socket?.close();child.kill();}
