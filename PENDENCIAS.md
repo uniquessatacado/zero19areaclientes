@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.58: em Aguardando produção, itens já no filme (fonte, VDR, Venduss, arte posicionada e pedido inteiro já adicionado) ficam travados, com borda verde e “Já está neste filme”; Selecionar todos ignora esses itens. Navegador desktop/320 PASS.
+
 - [x] 09/10 — 2.17.57: janela Aguardando produção do filme abre tudo desmarcado; botão Selecionar todos/Limpar seleção e Adicionar selecionados. Teste navegador desktop/320 PASS.
 
 - [x] 09/10 — 2.17.56 publicada (Vercel conferida, arquivo igual ao build): "*" sozinho não acusa mais "letra menor que a do pedido". Venda sem estoque do Estampa Política fica para a sessão aberta no NovoVenduss (roteiro no PENDENCIAS de lá).
