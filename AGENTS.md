@@ -1,5 +1,7 @@
 # Regras do dono — Personalizações ZERO19
 
+- Altura/sinais e venda sem estoque (09/10): sinal sozinho (ex.: *) é proporcional à letra do pedido e não pode acusar altura menor; a conferência continua no corpo da letra. NovoVenduss: botão "Liberar venda sem estoque" no Estampa Política, ligado vende Brasil/lisa nos tamanhos cadastrados e o estoque fica negativo ao marcar pago.
+
 - Aguardando pagamento/filme/cor (08/10, confirmado): página Aguardando pagamento ZERO19 com abas Ainda não chamei/Já chamei, botão Já chamei desfazível, filtro Hoje/Ontem/período no calendário, status por card (Não responde, Aguardando pagar, Desistiu) e criar novos status; tudo salvo no sistema e compartilhado pela equipe. Filme 019 sem limite de comprimento para PNG/TIFF (gerar em faixas, nunca dividir/reduzir). Escrita respeita a altura do pedido; se menor, botão Corrigir altura volta à medida do pedido; infantil mínimo 4 cm também na origem. Cor da letra disponível no estúdio do PDV para qualquer camisa. Publicação: 019 GitHub+Vercel por Claude; NovoVenduss só Git, servidor pelo dono.
 
 - PDV — vendas em espera (08/10, confirmado): qualquer usuário logado da loja vê, retoma ou cancela a venda em espera em qualquer PC/caixa; guardar no sistema, não só no navegador. A venda já em espera no PC original deve subir para o sistema sem se perder. Retomar só uma vez; não altera estoque/pagamento.
