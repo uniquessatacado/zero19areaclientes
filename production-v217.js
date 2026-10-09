@@ -3,11 +3,12 @@ import {openFilmAssetPicker,filmItemFromLibraryAsset} from './film-picker.js?v=2
 import {mountFilmPreview} from './film-preview.js?v=2.17.5';
 import {removeFilmEntry} from './film-edit-core.js?v=2.17.9';
 import {canSeparateFilmPhrase,separateFilmPhrase,reuniteFilmPhrase,resizeFilmPhraseHeight,filmPhraseNominalHeight,assertCompleteFilmPhrases,letteringApplicationPart} from './film-phrase-parts.js?v=2.17.50';
-import {verifyFilmLetteringRevisions} from './film-lettering-revisions.js?v=2.17.50';
+import {verifyFilmLetteringRevisions,letteringHeightProblem} from './film-lettering-revisions.js?v=2.17.50';
 import {createFilmMaskCache} from './film-mask-cache.js?v=2.17.10';
 import {listFilmJobs,getFilmJob} from './film-job-list.js?v=2.17.10';
 import {findCanvasAlphaBounds,cropCanvasToAlpha} from './film-export-core.js?v=2.17.5';
 import {exportCanvasWithSpot,spotCanvasGeometry,throwIfSpotCancelled} from './film-spot-export.js?v=2.17.9';
+import {createFilmBandPainter,exportBandedPng,needsBandedFilm} from './film-band-export.js?v=2.17.9';
 import {createInkCurveLut,loadCurveLibrary,removeCurveProfile,setDefaultCurve,STANDARD_CURVE_ID,upsertCurveProfile} from './film-curve.js?v=2.17.9';
 import {buildQueueSnapshot,fetchQueueRecords,missingQueueStages,scopeQueueRows} from './queue-core.js?v=2.17.12';
 import {measureLetteringItem,measureLetteringLine} from './lettering-core.js?v=2.17.5';
@@ -955,6 +956,10 @@ export function createProductionModule(ctx){
         }finally{if(button.isConnected)button.disabled=false;}
       }));
       app.querySelectorAll('.edit-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent()){const item=filmItems.find(i=>i.localId===b.dataset.id),set=readySets.find(candidate=>candidate.id===item?.sourceId);editFilmItem(item,refreshItems,{fontDefaultHeightCm:set?customizationDefaults(set).nameHeightCm:null})}});
+      app.querySelectorAll('[data-fix-letter-height]').forEach(button=>button.onclick=()=>safe(async()=>{
+        if(!pageCurrent()||button.disabled)return;button.disabled=true;
+        try{await fixFilmLetterHeights(button.dataset.fixLetterHeight==='all'?filmItems.map(i=>i.localId):[button.dataset.fixLetterHeight],refreshItems)}finally{if(button.isConnected)button.disabled=false}
+      }));
       app.querySelectorAll('.duplicate-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent())duplicateFilmItem(filmItems.find(i=>i.localId===b.dataset.id),refreshItems)});
       app.querySelectorAll('.color-film-vector').forEach(b=>b.onclick=()=>{if(pageCurrent())safe(()=>openFilmVectorColorEditor(filmItems.find(i=>i.localId===b.dataset.id),refreshItems))});
       app.querySelectorAll('.remove-film-item').forEach(b=>b.onclick=()=>{if(pageCurrent()){removeCurrentFilmEntry(b.dataset.id,media);drawOrders()}});
@@ -1143,10 +1148,11 @@ export function createProductionModule(ctx){
   }
   function filmItemPreview(item){const url=item.previewDataUrl||(item.path?ctx.publicUrl(item.path):'');return url?`<img src="${h(url)}" alt="" loading="lazy" decoding="async">`:'<span>ARTE</span>'}
   function hasEditableVectorColor(item){return item?.type==='team_customization'&&Boolean(item.vectorSource||(item.glyphs||[]).some(glyph=>glyph.svg_markup))}
-  function filmItemsHTML(){return filmItems.length?filmItems.map(i=>{
+  function filmItemsHTML(){const heightProblems=filmItems.filter(i=>letteringHeightProblem(i)).length;return (heightProblems>1?`<div class="film-height-fix-all" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding:10px;border-radius:12px;background:#450a0a;color:#fecaca"><small style="flex:1 1 180px">${heightProblems} escritas estão menores que a altura do pedido.</small><button class="btn small" data-fix-letter-height="all" style="background:#dc2626;color:#fff;border-color:#dc2626;min-height:40px">Corrigir todas</button></div>`:'')+(filmItems.length?filmItems.map(i=>{
     const manifests=i.phraseManifests||[],locked=manifests.length>0,linkedLettering=i.type==='team_customization'&&i.zero19WorkItemId,ownManifest=manifests.find(manifest=>manifest.id===i.phrasePart?.manifestId),reunite=ownManifest?[ownManifest]:manifests,lockSize=locked&&!editableFilmLetterHeight(i);
-    return `<article class="film-item editable-film-item"><div class="film-item-thumb">${filmItemPreview(i)}</div><div class="film-item-main"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}${editableFilmLetterHeight(i)?' · corpo letra '+h(Number(i.nameHeightCm).toLocaleString('pt-BR'))+' cm':''}</small>${i.symbolFallbackCharacters?.length?`<small class="film-symbol-note" style="color:#facc15;font-size:12px">Fonte alternativa só nos sinais: ${h(i.symbolFallbackCharacters.join(' '))}</small>`:''}${i.phrasePart?`<small>Palavra ${i.phrasePart.index+1}/${ownManifest?.words.length||'?'} · mova e gire sem cortar letras.</small>`:''}</div><button class="film-remove-item remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" value="${i.quantity}" ${locked||linkedLettering?'disabled title="Quantidade do conjunto/pedido"':''}></label><button class="btn small edit-film-item" data-id="${i.localId}" ${lockSize?'disabled':''}>Tamanho</button><button class="btn small duplicate-film-item" data-id="${i.localId}" ${locked||linkedLettering?'disabled':''}>Duplicar</button>${hasEditableVectorColor(i)?`<button class="btn small color-film-vector" data-id="${i.localId}" ${locked?'disabled':''}>Cor vetor</button>`:''}${canSeparateFilmPhrase(i)?`<button class="btn small" data-separate-film-phrase="${i.localId}">Separar palavras</button>`:''}${reunite.map(manifest=>`<button class="btn small" data-reunite-film-phrase="${h(manifest.id)}" title="${h(manifest.sourceText)}">Reunir frase</button>`).join('')}</div>${locked?'<small class="film-phrase-note">Uma só aplicação: exportação exige todas as palavras e cópias. Tamanho ajusta a altura do conjunto inteiro.</small>':''}${linkedLettering?'<small class="film-phrase-note">Escrita e quantidade do pedido: edite antes de adicionar ao filme. Tamanho é uma escolha explícita, sem redução automática.</small>':''}</div></article>`;
-  }).join(''):'<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>'}
+    const heightProblem=letteringHeightProblem(i);
+    return `<article class="film-item editable-film-item"${heightProblem?' style="border-color:#ef4444"':''}><div class="film-item-thumb">${filmItemPreview(i)}</div><div class="film-item-main"><div class="film-item-head"><div><b>${h(i.label)}</b><small>${i.widthCm.toFixed(2)} × ${i.heightCm.toFixed(2)} cm${i.halftone?' • halftone':''}${editableFilmLetterHeight(i)?' · corpo letra '+h(Number(i.nameHeightCm).toLocaleString('pt-BR'))+' cm':''}</small>${i.symbolFallbackCharacters?.length?`<small class="film-symbol-note" style="color:#facc15;font-size:12px">Fonte alternativa só nos sinais: ${h(i.symbolFallbackCharacters.join(' '))}</small>`:''}${i.phrasePart?`<small>Palavra ${i.phrasePart.index+1}/${ownManifest?.words.length||'?'} · mova e gire sem cortar letras.</small>`:''}</div><button class="film-remove-item remove-film-item" data-id="${i.localId}" aria-label="Remover ${h(i.label)}">×</button></div><div class="film-item-edit"><label>Quantidade<input class="film-item-qty" data-id="${i.localId}" type="number" inputmode="numeric" min="1" value="${i.quantity}" ${locked||linkedLettering?'disabled title="Quantidade do conjunto/pedido"':''}></label><button class="btn small edit-film-item" data-id="${i.localId}" ${lockSize?'disabled':''}>Tamanho</button><button class="btn small duplicate-film-item" data-id="${i.localId}" ${locked||linkedLettering?'disabled':''}>Duplicar</button>${hasEditableVectorColor(i)?`<button class="btn small color-film-vector" data-id="${i.localId}" ${locked?'disabled':''}>Cor vetor</button>`:''}${canSeparateFilmPhrase(i)?`<button class="btn small" data-separate-film-phrase="${i.localId}">Separar palavras</button>`:''}${reunite.map(manifest=>`<button class="btn small" data-reunite-film-phrase="${h(manifest.id)}" title="${h(manifest.sourceText)}">Reunir frase</button>`).join('')}</div>${locked?'<small class="film-phrase-note">Uma só aplicação: exportação exige todas as palavras e cópias. Tamanho ajusta a altura do conjunto inteiro.</small>':''}${linkedLettering?'<small class="film-phrase-note">Escrita e quantidade do pedido: edite antes de adicionar ao filme. Tamanho é uma escolha explícita, sem redução automática.</small>':''}${heightProblem?`<div class="film-height-fix" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:8px;border-radius:10px;background:#450a0a;color:#fecaca"><small style="flex:1 1 160px">Letra menor que a do pedido (${h(heightProblem.official.toLocaleString('pt-BR'))} cm).</small><button class="btn small" data-fix-letter-height="${h(i.localId)}" style="background:#dc2626;color:#fff;border-color:#dc2626;min-height:40px">Corrigir altura</button></div>`:''}</div></article>`;
+  }).join(''):'<div class="empty mini">Nenhum item. Adicione uma arte ou personalização.</div>')}
   async function openFilmVectorColorEditor(item,done){
     if(item?.phraseManifests?.length)throw new Error('Reúna a frase antes de alterar a cor do conjunto.');
     if(!hasEditableVectorColor(item))return;let markups=[];
@@ -1176,13 +1182,32 @@ export function createProductionModule(ctx){
     modal.querySelectorAll('[data-close]').forEach(b=>b.onclick=close);const restore=modal.querySelector('[data-restore-height]');if(restore)restore.onclick=()=>{input.value=String(nominal).replace('.',',');input.focus()};modal.onkeydown=e=>{if(e.key==='Escape'){e.preventDefault();close()}};
     form.onsubmit=async event=>{event.preventDefault();if(busy)return;const height=Number(String(input.value).replace(',','.'));if(!Number.isFinite(height)||height<=0||height>100){errorOutput.textContent='Informe uma altura maior que zero e até 100 cm.';return}if(!current()){close();return}busy=true;submit.disabled=true;input.disabled=true;errorOutput.textContent='';
       try{
-        let next,touched;
-        if(item.phrasePart){const reunited=reuniteFilmPhrase(source,item.phrasePart.manifestId).item;reunited.nameHeightCm=height;const sourceLayout=await prepareLetteringLayout(reunited),result=resizeFilmPhraseHeight(source,item.localId,height,{sourceLayout});next=result.items;touched=result.parts;}
-        else{next=structuredClone(source);const resized=next.find(i=>i.localId===item.localId);resized.nameHeightCm=height;resized.sizeOverride=true;delete resized.previewDataUrl;delete resized.previewQualityVersion;touched=[resized];}
-        for(const resized of touched){const layout=await prepareLetteringLayout(resized);resized.widthCm=layout.widthCm;resized.heightCm=layout.heightCm;resized.symbolFallbackCharacters=[...new Set([...layout.nameLine.parts,...layout.numberLine.parts].filter(part=>part.symbolFallback).map(part=>part.char))];const canvas=document.createElement('canvas'),scale=Math.max(1,Math.min(64,1600/resized.widthCm,1600/resized.heightCm));try{canvas.width=Math.ceil(resized.widthCm*scale);canvas.height=Math.ceil(resized.heightCm*scale);const context=canvas.getContext('2d');if(!context)throw new Error('Não foi possível preparar a prévia da escrita.');await drawTeamCustomization(context,resized,0,0,canvas.width,canvas.height);resized.previewDataUrl=canvas.toDataURL('image/png');resized.previewQualityVersion=2;}finally{canvas.width=canvas.height=1;}}
+        const next=await resizedFilmLetterItems(source,item,height);
         assertCompleteFilmPhrases(next);if(!current())throw new Error('A montagem mudou durante o ajuste. Ela foi preservada; abra Tamanho novamente.');filmItems=next;lastFilm=null;filmMaskCache.clear();busy=false;close();await done();ctx.toast('Altura aplicada sem cortar palavras nem diminuir a frase automaticamente.','ok');
       }catch(error){busy=false;submit.disabled=false;input.disabled=false;errorOutput.textContent=error.message||String(error)}
     };input.focus();input.select();
+  }
+  // Mesmo cálculo do editor Tamanho: altura física explícita, layout e prévia refeitos.
+  async function resizedFilmLetterItems(source,item,height){
+    let next,touched;
+    if(item.phrasePart){const reunited=reuniteFilmPhrase(source,item.phrasePart.manifestId).item;reunited.nameHeightCm=height;const sourceLayout=await prepareLetteringLayout(reunited),result=resizeFilmPhraseHeight(source,item.localId,height,{sourceLayout});next=result.items;touched=result.parts;}
+    else{next=structuredClone(source);const resized=next.find(i=>i.localId===item.localId);resized.nameHeightCm=height;resized.sizeOverride=true;delete resized.previewDataUrl;delete resized.previewQualityVersion;touched=[resized];}
+        for(const resized of touched){const layout=await prepareLetteringLayout(resized);resized.widthCm=layout.widthCm;resized.heightCm=layout.heightCm;resized.symbolFallbackCharacters=[...new Set([...layout.nameLine.parts,...layout.numberLine.parts].filter(part=>part.symbolFallback).map(part=>part.char))];const canvas=document.createElement('canvas'),scale=Math.max(1,Math.min(64,1600/resized.widthCm,1600/resized.heightCm));try{canvas.width=Math.ceil(resized.widthCm*scale);canvas.height=Math.ceil(resized.heightCm*scale);const context=canvas.getContext('2d');if(!context)throw new Error('Não foi possível preparar a prévia da escrita.');await drawTeamCustomization(context,resized,0,0,canvas.width,canvas.height);resized.previewDataUrl=canvas.toDataURL('image/png');resized.previewQualityVersion=2;}finally{canvas.width=canvas.height=1;}}
+    return next;
+  }
+  // Botão Corrigir altura: volta cada escrita vinculada para a altura oficial do pedido.
+  async function fixFilmLetterHeights(ids,done){
+    const source=filmItems,change=filmDraftChange;let next=source,fixed=0;const seen=new Set();
+    for(const id of ids){
+      const item=next.find(i=>i.localId===id),problem=letteringHeightProblem(item);if(!item||!problem)continue;
+      const key=item.phrasePart?.manifestId||item.localId;if(seen.has(key))continue;seen.add(key);
+      next=await resizedFilmLetterItems(next,item,problem.official);fixed++;
+    }
+    if(!fixed)return ctx.toast('As alturas já estão corretas.','ok');
+    assertCompleteFilmPhrases(next);
+    if(source!==filmItems||change!==filmDraftChange)throw new Error('A montagem mudou durante a correção. Toque em Corrigir altura novamente.');
+    filmItems=next;lastFilm=null;filmMaskCache.clear();await done();
+    ctx.toast(fixed+' escrita(s) corrigida(s) para a altura do pedido. Toque em Atualizar filme para recalcular o encaixe.','ok');
   }
   function editFilmItem(item,done,options={}){
     if(!item)return;
@@ -1378,9 +1403,11 @@ export function createProductionModule(ctx){
     // Exportação para o RIP é sempre um único PNG contínuo. Não dividir o filme
     // automaticamente: a medida física calculada na prancheta precisa chegar inteira ao RIP.
     const fullWidthPixels=cmToPx(layout.filmWidthMm/10),fullHeightPixels=cmToPx(layout.lengthMm/10);
-    if(fullWidthPixels<=0||fullHeightPixels<=0||fullWidthPixels>32767||fullHeightPixels>32767)throw new Error('O filme ultrapassa o limite de dimensão de um único PNG neste navegador. Reduza o comprimento do job antes de exportar.');
-    const estimatedRgbaBytes=fullWidthPixels*fullHeightPixels*4;
-    if(estimatedRgbaBytes>900e6)throw new Error('Este filme é grande demais para gerar um único PNG com segurança neste navegador. Divida o job manualmente em dois filmes; a exportação automática nunca separa as artes.');
+    // Filmes longos são gerados em faixas, sem limite de comprimento do canvas.
+    if(fullWidthPixels<=0||fullHeightPixels<=0||fullWidthPixels>32767)throw new Error('A largura do filme ultrapassa o limite de um único PNG neste navegador.');
+    const filmBandPainter=(placements,width,check)=>createFilmBandPainter({width,placements,check,
+      loadImage:async p=>{const item=items.find(item=>item.localId===p.id);if(item.type!=='asset')return null;const asset=assetMap.get(item.sourceId),source=item.path||asset?.processed_path||asset?.original_path;if(!source)throw new Error('Uma arte não tem arquivo para exportar.');const image=new Image();image.crossOrigin='anonymous';image.src=await ctx.assetUrls?.sourceUrl({...item,path:source})||ctx.publicUrl(source);await image.decode();return image},
+      drawPlacement:async(g,p,image)=>{const item=items.find(item=>item.localId===p.id),sourceW=cmToPx((p.sourceWidthMm||item.widthCm*10)/10),sourceH=cmToPx((p.sourceHeightMm||item.heightCm*10)/10);if(item.type==='asset')drawPlacedImage(g,image,p.x,p.y,p.w,p.h,p.rotation,sourceW,sourceH);else{g.save();try{g.translate(p.x+p.w/2,p.y+p.h/2);g.rotate((p.rotation||0)*Math.PI/180);await drawTeamCustomization(g,item,-sourceW/2,-sourceH/2,sourceW,sourceH)}finally{g.restore()}}}});
     const segments=[{start:0,end:layout.lengthMm}],modal=document.createElement('div'),previousFocus=document.activeElement,urls=new Set();let busy=false,closed=false,exportRecorded=false,spotController=null,curveOverlay=null;
     const exportAccount=String(owner()||''),exportGeneration=productionAccountGeneration;
     const currentExport=()=>!closed&&exportGeneration===productionAccountGeneration&&exportAccount===String(owner()||'')&&exportRoute===location.hash;
@@ -1461,7 +1488,8 @@ export function createProductionModule(ctx){
         await verifyFilmLetteringRevisions({supabase,ownerId:exportAccount,items,isCurrent:currentExport});
         const geometry=spotCanvasGeometry(layout,trim);
         const colorMode=tiffColor.value,applyCurve=colorMode==='cmyk'&&tiffCurve.checked,curveSnapshot={...activeCurve},curveLut=applyCurve?activeCurveLut():Uint8Array.from({length:256},(_,i)=>i);
-        const result=await exportCanvasWithSpot({name:filmExportBase(media)+(colorMode==='rgb'?'-rgb':'-spot'+(applyCurve?'':'-sem-curva'))+'.tif',geometry,trim,signal,curveLut,colorMode,onProgress:progress,renderCanvas:async({signal,onProgress})=>{
+        const tiffBands=filmBandPainter(geometry.placements,geometry.width,requireCurrentExport);
+        const result=await exportCanvasWithSpot({name:filmExportBase(media)+(colorMode==='rgb'?'-rgb':'-spot'+(applyCurve?'':'-sem-curva'))+'.tif',geometry,trim,signal,curveLut,colorMode,onProgress:progress,renderBand:async options=>{try{return await tiffBands.renderBand(options)}catch(error){tiffBands.dispose();throw error}},renderCanvas:async({signal,onProgress})=>{
           const canvas=document.createElement('canvas');canvas.width=geometry.width;canvas.height=geometry.height;const g=canvas.getContext('2d',{willReadFrequently:true});
           if(!g){canvas.width=canvas.height=1;throw new Error('Falta memória para renderizar o filme em tamanho real.')}
           try{
@@ -1477,7 +1505,7 @@ export function createProductionModule(ctx){
             }
             throwIfSpotCancelled(signal);return canvas;
           }catch(error){canvas.width=canvas.height=1;throw error}
-        }});
+        }}).finally(()=>tiffBands.dispose());
         if(!currentExport())return;
         const row=document.createElement('div');row.className='film-export-result';const description=document.createElement('div'),title=document.createElement('b'),detail=document.createElement('small');title.textContent=result.name;detail.textContent=result.width+' × '+result.height+' px · '+(result.width/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' × '+(result.height/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' cm · TIFF 300 DPI · '+(colorMode==='rgb'?'RGB com transparência · sem curva':('CMYK + Cor Spot 1 · '+(applyCurve?'curva '+curveSnapshot.inputPercent+'→'+curveSnapshot.outputPercent:'sem curva')));description.append(title,detail);row.append(description);
         if(result.saved){const saved=document.createElement('span');saved.textContent='Arquivo salvo';row.append(saved)}else{const url=URL.createObjectURL(result.blob);urls.add(url);const link=document.createElement('a');link.className='btn primary';link.dataset.downloadSpotExport='';link.href=url;link.download=result.name;link.textContent='Baixar TIFF';row.append(link)}
@@ -1500,7 +1528,17 @@ export function createProductionModule(ctx){
           // Render at one original origin, then crop native alpha. Rendering at
           // a shifted origin changes Canvas RGB rounding even for 90° rotations.
           const left=0,top=0,widthPx=cmToPx(layout.filmWidthMm/10),heightPx=cmToPx((segment.end-segment.start)/10);
-          if(widthPx<=0||heightPx<=0||widthPx>32767||heightPx>32767||widthPx*heightPx*4>900e6)throw new Error('O filme completo ultrapassa o limite de memória segura para um único PNG neste navegador. Divida o job manualmente; o sistema não separa mais a exportação automaticamente.');
+          if(widthPx<=0||heightPx<=0||widthPx>32767)throw new Error('A largura do filme ultrapassa o limite de um único PNG neste navegador.');
+          if(needsBandedFilm(widthPx,heightPx)){
+            // Filme longo: mesmo arquivo único e contínuo, gerado em faixas para não estourar a memória do navegador.
+            const bands=filmBandPainter(placements,widthPx,requireCurrentExport);
+            try{
+              const result=await exportBandedPng({width:widthPx,height:heightPx,renderBand:bands.renderBand,dpi:300,onProgress:info=>{button.textContent=(info.stage==='bounds'?'Conferindo filme longo':'Gravando PNG longo')+' · '+Math.round(info.done/info.total*100)+'%'}});
+              requireCurrentExport();
+              const name=filmExportBase(media)+'.png',url=URL.createObjectURL(result.blob);urls.add(url);const row=document.createElement('div');row.className='film-export-result';row.innerHTML='<div><b>'+h(name)+'</b><small>'+result.width+' × '+result.height+' px · '+(result.width/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' × '+(result.height/300*2.54).toLocaleString('pt-BR',{maximumFractionDigits:3})+' cm<br>300 DPI · Filme longo em um único PNG, sem redimensionar'+'</small></div><a class="btn primary" data-download-film-export href="'+url+'" download="'+h(name)+'">Baixar PNG</a>';output.appendChild(row);
+            }finally{bands.dispose()}
+            continue;
+          }
           const canvas=document.createElement('canvas');canvas.width=widthPx;canvas.height=heightPx;const g=canvas.getContext('2d',{willReadFrequently:true});
           if(!g)throw new Error('O navegador não tem memória suficiente para gerar o filme completo em um único PNG.');
           try{

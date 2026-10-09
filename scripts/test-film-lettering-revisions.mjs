@@ -25,7 +25,7 @@ for(const patch of [{quantity:1},{metadata:{...row.metadata,font_set_id:'changed
   readRows=[{...row,...patch}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/mudou|alterada/);
 }
 readRows=[row];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,letteringProductionSnapshot:null}]}),/rascunho antigo.*Remova/);
-for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.5,heightCm:3}]){await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]}),/menor.*altura autorizada/,'Do not export a shrunken body or stale smaller print geometry');}
+for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.5,heightCm:3}]){await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]}),/menor.*altura do pedido.*Corrigir altura/,'Do not export a shrunken body or stale smaller print geometry');}
 readRows=[{...row,stage:'cancelled'}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/cancelada.*nenhum arquivo/,'Cancelled application cannot render old PNG/TIFF');
 for(const stage of ['production','ready_pickup','delivered']){readRows=[{...row,stage}];await verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems});}
 readRows=[];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/confirmar/);
@@ -53,3 +53,15 @@ assert.equal((source.match(/await verifyFilmLetteringRevisions\(/g)||[]).length,
 assert.match(source,/markProduction\?\.\(items,\[\.\.\.selectedProductionGroups\],layout\)/);
 const proof=readFileSync(new URL('film-v2176-functions.txt',import.meta.url),'utf8');assert.match(proof,/const candidates=.*!item\.phraseManifests\?\.length&&!item\.zero19WorkItemId/,'Split parts and linked application text cannot be edited by generic proof');
 console.log('PASS film lettering snapshots: owner-scoped dedupe, source/revision/font/quantity CAS payload, source production JSON, missing parts/copies, stale/legacy/read/race errors cannot release application, PNG/history untouched.');
+{
+  const {letteringHeightLimits,letteringHeightProblem}=await import('../film-lettering-revisions.js');
+  const kid={name:'ANA',nameHeightCm:3.6,heightCm:3.6,letteringProductionSnapshot:{letter_height_cm:4,studio_text_layout:'TWENTY_LETTERS'}};
+  assert.deepEqual(letteringHeightLimits(kid),{official:4,minimum:4},'Infantil nunca abaixo de 4 cm');
+  assert.ok(letteringHeightProblem(kid));
+  assert.equal(letteringHeightProblem({...kid,nameHeightCm:4,heightCm:4}),null);
+  const men={name:'JOÃO',nameHeightCm:5,heightCm:5.2,letteringProductionSnapshot:{letter_height_cm:5.5,studio_text_layout:'TWENTY_LETTERS'}};
+  assert.equal(letteringHeightProblem(men),null,'Masculino 20 letras aceita até 5 cm');
+  assert.equal(letteringHeightProblem({...men,letteringProductionSnapshot:{letter_height_cm:5.5}})?.official,5.5,'Pedido antigo exige a altura do pedido');
+  assert.equal(letteringHeightLimits({...men,letteringProductionSnapshot:{letter_height_cm:5,studio_text_layout:'TWENTY_LETTERS'}}).minimum,4.5,'Feminino 5 → 4,5');
+  console.log('PASS altura mínima por pedido: masculino 5, feminino 4,5, infantil 4 e botão Corrigir altura.');
+}

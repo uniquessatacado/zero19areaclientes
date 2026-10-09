@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {canSeparateFilmPhrase,separateFilmPhrase,reuniteFilmPhrase,assertCompleteFilmPhrases,letteringApplicationPart} from '../film-phrase-parts.js';
+import {letteringHeightProblem} from '../film-lettering-revisions.js';
 
 const source=readFileSync(new URL('../production-v217.js',import.meta.url),'utf8'),start=source.indexOf("      app.querySelectorAll('[data-separate-film-phrase],[data-reunite-film-phrase]')"),end=source.indexOf("      app.querySelectorAll('.edit-film-item')",start);
 assert(start>0&&end>start);
@@ -25,7 +26,7 @@ current=false;const readsBefore=readCount;await button.onclick();assert.equal(re
 const editableStart=source.indexOf('  function editableFilmLetterHeight('),editableEnd=source.indexOf('  function openFilmLetterHeightEditor(',editableStart);
 assert(editableStart>0&&editableEnd>editableStart,'The actual lettering size eligibility helper is tested');
 const editableFilmLetterHeight=runInNewContext(source.slice(editableStart,editableEnd)+';editableFilmLetterHeight');
-const htmlStart=source.indexOf('  function filmItemsHTML()'),htmlEnd=source.indexOf('\n  async function openFilmVectorColorEditor(',htmlStart),htmlContext={filmItems:[structuredClone(base)],filmItemPreview:()=>'<span>Preview</span>',hasEditableVectorColor:()=>false,h:value=>String(value||'').replaceAll('<','&lt;').replaceAll('>','&gt;'),canSeparateFilmPhrase,editableFilmLetterHeight};
+const htmlStart=source.indexOf('  function filmItemsHTML()'),htmlEnd=source.indexOf('\n  async function openFilmVectorColorEditor(',htmlStart),htmlContext={letteringHeightProblem,filmItems:[structuredClone(base)],filmItemPreview:()=>'<span>Preview</span>',hasEditableVectorColor:()=>false,h:value=>String(value||'').replaceAll('<','&lt;').replaceAll('>','&gt;'),canSeparateFilmPhrase,editableFilmLetterHeight};
 const html=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',htmlContext);assert.match(html,/data-separate-film-phrase="phrase"/);assert.match(html,/Cliente &lt;teste&gt;/);assert.doesNotMatch(html,/data-reunite-film-phrase/);
 const split=separateFilmPhrase([base],'phrase');const wordHtml=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',{...htmlContext,filmItems:split.items});assert.equal((wordHtml.match(/data-reunite-film-phrase=/g)||[]).length,4);assert.doesNotMatch(wordHtml,/data-separate-film-phrase/);assert.equal((wordHtml.match(/class="film-item-qty"[^>]+ disabled/g)||[]).length,4);assert.match(wordHtml,/Palavra 1\/4/);assert.match(wordHtml,/Uma só aplicação/);
 assert.equal((wordHtml.match(/edit-film-item[^>]+ disabled/g)||[]).length,0,'Tamanho is enabled for a whole-word group without unlocking application quantity');
@@ -37,3 +38,9 @@ const linkedHtml=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML
 const css=readFileSync(new URL('../production-v217.css',import.meta.url),'utf8');assert.match(css,/\[data-separate-film-phrase\].*min-height:44px!important;background:#fff;color:#111113/,'Full-width legible 44px touch actions');
 assert.match(source,/button\.dataset\.separateFilmPhrase\?separateFilmPhrase/);assert.match(source,/source!==filmItems\|\|change!==filmDraftChange/);
 console.log('PASS film phrase actions: whole-word rendering/layout before atomic commit, lossless reunite, no mutation on font failure/stale edit/route, visible source/split actions, protected word/application quantity, escaped text and responsive contrast/touch CSS.');
+{
+  const short={...base,localId:'short',zero19WorkItemId:'w1',nameHeightCm:3,heightCm:3,letteringProductionSnapshot:{letter_height_cm:5.5}};
+  const fixHtml=runInNewContext(source.slice(htmlStart,htmlEnd)+';filmItemsHTML()',{...htmlContext,filmItems:[short,{...short,localId:'short2'}]});
+  assert.match(fixHtml,/data-fix-letter-height="short"/);assert.match(fixHtml,/data-fix-letter-height="all"/);assert.match(fixHtml,/5,5 cm/);
+  console.log('PASS botão Corrigir altura aparece no item e em Corrigir todas.');
+}
