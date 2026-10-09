@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 09/10 — 2.17.66: "Montar no estúdio" no filme (estampas Estampa Política + escritas + cor + quantidade direto no filme). Build PASS; QA navegador Edge desktop/320 PASS com catálogo real e preparação simulada (scripts/film-studio-browser-qa.mjs). PENDENTE: teste logado real (preparo da estampa pela função zero19-vdr-import-art e escrita na fonte Brasil dentro do filme).
+
 - [x] 09/10 — 2.17.65 publicada (Vercel conferida): altura menor só avisa, nunca bloqueia exportar; TIFF acima de 4 GB sai em BigTIFF (validado com leitor tifffile: CMYK+Spot/RGB, 300 DPI, pixels iguais); PNG longo esvazia memória a cada ~64 MB. Pendente: filme real de 25 m impresso/aberto no RIP; disco C: com só 3,5 GB livres (TIFF de 25 m ≈ 10 GB).
 
 - [x] 09/10 — 2.17.64 publicada (Vercel conferida, arquivo no ar): "13+9" não trava mais o filme. Conferência de altura agora é só no corpo da letra (5,5 cm); a altura total do desenho (5,39 por causa dos números/+ da fonte) não bloqueia. Corpo menor que o pedido continua bloqueado.

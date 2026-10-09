@@ -562,6 +562,32 @@ export function createZero19PdvSync(ctx){
     const profile={asset_id:asset.data.id,default_width_cm:width,default_height_cm:height,aspect_ratio:width/height,halftone:Boolean(production.needs_halftone),rotation_policy:'180',allow_internal_nesting:!production.needs_halftone,ready_for_print:true};
     return {...filmItemFromLibraryAsset(filmAsset,profile,{quantity:item.quantity,companyName}),storageBucket,officialProjectId:item.project_id,officialOrderRef:orderNo(item.summary.project),externalOrderItemRef:item.personalization_sale_id,productionGroupKeys:['order:'+item.project_id],zero19WorkItemId:item.id};
   }
+  // Estúdio no filme (09/10): mesma preparação de PNG 300 DPI do PDV (zero19-vdr-import-art).
+  // Medida por aplicação no filme; a arte padrão e o original privado não são alterados.
+  async function prepareStudioArtFilmItem({printId,printName,heightCm,quantity}){
+    const owner=accountOwnerId(),height=Number(heightCm),qty=Number(quantity);
+    if(!(height>=1&&height<=100))throw new Error('Altura da estampa entre 1 e 100 cm.');
+    if(!Number.isSafeInteger(qty)||qty<1)throw new Error('Quantidade inválida.');
+    const call=async body=>{
+      const {data,error}=await supabase.functions.invoke('zero19-vdr-import-art',{body:{tenant_id:ZERO19_TENANT_ID,political_print_id:printId,...body}});
+      if(error){let message=error.message;try{const detail=await error.context?.json?.();if(detail?.error)message=detail.error}catch{}throw new Error((printName?printName+': ':'')+(message||'não foi possível preparar a estampa.'))}
+      if(data?.error)throw new Error((printName?printName+': ':'')+data.error);return data;
+    };
+    let asset=(await call({action:'default'})).asset;
+    if(!asset?.id)asset=(await call({action:'import',dimension:'height',size_cm:height})).asset;
+    if(!asset?.id)throw new Error('A estampa '+(printName||'')+' não voltou preparada. Tente novamente.');
+    const row=await supabase.from('z19p_assets').select('*').eq('id',asset.id).eq('owner_id',owner).single();
+    if(row.error)throw row.error;if(owner!==accountOwnerId())throw new Error('A conta mudou. Abra o estúdio novamente.');
+    const storageBucket=asset.storage_bucket||row.data.metadata?.storage_bucket||'z19p-assets';
+    if(!['z19p-private','z19p-assets'].includes(storageBucket))throw new Error('O armazenamento desta estampa não está disponível para o filme.');
+    const ratio=Number(asset.width_cm)>0&&Number(asset.height_cm)>0?Number(asset.width_cm)/Number(asset.height_cm):Number(row.data.width)/Number(row.data.height);
+    if(!(ratio>0))throw new Error('A estampa não tem proporção válida.');
+    const filmAsset={...row.data,processed_path:asset.path||row.data.processed_path,metadata:{...row.data.metadata,storage_bucket:storageBucket}};
+    const profile={asset_id:row.data.id,default_width_cm:height*ratio,default_height_cm:height,aspect_ratio:ratio,halftone:false,rotation_policy:'180',allow_internal_nesting:true,ready_for_print:true};
+    const item={...filmItemFromLibraryAsset(filmAsset,profile,{quantity:qty,companyName:'Estúdio'}),storageBucket,studioPrintId:printId};
+    if(printName)item.label='Estúdio • '+printName+' • '+String(height).replace('.',',')+' cm';
+    return item;
+  }
   async function prepareVendussFilmItem(workItemId){
     const owner=accountOwnerId(),item=(await pendingVendussFilmRows()).find(row=>row.id===workItemId);
     if(!item)throw new Error('O pedido Venduss não está mais aguardando produção. Atualize a seleção.');
@@ -780,5 +806,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareVdrFilmItem,refreshArtworkPreview,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareStudioArtFilmItem,prepareVdrFilmItem,refreshArtworkPreview,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
 }
