@@ -303,7 +303,10 @@ function rectangleCandidates(expanded,settings,locked){
   // em pé + deitada não cabem lado a lado (ex.: 29,6 + 28 cm + distância > 58 cm),
   // duas deitadas cabem (28 + 28 cm) e o filme fica pela metade.
   const orientationChoices=new Map([['any',choices]]);
-  for(const [mode,rotation] of [['rot',90],['flat',0]]){const variant=new Map();for(const [key,list] of choices){const only=list.filter(option=>option.rotation===rotation);variant.set(key,only.length?only:list);}orientationChoices.set(mode,variant);}
+  // Variantes "só as grandes": nomes/frases compridos continuam livres para deitar
+  // numa faixa fina em vez de ficarem em pé esticando o filme (dono 09/10).
+  const bigItems=new Set(unlocked.filter(item=>Math.min(item.widthMm,item.heightMm)>=width*0.2).map(item=>item.originalIndex));
+  for(const [mode,rotation,onlyBig] of [['rot-big',90,true],['flat-big',0,true],['rot',90,false],['flat',0,false]]){const variant=new Map();for(const [key,list] of choices){const only=onlyBig&&!bigItems.has(key)?list:list.filter(option=>option.rotation===rotation);variant.set(key,only.length?only:list);}orientationChoices.set(mode,variant);}
   let work=0,limited=false;const budget=2e7,results=[];
   const spend=()=>{if(++work>budget)throw new Error('rectangle-search-budget');};
   const contains=(a,b)=>b.x>=a.x&&b.y>=a.y&&b.x+b.w<=a.x+a.w&&b.y+b.h<=a.y+a.h;

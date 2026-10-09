@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 09/10 — 2.17.63: encaixe testa girar só as artes grandes (≥20% da largura), deixando nomes/frases compridos deitados numa faixa fina; aviso técnico de limite da busca removido da tela (2.17.62). Caso 4×22 + nomes, distância 5 mm: 90 → 71,9 cm. Pendente: comprovar no filme real do dono.
+
 - [x] 09/10 — 2.17.61: encaixe do filme não desperdiça mais a lateral. Causas: limite global da busca por pixels (agora por arte, pulando linhas cheias) e encaixe por retângulos que só testava a escolha peça a peça (agora também todas giradas 90°/todas em pé). Caso real 58 cm + arte 29,63×28 + distância 5 mm: 6 artes de 170,5 → 90 cm. Distância padrão continua 3 mm.
 
 - [x] 09/10 — 2.17.60: em Aguardando produção, cada arte de um pedido com várias artes tem “Selecionar pedido inteiro (N artes)”/“Desmarcar este pedido”, ignorando o que já está no filme. 2.17.59: disco cheio no TIFF vira mensagem clara (causa real: C: com 0,1 GB livre; limpas pastas temporárias de teste do 019, ficou 10,7 GB). Navegador desktop/320 PASS.
