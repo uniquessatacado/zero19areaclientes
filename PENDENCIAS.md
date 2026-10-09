@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 09/10 — NovoVenduss: trocar frete em Aguardando pagamento e na gestão do pedido (pedido do site não pago dava "precisa de uma peça física"). Git 304e1469; PENDENTE do dono: rodar SQL 20261009150000_zero19_pending_shipping_change.sql e reconstruir o frontend. Nada mudou no aplicativo Personalizações nesta frente.
+
 - [~] 09/10 — 2.17.66: "Montar no estúdio" no filme (estampas Estampa Política + escritas + cor + quantidade direto no filme). Build PASS; QA navegador Edge desktop/320 PASS com catálogo real e preparação simulada (scripts/film-studio-browser-qa.mjs). PENDENTE: teste logado real (preparo da estampa pela função zero19-vdr-import-art e escrita na fonte Brasil dentro do filme).
 
 - [x] 09/10 — 2.17.65 publicada (Vercel conferida): altura menor só avisa, nunca bloqueia exportar; TIFF acima de 4 GB sai em BigTIFF (validado com leitor tifffile: CMYK+Spot/RGB, 300 DPI, pixels iguais); PNG longo esvazia memória a cada ~64 MB. Pendente: filme real de 25 m impresso/aberto no RIP; disco C: com só 3,5 GB livres (TIFF de 25 m ≈ 10 GB).
