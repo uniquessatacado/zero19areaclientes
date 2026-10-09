@@ -1340,7 +1340,7 @@ export function createProductionModule(ctx){
       button.textContent='Calculando encaixe…';
       const result=await runNesting(items,{filmWidthMm:Number(profile.usable_width_cm)*10,mode,gapMm:gap,cellMm:mode==='maximum'?1:2,freeRotation:filmSettings.freeRotation,angleStep:filmSettings.angleStep,lockedPlacements:lastFilm?.placements.filter(p=>p.locked)||[],baselinePlacements:lastFilm?.placements||[]});if(!current())return;
       const previewsReady=await regenerateFilmDraftPreviews();if(!current())return;if(!previewsReady){lastFilm=null;throw new Error(filmDraftNote);}
-      lastFilm=result;filmDraftNote='';saveFilmDraft(true);if(result.rotationSearchWarning)ctx.toast(result.rotationSearchWarning,'warn');if(result.nestingSearchWarning)ctx.toast(result.nestingSearchWarning,'warn');
+      lastFilm=result;filmDraftNote='';saveFilmDraft(true);/* Limite interno da busca não é erro: o melhor encaixe validado já está aplicado (dono 09/10). */
       drawFilm(media);app.querySelector('#exportFilm').disabled=false;app.querySelector('#saveFilm').disabled=false;
     }catch(error){if(current()){console.error(error);filmDraftNote='Itens preservados. Não foi possível concluir o encaixe: '+(error.message||String(error));filmDraftBanner();const metrics=app.querySelector('#filmMetrics');if(metrics)metrics.textContent=filmDraftNote;ctx.toast(error.message||String(error),'err')}}finally{if(button.isConnected&&button===app.querySelector('#calculateFilm')&&button.dataset.calculation===String(generation)){button.disabled=false;button.textContent='Atualizar filme'}}
   }

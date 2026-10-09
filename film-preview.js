@@ -44,7 +44,7 @@ export function mountFilmPreview({element,layout,items,publicUrl,validate,onChan
   inspector.querySelectorAll('[data-angle-preset]').forEach(button=>button.onclick=()=>rotate(Number(button.dataset.anglePreset)));
   get('[data-angle]').onchange=()=>{const value=num(get('[data-angle]').value);if(!Number.isFinite(value))return status('Informe um ângulo válido em graus.',true);rotate(value,{free:value%90!==0})};
   get('[data-angle]').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();get('[data-angle]').blur()}};
-  get('[data-repack]').onclick=async()=>{if(busy||!active())return;setBusy(true);status('Procurando um encaixe menor sem mexer nas posições travadas…');try{const next=await onRepack(layout.placements.filter(p=>p.locked));if(!active()||!next?.placements)return;if(onChange(next)===false)return;layout=next;status(next.nestingSearchWarning||next.rotationSearchWarning||'Espaços otimizados. As posições travadas foram preservadas.')}catch(error){if(active())status(error.message,true)}finally{if(active()){setBusy(false);render()}}};
+  get('[data-repack]').onclick=async()=>{if(busy||!active())return;setBusy(true);status('Procurando um encaixe menor sem mexer nas posições travadas…');try{const next=await onRepack(layout.placements.filter(p=>p.locked));if(!active()||!next?.placements)return;if(onChange(next)===false)return;layout=next;status('Espaços otimizados. As posições travadas foram preservadas.')}catch(error){if(active())status(error.message,true)}finally{if(active()){setBusy(false);render()}}};
   render();return {getLayout:()=>layout,deleteSelected:removeSelected};
 }
 import {rotatedBoundsMm} from './nesting-core.js?v=2.17.3';
