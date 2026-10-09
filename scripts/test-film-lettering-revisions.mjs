@@ -25,7 +25,7 @@ for(const patch of [{quantity:1},{metadata:{...row.metadata,font_set_id:'changed
   readRows=[{...row,...patch}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/mudou|alterada/);
 }
 readRows=[row];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,letteringProductionSnapshot:null}]}),/rascunho antigo.*Remova/);
-for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.4,heightCm:5.4}]){await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]}),/menor.*altura do pedido.*Corrigir altura/,'Do not export a shrunken letter body');}
+for(const patch of [{nameHeightCm:3,heightCm:3},{nameHeightCm:5.4,heightCm:5.4},{name:'13+9',nameHeightCm:5.5,heightCm:5.39}]){await verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:[{...base,...patch}]});} // 09/10: altura menor só avisa, nunca bloqueia exportar
 readRows=[{...row,stage:'cancelled'}];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/cancelada.*nenhum arquivo/,'Cancelled application cannot render old PNG/TIFF');
 for(const stage of ['production','ready_pickup','delivered']){readRows=[{...row,stage}];await verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems});}
 readRows=[];await assert.rejects(verifyFilmLetteringRevisions({supabase,ownerId:'owner',items:sourceItems}),/confirmar/);

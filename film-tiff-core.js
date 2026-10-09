@@ -130,6 +130,38 @@ function validDimension(value) {
   return Number.isSafeInteger(value) && value > 0 && value <= UINT32_MAX;
 }
 
+function createBigTiffHeader({ entries, pixelBytes, width, height }) {
+  const big = entries.map(([tag, type, count, payload]) =>
+    tag === 273 || tag === 279 ? [tag, 16, 1, new Uint8Array(8)] : [tag, type, count, payload]);
+  let pixelOffset = 16 + 8 + big.length * 20 + 8;
+  for (const entry of big) {
+    if (entry[3].length > 8) pixelOffset += entry[3].length + entry[3].length % 2;
+  }
+  const totalBytes = pixelOffset + pixelBytes;
+  if (!Number.isSafeInteger(totalBytes)) throw new RangeError('O filme é grande demais para ser representado.');
+  const header = new Uint8Array(pixelOffset);
+  const view = new DataView(header.buffer);
+  header.set([0x49, 0x49, 43, 0, 8, 0, 0, 0]);
+  view.setBigUint64(8, 16n, true);
+  view.setBigUint64(16, BigInt(big.length), true);
+  let dataOffset = 16 + 8 + big.length * 20 + 8;
+  big.forEach(([tag, type, count, payload], index) => {
+    const entryOffset = 24 + index * 20;
+    view.setUint16(entryOffset, tag, true);
+    view.setUint16(entryOffset + 2, type, true);
+    view.setBigUint64(entryOffset + 4, BigInt(count), true);
+    if (tag === 273) view.setBigUint64(entryOffset + 12, BigInt(pixelOffset), true);
+    else if (tag === 279) view.setBigUint64(entryOffset + 12, BigInt(pixelBytes), true);
+    else if (payload.length <= 8) header.set(payload, entryOffset + 12);
+    else {
+      view.setBigUint64(entryOffset + 12, BigInt(dataOffset), true);
+      header.set(payload, dataOffset);
+      dataOffset += payload.length + payload.length % 2;
+    }
+  });
+  return { header, pixelOffset, pixelBytes, totalBytes, width, height, bigTiff: true };
+}
+
 /**
  * Return only the header, never a full-image buffer. Append width*height*5 bytes
  * in row-major CMYK+Spot order. Many writes still constitute one logical TIFF
@@ -143,8 +175,8 @@ export function createSpotTiffHeader({ width, height, dpi = 300, colorMode = 'cm
     throw new RangeError('Largura e altura TIFF devem ser inteiros positivos validos.');
   }
   const pixelBytes = width * height * channels;
-  if (!Number.isSafeInteger(pixelBytes) || pixelBytes > UINT32_MAX) {
-    throw new RangeError('O filme excede o limite de 4 GiB do TIFF classico; nao sera dividido nem reduzido.');
+  if (!Number.isSafeInteger(pixelBytes)) {
+    throw new RangeError('O filme é grande demais para ser representado; nao sera dividido nem reduzido.');
   }
   const resolutionNumerator = Math.round(dpi * 10000);
   if (typeof dpi !== 'number' || !Number.isFinite(dpi) || dpi <= 0 ||
@@ -180,9 +212,9 @@ export function createSpotTiffHeader({ width, height, dpi = 300, colorMode = 'cm
     if (entry[3].length > 4) pixelOffset += entry[3].length + entry[3].length % 2;
   }
   const totalBytes = pixelOffset + pixelBytes;
-  if (totalBytes > UINT32_MAX) {
-    throw new RangeError('Os metadados e pixels excedem o limite de 4 GiB do TIFF classico.');
-  }
+  // Filme gigante (09/10, dono: sem limite): acima de 4 GiB o mesmo arquivo único
+  // sai em BigTIFF (offsets de 64 bits). Pixels, canais e ordem não mudam.
+  if (totalBytes > UINT32_MAX) return createBigTiffHeader({ entries, pixelBytes, width, height });
   const header = new Uint8Array(pixelOffset);
   const view = new DataView(header.buffer);
   header.set([0x49, 0x49, 42, 0]);

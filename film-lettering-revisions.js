@@ -23,8 +23,7 @@ export function assertCurrentLetteringSnapshots(items,rows){
     if(!item.letteringProductionSnapshot||!Array.isArray(item.letteringApplicationParts))throw new Error('Este rascunho antigo não possui a conferência da escrita do pedido. Remova a aplicação antiga e adicione novamente por Aguardando produção; o arquivo histórico não foi alterado.');
     const row=current.get(item.zero19WorkItemId),expectedQuantity=Number(item.applicationQuantity??item.quantity),font=item.customizationSetId||item.sourceId;
     if(row?.stage==='cancelled')throw new Error('Esta aplicação foi cancelada. Remova-a do filme; nenhum arquivo será preparado e nenhuma produção será liberada.');
-    const problem=letteringHeightProblem(item);
-    if(problem)throw new Error('A escrita “'+String(item.name)+'” está menor que a altura do pedido ('+problem.official.toLocaleString('pt-BR')+' cm). Toque em “Corrigir altura” no item do filme; o sistema volta para a medida do pedido e recalcula. Nenhum arquivo foi liberado.');
+    // 09/10 (dono): altura menor é só aviso no item (botão Corrigir altura); nunca impede exportar.
     if(JSON.stringify(canonical(item.letteringProductionSnapshot))!==JSON.stringify(canonical(row?.metadata?.details?.[0]?.production||{}))||font!==row?.metadata?.font_set_id||expectedQuantity!==Number(row?.quantity)||Number(item.quantity)!==expectedQuantity)throw new Error('Texto, fonte ou quantidade deste pedido mudou. Remova o conjunto antigo e adicione a aplicação atual novamente antes de exportar.');
   }
   return true;

@@ -68,7 +68,9 @@ export async function encodePngRows({width,height,readRows,dpi=300,signal,onProg
   ihdrView.setUint32(0,width);ihdrView.setUint32(4,height);ihdr[8]=8;ihdr[9]=6;
   const phys=new Uint8Array(9),physView=new DataView(phys.buffer),ppm=Math.round(dpi/0.0254);physView.setUint32(0,ppm);physView.setUint32(4,ppm);phys[8]=1;
   const parts=[signature,pngChunk('IHDR',ihdr),pngChunk('pHYs',phys)],stream=new CompressionStream('deflate'),writer=stream.writable.getWriter(),reader=stream.readable.getReader();
-  const collect=(async()=>{for(;;){const {done,value}=await reader.read();if(done)break;if(value?.length)parts.push(pngChunk('IDAT',value))}})();
+  // Filme gigante: a cada ~64 MB os pedaços viram um Blob (o Chrome guarda em disco), sem acumular GBs na memória da aba.
+  let pending=[],pendingBytes=0;const flush=()=>{if(pending.length){parts.push(new Blob(pending));pending=[];pendingBytes=0}};
+  const collect=(async()=>{for(;;){const {done,value}=await reader.read();if(done)break;if(value?.length){const chunk=pngChunk('IDAT',value);pending.push(chunk);pendingBytes+=chunk.length;if(pendingBytes>=64e6)flush()}}flush()})();
   const stride=width*4;
   try{
     for(let y=0;y<height;y+=ROWS){

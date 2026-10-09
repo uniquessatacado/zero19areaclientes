@@ -35,7 +35,7 @@ export function preflightSpotExport({width,height,streaming=false,deviceMemory=g
 }
 
 // Long films: only one band canvas exists at a time, so the canvas-size limits
-// above do not apply. TIFF classic 4 GiB and the non-streaming download rule remain.
+// above do not apply. Above 4 GiB the header switches to BigTIFF; the non-streaming download rule remains.
 export function preflightBandedSpotExport({width,height,streaming=false,colorMode='cmyk'}){
   const tiff=createSpotTiffHeader({width,height,dpi:300,colorMode});
   if(width>32767)throw new Error('A largura do filme ultrapassa o limite do navegador.');

@@ -181,13 +181,33 @@ assert.deepEqual(readTiffHeader(twoGiB.header).get(279).values, [2500000000]);
 const maxPixels = Math.floor((0xffffffff - result.header.length) / 5);
 const boundary = createSpotTiffHeader({ width: maxPixels, height: 1 });
 assert.ok(boundary.totalBytes <= 0xffffffff);
-assert.throws(() => createSpotTiffHeader({ width: maxPixels + 1, height: 1 }), /4 GiB/);
+assert.ok(!boundary.bigTiff);
+// 09/10: acima de 4 GiB o mesmo arquivo sai em BigTIFF, sem dividir nem reduzir.
+// Filme de 25 m × 58 cm a 300 DPI: 6850 × 295276 px, CMYK + Spot ≈ 10,1 GB.
+for (const big of [createSpotTiffHeader({ width: maxPixels + 1, height: 1 }), createSpotTiffHeader({ width: 6850, height: 295276 }), createSpotTiffHeader({ width: 6850, height: 295276, colorMode: 'rgb' })]) {
+  assert.equal(big.bigTiff, true);
+  const v = new DataView(big.header.buffer);
+  assert.deepEqual([...big.header.subarray(0, 8)], [0x49, 0x49, 43, 0, 8, 0, 0, 0]);
+  assert.equal(v.getBigUint64(8, true), 16n);
+  const count = Number(v.getBigUint64(16, true)), tags = new Map();
+  for (let i = 0; i < count; i++) { const o = 24 + i * 20; tags.set(v.getUint16(o, true), { type: v.getUint16(o + 2, true), count: v.getBigUint64(o + 4, true), o: o + 12 }); }
+  assert.equal(v.getBigUint64(24 + count * 20, true), 0n, 'sem próximo IFD');
+  assert.equal(v.getUint32(tags.get(256).o, true), big.width);
+  assert.equal(v.getUint32(tags.get(257).o, true), big.height);
+  assert.equal(tags.get(273).type, 16); assert.equal(Number(v.getBigUint64(tags.get(273).o, true)), big.pixelOffset);
+  assert.equal(tags.get(279).type, 16); assert.equal(Number(v.getBigUint64(tags.get(279).o, true)), big.pixelBytes);
+  assert.equal(big.totalBytes, big.pixelOffset + big.pixelBytes);
+  assert.equal(big.header.length, big.pixelOffset);
+  const res = tags.get(282); assert.equal(v.getUint32(res.o, true), 3000000, "300 DPI dentro do registro (8 bytes)");
+}
+assert.equal(createSpotTiffHeader({ width: 6850, height: 295276 }).pixelBytes, 6850 * 295276 * 5);
+console.log('PASS BigTIFF acima de 4 GiB: filme 25 m CMYK+Spot e RGB em um único arquivo.');
 for (const invalid of [0, -1, 1.1, NaN, Infinity, '3', null, undefined, 0x100000000, Number.MAX_SAFE_INTEGER]) {
   assert.throws(() => createSpotTiffHeader({ width: invalid, height: 1 }));
   assert.throws(() => createSpotTiffHeader({ width: 1, height: invalid }));
 }
 assert.throws(() => createSpotTiffHeader());
-assert.throws(() => createSpotTiffHeader({ width: 0xffffffff, height: 0xffffffff }), /4 GiB/);
+assert.throws(() => createSpotTiffHeader({ width: 0xffffffff, height: 0xffffffff }), /grande demais/);
 for (const dpi of [0, -1, NaN, Infinity, '300', 0.00001, 429496.7296]) {
   assert.throws(() => createSpotTiffHeader({ width: 1, height: 1, dpi }));
 }
