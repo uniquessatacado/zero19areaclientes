@@ -1,5 +1,7 @@
 # Regras do dono — Personalizações ZERO19
 
+- QR da produção — Ler próximo QR (10/10, dono): botão fixo embaixo "Ler próximo QR" abre a câmera na própria página e, ao ler o QR do cupom de outra camisa, já abre aquele pedido (registrando a leitura). Ignora QR que não é do cupom de produção e avisa se for o mesmo pedido.
+
 - Tela do QR da produção (10/10, dono): pouco texto, cada botão de etapa com sua cor pastel (peça=azul, peça+estampa=lilás, prensando=laranja, pronta=verde, voltar=rosa, ver montagem=amarelo), botão "Ver como o cliente montou" no topo para não estampar errado, e TODA mudança de etapa (inclusive pronta, voltar e rastreio manual) abre confirmação Confirmar/Cancelar antes de mudar.
 
 - Login do QR da produção (10/10, dono): manter login, mas sem pedir de novo. "Sair" desconecta só o aparelho atual (nunca todos os aparelhos da conta). A página do QR não fica pública.
