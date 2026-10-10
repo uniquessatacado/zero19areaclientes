@@ -8,6 +8,7 @@
 
 - [x] 09/10 — 2.17.64 publicada (Vercel conferida, arquivo no ar): "13+9" não trava mais o filme. Conferência de altura agora é só no corpo da letra (5,5 cm); a altura total do desenho (5,39 por causa dos números/+ da fonte) não bloqueia. Corpo menor que o pedido continua bloqueado.
 
+- [~] 10/10 — QR de produção com etapas + Acompanhar meu pedido animado + rastreio manual/ENVIADO automático no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rodar SQL 20261010120000 e rebuild.
 - [~] 10/10 — Separado para prensar (Prioridade 23/10 + Acompanhar meu pedido) e zoom/nome no Ver camisas, no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rodar SQL 20261009190000 e rebuild.
 - [~] 10/10 — Prioridade 23/10 com "Ver camisas e o que separar" no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rebuild.
 - [~] 10/10 — Continuar venda (cadastros de envio) sem quem já tem pedido + aviso de repetidos no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rebuild.
