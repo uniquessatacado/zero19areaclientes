@@ -8,6 +8,7 @@
 
 - [x] 09/10 — 2.17.64 publicada (Vercel conferida, arquivo no ar): "13+9" não trava mais o filme. Conferência de altura agora é só no corpo da letra (5,5 cm); a altura total do desenho (5,39 por causa dos números/+ da fonte) não bloqueia. Corpo menor que o pedido continua bloqueado.
 
+- [~] 10/10 — Prioridade 23/10 com "Ver camisas e o que separar" no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rebuild.
 - [~] 10/10 — Continuar venda (cadastros de envio) sem quem já tem pedido + aviso de repetidos no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rebuild.
 - [~] 09/10 — DTF sem aplicação com envio no PDV (envelope único 40×40×1, 50 g por arte) no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta rebuild do frontend e publicar Edges.
 - [~] 09/10 — Meus pedidos completo + comprovante pelo site + destaque vermelho em Aguardando pagamento no NovoVenduss: ver PENDENCIAS do NovoVenduss; falta o dono rodar o SQL 20261009190000 e reconstruir o frontend.

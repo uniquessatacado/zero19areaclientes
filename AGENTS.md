@@ -1,5 +1,7 @@
 # Regras do dono — Personalizações ZERO19
 
+- Prioridade 23/10 — Ver camisas (10/10, dono): cada card tem "Ver camisas e o que separar", que abre janela com cada camisa do pedido desenhada igual ao estúdio (frente/costas, público, tamanho, quantidade) e lista para separar: cada estampa (miniatura, lado, altura) e cada escrita (texto, lado, letra, cor). Usa a montagem salva do checkout do site ou do estúdio do PDV; pedido sem estúdio mostra os itens. Só leitura.
+
 - Lista Continuar venda (10/10, dono): cadastro de envio cujo cliente (mesmo WhatsApp ou CPF) já tem pedido não cancelado feito depois do cadastro (tolerância 3 h antes) sai da lista, mesmo que o pedido tenha sido tirado por outro caminho; fica num bloco recolhido "Já têm pedido" com o número. Cadastros repetidos (mesmo WhatsApp ou CPF) aparecem em vermelho com aviso para tirar só UM pedido; botão Arquivar (não apaga nada) quando o banco tiver a coluna. Só leitura: não vincula nem altera cadastro, cliente ou pedido.
 
 - DTF sem aplicação com envio (09/10, dono confirmou): toda arte avulsa (inclusive "DTF sem aplicação" do botão Personalização do PDV e DTF por metro, que vai cortado em várias artes) é enviada num ÚNICO envelope fixo 40×40×1 cm, 50 g por arte (peso somado). Não pergunta medida da arte para o frete. Vale para cotação do PDV, site e etiqueta; com camisa no pedido, aplicações continuam sem peso extra. PDV exige recalcular quando o frete foi cotado como camisa numa venda só de arte.
