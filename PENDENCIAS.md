@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 12/10 — 2.17.68: card ZERO19 mostra "Em espera até … · motivo · quem" (espera da fila de urgência do QR). Depende do SQL parte 2 (arquivo único RODAR_NO_SUPABASE_12-10.sql nesta pasta, pode rodar de novo inteiro).
+
 - [~] 12/10 — 2.17.67 PUBLICADA (Vercel conferida: site com 2.17.67 e arquivo novo no ar; Git 8c537f8): cards ZERO19 da produção no estilo da página do QR (cabeçalho escuro, corpo claro, botões pastel por função) com faixas da etapa do QR, Envio/Retirada, Só arte DTF, Camisa do cliente, Não pago, etiqueta (gerada/erro/falta) e botão "Abrir no QR"; "Pronto para envio" quando o pedido é de envio. Build PASS; Edge 1280/390 com banco simulado PASS (scripts/zero19-flow-cards-browser-qa.mjs). As faixas dependem do SQL 20261012120000 do NovoVenduss (ver PENDENCIAS de lá); sem ele os cards aparecem no estilo novo sem faixas. Etiqueta automática só pelo QR (marcar pronta no 019 mostra "Falta gerar etiqueta" + Abrir no QR).
 - [ ] 12/10 — Perguntado ao dono: quais outras telas do 019 passar para o estilo do QR primeiro e quais funções ele considera sem uso (nada removido sem confirmação).
 

@@ -1,5 +1,13 @@
 # Regras do dono — Personalizações ZERO19
 
+- Espera na fila de urgência (12/10, dono): na página do QR, botão "Esperar" ao lado de "Nº mais urgente" pergunta quanto tempo (horas ou dias, 30 min a 30 dias) e por quê (motivo obrigatório); o pedido sai do "Próximo urgente", aparece em "Em espera" com até quando/motivo/quem (QR, lista de urgência e card do 019) e volta sozinho quando o prazo acaba; "Tirar da espera" volta na hora. Ao confirmar já abre o próximo urgente. Não muda etapa, pagamento, estoque, frete nem a pausa do 019.
+
+- Entregue pelo QR (12/10, dono): pedido pronto ou enviado tem "Marcar como entregue" ("Cliente retirou · marcar entregue" na retirada), com confirmação; mesmo efeito do "Entregue" do 019. O status do pedido só vira ENTREGUE se já estava ENVIADO ou PRONTO_RETIRADA (estoque já separado), igual à tela do pedido; antes disso fica o aviso. Não pago: aviso forte "receba ANTES de entregar", sem travar.
+
+- Busca do pedido na produção (12/10, dono): em /producao/pronto e no "Ler próximo QR", buscar pelo número do pedido, nome do cliente ou telefone (botão Buscar); número exato abre direto, nome/telefone mostram a lista para escolher.
+
+- Página do QR = controle geral da produção (12/10, dono): botão "Produção (QR)" no topo do PDV ZERO19 (abre em nova aba para não perder a venda) e item "Produção (QR)" no menu da ZERO19.
+
 - QR da produção integrado ao 019 (12/10, dono): "pronta" tem UMA fonte, as aplicações do 019 (z19p_zero19_work_items). Pronta com foto no QR conclui as aplicações no 019; "Já está pronta"/"Finalizar pedido inteiro" no 019 deixam QR e cliente em Pronta; "Voltar ao fluxo" no 019 tira de Pronta; "Entregue" no 019 (retirada) vira Entregue. O card do 019 mostra a etapa do QR, Envio/Retirada, Só arte DTF/Camisa do cliente, Não pago e a situação da etiqueta, com botão "Abrir no QR". Pagamento NUNCA bloqueia etapas, foto, pronta nem rastreio manual: só aviso "Pedido NÃO pago: receba do cliente antes de entregar/enviar" (cancelado continua bloqueando). Equipe = conta ZERO19 do NovoVenduss ou equipe do 019.
 
 - Próximo urgente (12/10, dono): botão fixo ao lado de "Ler próximo QR" abre o pedido mais urgente. Retirada: data prometida no 019 (sem data, 1 dia útil depois do pedido). Envio: dia de postar para chegar no prazo que o cliente viu (1 dia útil de produção + transporte, regra do checkout) e, até 23/10, para o frete escolhido chegar até 23/10. Atrasado primeiro; no mesmo dia, envio antes de retirada e frete mais longo antes. "Ver ordem de urgência" lista a fila; a página mostra "Nº mais urgente".
@@ -8,7 +16,7 @@
 
 - Etiqueta automática (12/10, dono): envio PAGO com frete SmartEnvios gera a etiqueta sozinho ao marcar pronta com foto, com as mesmas travas da página Etiquetas (pago, cotação salva, sem tentativa anterior, valor conferido, nunca compra duas vezes). Se não gerar, o motivo exato (mensagem que a API devolveu) fica salvo e destacado em vermelho no card de Etiquetas e no QR, com "Tentar de novo". Pedido não pago não gera etiqueta: avisa para receber antes.
 
-- Pedido antigo sem QR impresso (12/10, dono): venduss.com/producao/pronto (sem número) e o "Ler próximo QR" aceitam digitar o número do pedido e seguem igual a ler o QR (registra a abertura).
+- Pedido antigo sem QR impresso (12/10, dono): venduss.com/producao/pronto (sem número) e o "Ler próximo QR" aceitam buscar o pedido (número, nome ou telefone) e seguem igual a ler o QR (registra a abertura).
 
 - Público da camisa no QR (12/10, dono): resumo das camisas na própria página e em "Ver como o cliente montou" com moldura grossa azul = masculina, rosa = feminina, colorida = infantil (cinza = unissex, amarela = público a conferir) e tamanho grande em destaque, porque a foto base é a mesma.
 

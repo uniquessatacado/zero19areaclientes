@@ -202,6 +202,7 @@ export function createZero19PdvSync(ctx){
     if(flow.paid===false&&flow.stage!=='CANCELLED')chips.push('<span class="z19-chip z19-chip-alert">Não pago · receber antes de '+(flow.pickup?'entregar':'enviar')+'</span>');
     const stageAt={GARMENT_SEPARATED:flow.times?.garment_separated_at,SEPARATED:flow.times?.separated_at,PRESSING:flow.times?.pressing_at,READY:flow.times?.ready_at,SHIPPED:flow.times?.shipped_at}[flow.stage];
     const stageBy={GARMENT_SEPARATED:flow.by?.garment_separated,SEPARATED:flow.by?.separated,PRESSING:flow.by?.pressing}[flow.stage];
+    if(flow.hold?.until&&new Date(flow.hold.until).getTime()>Date.now())chips.push('<span class="z19-chip z19-chip-amber">Em espera até '+h(flowTime(flow.hold.until))+(flow.hold.reason?' · '+h(flow.hold.reason):'')+(flow.hold.by?' · '+h(flow.hold.by):'')+'</span>');
     if(QR_STAGE_LABELS[flow.stage])chips.push('<span class="z19-chip z19-chip-orange">QR: '+h(QR_STAGE_LABELS[flow.stage])+(stageAt?' · '+h(flowTime(stageAt)):'')+(stageBy?' · '+h(stageBy):'')+'</span>');
     if(!flow.pickup){
       if(flow.label?.generated)chips.push('<span class="z19-chip z19-chip-green">Etiqueta gerada</span>');

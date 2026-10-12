@@ -24,7 +24,7 @@ const tables={
  z19p_production_pauses:[],z19p_pause_reasons:[],personalization_sales:[],z19p_assets:[]};
 const flows={'${A}':{stage:'PRESSING',pickup:true,paid:false,kind:{kind:'GARMENT'},times:{pressing_at:new Date().toISOString()},by:{pressing:'Clovis'},shipping_method:'Retirada na loja',label:{generated:false}},
  '${B}':{stage:'READY',pickup:false,paid:true,kind:{kind:'ART_ONLY'},times:{ready_at:new Date().toISOString()},by:{},shipping_method:'J&T Express',label:{generated:false,issue:'Complete os dados do destinatario: CEP.'}},
- '${C}':{stage:'ART_PRODUCING',pickup:false,paid:true,kind:{kind:'GARMENT',customer_garment:true},times:{},by:{},shipping_method:'SEDEX',label:{generated:false}}};
+ '${C}':{stage:'ART_PRODUCING',pickup:false,paid:true,kind:{kind:'GARMENT',customer_garment:true},times:{},by:{},shipping_method:'SEDEX',label:{generated:false},hold:{until:soon,reason:'Falta camisa ou tamanho: G masculina',by:'Clovis'}}};
 window.calls=[];
 const builder=table=>{const q={select:()=>q,eq:()=>q,in:()=>q,is:()=>q,order:()=>q,limit:()=>q,then:(ok,fail)=>Promise.resolve({data:table==='z19p_workspaces'&&q._library?[]:tables[table]||[],error:null}).then(ok,fail)};const eq=q.eq;q.eq=(k,v)=>{if(k==='workspace_type')q._library=true;return eq(k,v);};return q;};
 const supabase={from:builder,storage:{from:()=>({createSignedUrls:async()=>({data:[]})})},rpc:async(name,args)=>{calls.push(name);return name==='zero19_orders_flow'?{data:flows}:name==='zero19_personalization_ops_snapshot'?{data:{production_items:[],avg_minutes_per_shirt:30,holidays:[]}}:{data:{synced:0}};}};
@@ -57,7 +57,7 @@ try {
     for (let n = 0; n < 200 && !(await evaluate('!!(window.done||window.failed)')); n++) await delay(50);
     assert.equal(await evaluate('window.failed||""'), '', 'Tela renderizou');
     const text = await evaluate('document.body.innerText');
-    for (const expected of ['Retirada na loja', 'Não pago · receber antes de entregar', 'QR: Prensando agora', 'Clovis', 'Envio · J&T Express', 'Só arte DTF · não prensar', 'Etiqueta não saiu: Complete os dados do destinatario: CEP.', 'Camisa do cliente', 'Envio · SEDEX', 'Abrir no QR'])
+    for (const expected of ['Retirada na loja', 'Não pago · receber antes de entregar', 'QR: Prensando agora', 'Clovis', 'Envio · J&T Express', 'Só arte DTF · não prensar', 'Etiqueta não saiu: Complete os dados do destinatario: CEP.', 'Camisa do cliente', 'Envio · SEDEX', 'Abrir no QR', 'Em espera até', 'Falta camisa ou tamanho: G masculina'])
       assert(text.includes(expected), width + ' mostra ' + expected);
     assert(text.toUpperCase().includes('PRONTO PARA ENVIO'), 'Pedido de envio pronto aparece como Pronto para envio');
     assert.equal(await evaluate(`[...document.querySelectorAll('a.z19-qr-open')].map(a=>a.href).filter(h=>h.startsWith('https://venduss.com/producao/pronto/')).length`), 3, 'Abrir no QR leva ao pedido');
@@ -68,5 +68,5 @@ try {
     const image = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
     await fs.writeFile(path.join(output, 'cards-' + width + '.png'), Buffer.from(image.data, 'base64'));
   }
-  console.log('PASS 019 cards ZERO19 no estilo do QR (1280/390): etapa do QR, envio/retirada, só arte DTF, camisa do cliente, não pago, erro da etiqueta, pronto para envio, Abrir no QR, sem rolagem lateral. Evidência=' + output);
+  console.log('PASS 019 cards ZERO19 no estilo do QR (1280/390): etapa do QR, espera, envio/retirada, só arte DTF, camisa do cliente, não pago, erro da etiqueta, pronto para envio, Abrir no QR, sem rolagem lateral. Evidência=' + output);
 } finally { socket?.close(); child.kill(); server.close(); }
