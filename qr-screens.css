@@ -1,0 +1,138 @@
+/* Ajustes por tela no estilo do QR da produção (12/10, dono): claro, pouco texto, botões grandes
+   em cor pastel por função, etapas numeradas. Carregado depois de qr-theme.css. Só visual. */
+
+/* ---------- Base: topo escuro como o cabeçalho do QR, fundo claro, botões ---------- */
+body .topbar{background:#020617!important;border-bottom:0!important;box-shadow:0 6px 24px rgba(2,6,23,.18)}
+body .topbar,body .topbar .brand-title{color:#fff}
+body .topbar .brand-sub{color:#94a3b8}
+body header.topbar .btn,body header.topbar .btn.ghost{background:rgba(255,255,255,.1)!important;border-color:rgba(255,255,255,.2)!important;color:#fff!important}
+body header.topbar .btn:hover{background:rgba(255,255,255,.2)!important}
+body header.topbar .btn svg{stroke:currentColor}
+body header.topbar .user-chip{background:rgba(255,255,255,.1)!important;border-color:rgba(255,255,255,.2)!important;color:#fff!important}
+body header.topbar .user-chip b{color:#fff!important}
+body header.topbar .user-chip small{color:#cbd5e1!important}
+body .topbar .app-version-badge{background:rgba(255,255,255,.1);color:#cbd5e1;border-color:rgba(255,255,255,.2)}
+body .topbar .nav-menu-trigger{color:#fff;background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.18)}
+body:not(.drawer-open) .app-drawer{box-shadow:none}
+body .container{color:#0f172a}
+body .eyebrow{color:#047857;letter-spacing:.12em}
+body .hero h1,body .simple-hero h1{color:#0f172a}
+body .btn{border-radius:14px;font-weight:800;min-height:44px;border-color:#cbd5e1;background:#fff;color:#0f172a;box-shadow:0 1px 0 rgba(15,23,42,.04)}
+body .btn:hover{border-color:#94a3b8;background:#f8fafc}
+body .btn.primary{background:linear-gradient(135deg,#ff8a3d,#ff5f1f);border-color:#ea580c!important;color:#fff}
+body .btn.primary:hover{background:linear-gradient(135deg,#ff7a29,#f04d0c);border-color:#c2410c!important}
+body .btn.ghost{background:#fff}
+body .btn.danger{background:#ffe4e6;border-color:#fda4af;color:#881337}
+body .btn.whatsapp{background:#dcfce7;border-color:#86efac;color:#052e16}
+body .btn:disabled{opacity:.5}
+body .field input,body .field select,body .field textarea{border:2px solid #dbe3ec;border-radius:12px;color:#0f172a;background:#fff}
+body .field input:focus,body .field select:focus,body .field textarea:focus{border-color:#10b981;outline:3px solid rgba(16,185,129,.18)}
+body .field label{color:#334155;font-weight:800}
+body .modal{background:#fff;color:#0f172a;border-radius:22px}
+body .empty{color:#475569;background:#fff}
+
+/* ---------- Montar filme (tela mais usada) ---------- */
+body .film-page .film-hero{background:#020617;color:#fff;border-radius:24px;padding:18px 20px;margin-bottom:14px}
+body .film-page .film-hero h1{color:#fff;margin:4px 0}
+body .film-page .film-hero p{color:#cbd5e1;margin:0}
+body .film-page .film-hero .eyebrow{color:#6ee7b7}
+/* Rascunhos: compactos e legíveis (as cores vinham escritas no código). */
+body .film-page .film-draft-banner{background:#fff!important;border:2px solid #e2e8f0!important;border-radius:18px!important;color:#0f172a}
+body .film-page .film-draft-banner small{color:#475569!important}
+body .film-page .film-draft-banner small[style*="ffa997"]{color:#b91c1c!important;font-weight:800}
+body .film-page .film-draft-toolbar{background:#fff;border:2px solid #e2e8f0;border-radius:18px}
+body .film-page .film-draft-toolbar small{color:#047857}
+body .film-page .film-draft-toolbar b{color:#0f172a}
+body .film-page .film-draft-toolbar span{color:#64748b}
+body .film-page .film-draft-banner .btn,body .film-page .film-draft-toolbar .btn{min-height:40px;font-size:13px}
+body .film-page [data-new-film]{background:#0f172a!important;border-color:#0f172a!important;color:#fff!important}
+body .film-page [data-clear-film]{background:#ffe4e6!important;border-color:#fda4af!important;color:#881337!important}
+body .film-page [data-proof-names]{background:#fef9c3!important;border-color:#fde047!important;color:#422006!important}
+/* Etapas: 1 Filme · 2 Adicionar artes · 3 Organizar · 4 Exportar */
+body .film-page .film-primary-controls{background:#fff;border:2px solid #e2e8f0;border-radius:22px;padding:16px;gap:10px;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr));align-items:end}
+body .film-page .film-primary-controls::before{content:"① Filme   →   ② Adicionar artes   →   ③ Organizar   →   ④ Exportar";grid-column:1/-1;white-space:pre;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:900;letter-spacing:.04em;color:#047857;background:#ecfdf5;border-radius:999px;padding:7px 12px;justify-self:start;max-width:100%}
+body .film-page .film-name-field{grid-column:span 4;margin:0}
+body .film-page .film-media-field{grid-column:span 2;margin:0}
+body .film-page .film-name-field label::before{content:"1 · "}
+body .film-page .film-action{grid-column:span 2;min-height:62px;border-width:2px!important;border-radius:16px!important;font-size:15px!important;font-weight:900!important;white-space:normal;line-height:1.15}
+body .film-page #addOfficialPending{order:1;grid-column:span 6;min-height:72px;font-size:18px!important;background:#d1fae5!important;border-color:#34d399!important;color:#022c22!important;position:relative}
+body .film-page #addOfficialPending::after{content:"MAIS USADO";position:absolute;top:-9px;right:14px;background:#047857;color:#fff;font-size:10px;font-weight:900;letter-spacing:.06em;padding:3px 8px;border-radius:999px}
+body .film-page #addOfficialPending::before{content:"2 · ";margin-right:2px}
+body .film-page #addFilmTeam{order:2;background:#ede9fe!important;border-color:#c4b5fd!important;color:#2e1065!important}
+body .film-page #openFilmStudio{order:3;background:#fae8ff!important;border-color:#f0abfc!important;color:#4a044e!important}
+body .film-page #addFilmAsset{order:4;background:#e0f2fe!important;border-color:#7dd3fc!important;color:#082f49!important}
+body .film-page #quickUploadFilmAsset{order:5;grid-column:span 6;min-height:48px;background:#f0f9ff!important;border-color:#bae6fd!important;color:#0c4a6e!important}
+body .film-page #calculateFilm{order:6;grid-column:span 6;min-height:64px;font-size:18px!important;background:#ea580c!important;border-color:#ea580c!important;color:#fff!important}
+body .film-page #calculateFilm::before{content:"3 · "}
+body .film-page .film-name-field,body .film-page .film-media-field{order:0}
+body .film-page .film-advanced{background:#fff;border:2px solid #e2e8f0;border-radius:18px;padding:4px 14px;color:#0f172a}
+body .film-page .film-advanced summary{font-weight:900;min-height:44px;display:flex;align-items:center;cursor:pointer;color:#334155}
+body .film-page .film-items-panel,body .film-page .film-canvas-panel{background:#fff;border:2px solid #e2e8f0;border-radius:22px}
+body .film-page .film-panel-title small{color:#047857}
+body .film-page .film-panel-title span{background:#0f172a;color:#fff;border-radius:999px;padding:4px 10px;font-weight:900}
+body .film-page .film-metrics>*{background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px}
+body .film-page .film-export-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end}
+body .film-page .film-export-actions::before{content:"4 · Exportar";font-weight:900;color:#047857;margin-right:auto}
+body .film-page #exportFilm{min-height:60px;padding:0 22px;font-size:17px;background:#047857!important;border-color:#047857!important;color:#fff!important}
+body .film-page #exportFilm:disabled{background:#cbd5e1!important;border-color:#cbd5e1!important;color:#475569!important;opacity:1}
+body .film-page #saveFilm{min-height:60px}
+@media (max-width:780px){
+  body .film-page .film-primary-controls{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}
+  body .film-page .film-primary-controls::before{content:"① Filme → ② Artes → ③ Organizar → ④ Exportar";white-space:normal;justify-self:stretch;text-align:center}
+  body .film-page .film-name-field,body .film-page .film-media-field,body .film-page #addOfficialPending,body .film-page #quickUploadFilmAsset,body .film-page #calculateFilm{grid-column:1/-1}
+  body .film-page .film-action{grid-column:span 1;min-height:58px;font-size:14px!important}
+  body .film-page #openFilmStudio{grid-column:1/-1}
+  body .film-page .film-export-actions{justify-content:stretch}
+  body .film-page .film-export-actions::before{flex-basis:100%}
+  body .film-page #exportFilm,body .film-page #saveFilm{flex:1 1 100%}
+}
+
+/* ---------- Produção (início do 019) ---------- */
+body .production-home-hero{background:#fff;border:2px solid #e2e8f0;border-radius:24px}
+body .production-home-actions [data-z19-global-upload]{background:#0284c7!important;border-color:#0284c7!important;color:#fff!important;min-height:48px;font-size:15px}
+body .production-home-actions [data-z19-home-refresh]{background:#fff!important}
+body .production-home-actions [data-nav="/zero19-entregues"],body .production-home-actions [data-z19-open-queue]{background:#e0f2fe!important;border-color:#7dd3fc!important;color:#082f49!important}
+body .production-home-actions [data-z19-printer-pause]{background:#ffedd5!important;border-color:#fdba74!important;color:#431407!important}
+body .production-home-actions [data-z19-printer-pause][data-z19-paused="true"]{background:#f59e0b!important;border-color:#f59e0b!important;color:#fff!important}
+body .production-home-actions [data-z19-manage-reasons],body .production-home-actions [data-z19-manage-holidays],body .production-home-actions [data-z19-production-settings]{min-height:38px;font-size:12.5px;background:#f8fafc!important;color:#475569!important;border-color:#e2e8f0!important}
+body .production-live-metrics article{background:#fff;border:2px solid #e2e8f0;border-radius:20px}
+body .production-stage-board button{border-radius:16px;border-width:2px;background:#fff;text-align:left}
+body .production-stage-board button[data-count="0"]{opacity:.5;background:#f8fafc}
+body .production-stage-board button[aria-pressed="true"]{background:#0f172a!important;border-color:#0f172a!important;color:#fff!important;opacity:1}
+body .production-stage-board button[aria-pressed="true"] span{color:#cbd5e1!important}
+body .production-stage-board button[data-home-stage-filter="awaiting_release"]:not([data-count="0"]){background:#f1f5f9;border-color:#94a3b8}
+body .production-stage-board button[data-home-stage-filter="awaiting_art"]:not([data-count="0"]){background:#fef3c7;border-color:#fcd34d;color:#451a03}
+body .production-stage-board button[data-home-stage-filter="art_received"]:not([data-count="0"]){background:#e0f2fe;border-color:#7dd3fc;color:#082f49}
+body .production-stage-board button[data-home-stage-filter="awaiting_halftone"]:not([data-count="0"]){background:#fae8ff;border-color:#f0abfc;color:#4a044e}
+body .production-stage-board button[data-home-stage-filter="awaiting_font"]:not([data-count="0"]){background:#fef9c3;border-color:#fde047;color:#422006}
+body .production-stage-board button[data-home-stage-filter="ready_production"]:not([data-count="0"]){background:#ede9fe;border-color:#c4b5fd;color:#2e1065}
+body .production-stage-board button[data-home-stage-filter="production"]:not([data-count="0"]){background:#ffedd5;border-color:#fdba74;color:#431407}
+body .production-stage-board button[data-home-stage-filter="ready_pickup"]:not([data-count="0"]){background:#d1fae5;border-color:#6ee7b7;color:#022c22}
+body .production-stage-board button strong{font-size:26px}
+body .production-open-section{background:#fff;border:2px solid #e2e8f0;border-radius:24px}
+body .production-search input{border:2px solid #dbe3ec;border-radius:14px;min-height:48px;background:#fff;color:#0f172a}
+@media (max-width:900px){
+  body .production-home-hero{gap:14px;flex-direction:column!important;align-items:stretch!important}
+  body .production-home-hero>*{flex:0 0 auto!important;min-height:0!important}
+  body .production-home-actions{flex:0 0 auto!important;max-width:none!important;grid-auto-rows:auto;align-content:start}
+  body .production-home-actions .btn{min-height:46px!important;height:auto}
+  body .production-home-actions [data-z19-manage-reasons],body .production-home-actions [data-z19-manage-holidays],body .production-home-actions [data-z19-production-settings]{min-height:38px!important;grid-column:auto!important}
+}
+
+/* Personalizações do PDV (/zero19-fila): mesmos quadros pastel por etapa da tela Produção; etapa vazia fica apagada. */
+body .z19-zero19-summary button{background:#fff;border:1px solid #dbe3ec;color:#0f172a;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+body .z19-zero19-summary button b{font-size:28px;line-height:1}
+body .z19-zero19-summary button[data-count="0"]{opacity:.55;box-shadow:none}
+body .z19-zero19-summary button[data-z19-jump="awaiting_release"]:not([data-count="0"]){background:#f1f5f9;border-color:#94a3b8}
+body .z19-zero19-summary button[data-z19-jump="awaiting_art"]:not([data-count="0"]){background:#fef3c7;border-color:#fcd34d;color:#451a03}
+body .z19-zero19-summary button[data-z19-jump="art_received"]:not([data-count="0"]){background:#e0f2fe;border-color:#7dd3fc;color:#082f49}
+body .z19-zero19-summary button[data-z19-jump="awaiting_halftone"]:not([data-count="0"]){background:#fae8ff;border-color:#f0abfc;color:#4a044e}
+body .z19-zero19-summary button[data-z19-jump="awaiting_font"]:not([data-count="0"]){background:#fef9c3;border-color:#fde047;color:#422006}
+body .z19-zero19-summary button[data-z19-jump="ready_production"]:not([data-count="0"]){background:#ede9fe;border-color:#c4b5fd;color:#2e1065}
+body .z19-zero19-summary button[data-z19-jump="production"]:not([data-count="0"]){background:#ffedd5;border-color:#fdba74;color:#431407}
+body .z19-zero19-summary button[data-z19-jump="ready_pickup"]:not([data-count="0"]){background:#d1fae5;border-color:#6ee7b7;color:#022c22}
+body .z19-zero19-summary button span{color:inherit;opacity:.8;font-weight:700}
+
+/* Barra de baixo (celular): "Clientes" não tinha ícone (aparecia um quadrado). Produção = prancheta, Clientes = pessoas. */
+body .mobile-bottom-nav button[data-nav='/']{--nav-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 4V3h6v1M8.5 10l1.5 1.5 3-3M8.5 16h7'/%3E%3C/svg%3E")}
+body .mobile-bottom-nav button[data-nav='/clientes']{--nav-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='9' cy='7' r='3'/%3E%3Cpath d='M3 20v-2a6 6 0 0 1 12 0v2M16 4a3 3 0 0 1 0 6m3 10v-2a6 6 0 0 0-2-4'/%3E%3C/svg%3E")}
