@@ -28,6 +28,8 @@
 
 - SQL para o dono (12/10): ao pedir para rodar SQL no Supabase, mandar o link clicável do arquivo (e o código no chat quando couber), nunca só o nome.
 
+- Fundo do filme (12/10, dono): a prévia do filme nunca fica branca; "Transparente" é quadriculado claro bem visível para ver na hora qual estampa veio com fundo. Opções Branco/Preto/Cinza respeitadas. O tema não pode mudar quadriculados (conic-gradient) nem as opções de fundo.
+
 - Visual do 019 no estilo do QR (12/10, dono: "todas telas… capriche"): tema claro em TODAS as telas, cabeçalho escuro, corpo claro, botões pastel por função, botão principal laranja ZERO19; responsivo sem rolagem lateral. Tema GERADO por `scripts/gen-qr-theme.mjs` (lê todos os CSS e os estilos dentro dos JS) em `qr-theme.css` — rodar de novo depois de mudar qualquer CSS; ajustes finos à mão em `qr-screens.css`. Prévia do filme, miniaturas e estúdio continuam escuros (estampa branca precisa aparecer). Filme: etapas ① Filme → ② Adicionar artes → ③ Organizar → ④ Exportar, "Aguardando produção" em destaque (mais usado). Não muda função nem HTML. Conferir com `scripts/app-ui-snapshot.mjs` (app inteiro com banco simulado) e `scripts/ui-snapshot.mjs`.
 
 - QR da produção — Ler próximo QR (10/10, dono): botão fixo embaixo "Ler próximo QR" abre a câmera na própria página e, ao ler o QR do cupom de outra camisa, já abre aquele pedido (registrando a leitura). Ignora QR que não é do cupom de produção e avisa se for o mesmo pedido.

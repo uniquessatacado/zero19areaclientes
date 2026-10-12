@@ -136,3 +136,32 @@ body .z19-zero19-summary button span{color:inherit;opacity:.8;font-weight:700}
 /* Barra de baixo (celular): "Clientes" não tinha ícone (aparecia um quadrado). Produção = prancheta, Clientes = pessoas. */
 body .mobile-bottom-nav button[data-nav='/']{--nav-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='4' width='14' height='17' rx='2'/%3E%3Cpath d='M9 4V3h6v1M8.5 10l1.5 1.5 3-3M8.5 16h7'/%3E%3C/svg%3E")}
 body .mobile-bottom-nav button[data-nav='/clientes']{--nav-icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'%3E%3Ccircle cx='9' cy='7' r='3'/%3E%3Cpath d='M3 20v-2a6 6 0 0 1 12 0v2M16 4a3 3 0 0 1 0 6m3 10v-2a6 6 0 0 0-2-4'/%3E%3C/svg%3E")}
+
+/* Filme (12/10, dono): o filme NUNCA fica branco. "Transparente" = quadriculado claro clássico bem visível,
+   para ver na hora qual estampa veio com fundo (fundo branco cobre os quadradinhos cinza). Branco/Preto/Cinza continuam iguais. */
+body .film-page .film-sheet,body .film-page .film-sheet[data-background=check]{background:repeating-conic-gradient(#c3cad4 0 25%,#ffffff 0 50%) 0 0/16px 16px!important;box-shadow:0 0 0 2px #ff6428,0 10px 30px rgba(0,0,0,.45)!important}
+body .film-page .film-sheet[data-background=white]{background:#fff!important}
+body .film-page .film-sheet[data-background=black]{background:#050505!important}
+body .film-page .film-sheet[data-background=gray]{background:#909096!important}
+body .film-page .film-preview-shell{background:#1e293b!important;border:0!important;border-radius:18px}
+body .film-page .film-preview{background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px)}
+body .film-page .film-preview .empty{background:#fff;color:#334155;border-radius:16px}
+/* Topo menor: mais espaço para o filme. */
+body .film-page .film-hero{padding:14px 18px!important}
+body .film-page .film-hero h1{font-size:clamp(24px,3vw,34px)!important;line-height:1.1}
+body .film-page .film-hero p{font-size:13px}
+/* Números do filme em cores: comprimento/metros em destaque, aproveitamento verde, desperdício laranja. */
+body .film-page .film-metrics>span{display:grid;gap:2px;padding:10px 12px}
+body .film-page .film-metrics>span b{font-size:18px;color:#0f172a}
+body .film-page .film-metrics>span:nth-child(2),body .film-page .film-metrics>span:nth-child(3){background:#e0f2fe;border-color:#7dd3fc}
+body .film-page .film-metrics>span:nth-child(4){background:#d1fae5;border-color:#6ee7b7}
+body .film-page .film-metrics>span:nth-child(4) b{color:#065f46}
+body .film-page .film-metrics>span:nth-child(5){background:#ffedd5;border-color:#fdba74}
+body .film-page .film-metrics>span:nth-child(5) b{color:#9a3412}
+/* Opções de encaixe: um botão claro, não um texto solto. */
+body .film-page details>summary{cursor:pointer;font-weight:800;font-size:14px;color:#0f172a;padding:4px 0}
+/* Ajustar encaixe e lista de artes: cartões claros com borda suave. */
+body .film-page .film-inspector{background:#f8fafc!important;border:2px solid #e2e8f0!important;border-radius:18px}
+body .film-page .film-inspector-head select{background:#fff!important;color:#0f172a!important;border:2px solid #cbd5e1!important;font-size:13px!important}
+body .film-page .film-items-panel .film-item{border:2px solid #e2e8f0;border-radius:16px;background:#fff}
+body .film-page .film-item-thumb{background:repeating-conic-gradient(#c3cad4 0 25%,#ffffff 0 50%) 0 0/10px 10px!important;border-radius:10px}

@@ -14,7 +14,7 @@ const linked = [...index.matchAll(/<link rel="stylesheet" href="\/([^"?]+)/g)].m
 const extra = (await fs.readdir(root)).filter(file => file.endsWith('.css') && !linked.includes(file)).sort();
 const files = [...linked, ...extra].filter(file => file !== 'qr-theme.css' && file !== 'qr-screens.css');
 // Seletores que mostram arte/filme/foto: o fundo escuro é de propósito (estampa branca precisa aparecer).
-const KEEP_DARK = /preview|backdrop|overlay|scrim|\.black|film-preview|preview-shell|film-canvas|filmPreview|canvas|thumb|garment-stage|garment-scene|garment-view|three|color-canvas|shirt-stage|studio-stage|asset-preview|halftone|checker|zoom|lightbox|viewer|crop|z19-zero19-card|qr-header/i;
+const KEEP_DARK = /preview|film-sheet|film-ruler|data-background|backdrop|overlay|scrim|\.black|film-preview|preview-shell|film-canvas|filmPreview|canvas|thumb|garment-stage|garment-scene|garment-view|three|color-canvas|shirt-stage|studio-stage|asset-preview|halftone|checker|zoom|lightbox|viewer|crop|z19-zero19-card|qr-header/i;
 
 const clamp = value => Math.max(0, Math.min(1, value));
 function parseColor(text) {
@@ -97,7 +97,7 @@ function themeRule(selector, body) {
   if (/^(:root|html|body|html,\s*body|\*)$/i.test(selector.trim())) return '';
   const rules = [];
   for (const [prop, raw] of declarations(body)) {
-    if (/url\(/i.test(raw)) continue; // ícones/imagens em data URL: não mexer (as cores ali dentro são máscara)
+    if (/url\(|conic-gradient/i.test(raw)) continue; // ícones em data URL e quadriculado de transparência: não mexer
     const important = /!important\s*$/i.test(raw), value = raw.replace(/!important\s*$/i, '').trim(), bang = important ? ' !important' : '';
     if (/^background(-color|-image)?$/.test(prop)) { if (keep || /url\(/i.test(value)) continue; const mapped = mapValue(value, mapBackground); if (mapped) rules.push(`${prop}:${mapped}${bang}`); }
     else if (prop === 'color') { if (keep && !/backdrop|overlay|scrim/i.test(selector)) continue; const mapped = mapValue(value, mapText); if (mapped) rules.push(`color:${mapped}${bang}`); }

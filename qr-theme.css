@@ -315,7 +315,6 @@ html .film-workspace>aside,html .film-workspace>div{background:hsl(215,25%,98.5%
 html .film-item small{color:#475569}
 html .film-metrics span{background:hsl(215,25%,100.0%)}
 html .film-metrics small{color:#475569}
-html .film-ruler-x{color:#475569}
 html .film-placement{border:1px solid hsl(214,32%,86.0%)}
 @media(max-width:680px){html .film-export-actions{background:hsla(215,25%,100.0%,0.94)}}
 html .workspace-card.in-production-queue{box-shadow:inset 3px 0 #ff8a45,0 8px 25px hsla(214,32%,86.0%,0.133)}
@@ -485,7 +484,6 @@ html .studio-tool{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,98.
 html .studio-tool.active{color:hsl(24,100%,24.0%);background:hsla(19,55%,93.0%,0.92)}
 html .color-toolbar select{background:hsl(215,25%,98.5%);color:#475569;border:1px solid hsl(214,32%,86.0%)}
 html .color-sample{border:1px solid hsl(214,32%,86.0%);background:hsl(225,55%,93.0%)}
-html .color-sample>span{background:repeating-conic-gradient(#555 0 25%,hsl(215,25%,96.5%) 0 50%) 0 0 / 12px 12px}
 html .color-sample small{color:#475569}
 html .studio-slider{color:#475569}
 html .studio-slider output{color:hsl(23,100%,24.0%)}
@@ -500,13 +498,11 @@ html .garment-settings{background:hsl(215,25%,98.5%)}
 html .garment-composer select{color:#0f172a;background:hsl(215,25%,98.5%);border:1px solid hsl(214,32%,86.0%)}
 html .garment-art>span{background:hsla(215,25%,98.5%,0.929);color:#0f172a}
 html .garment-layer-row{border:1px solid hsl(214,32%,86.0%);color:#0f172a}
-html .garment-layer-row img{background:repeating-conic-gradient(#595961 0 25%,hsl(215,25%,96.5%) 0 50%) 0 0/12px 12px}
 html .garment-layer-row small{color:#475569}
 html .garment-outside-note{color:hsl(26,100%,24.0%)}
 html .garment-library{background:hsl(215,25%,98.5%);border:1px solid hsl(214,32%,86.0%);color:#0f172a}
 html .garment-library input{color:#0f172a;background:hsl(225,55%,93.0%);border:1px solid hsl(214,32%,86.0%)}
 html .garment-library-grid button{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,96.5%);color:#0f172a}
-html .garment-library-grid img{background:repeating-conic-gradient(#5d5d64 0 25%,hsl(215,25%,96.5%) 0 50%) 0 0/18px 18px}
 html .presentation-options>p{color:#475569}
 html .garment-step-label{color:#475569}
 html .garment-step-label b{color:#0f172a}
@@ -653,10 +649,8 @@ html .film-selection-controls label{color:#475569}
 html .film-selection-controls input{background:hsl(215,25%,100.0%);color:#0f172a;border:1px solid hsl(214,32%,86.0%)}
 html .film-inspector-foot span{color:#475569}
 html .film-inspector-foot span.error{color:hsl(14,100%,24.0%)}
-html .film-sheet{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0 25%,hsl(215,25%,96.5%) 0 50%) 0 0/18px 18px}
 html .film-placement.visual-placement small{background:hsla(215,25%,98.5%,0.92);color:#0f172a}
 html .film-placement-fallback{color:#475569}
-html .film-sheet[data-background=black]{background:hsl(215,25%,100.0%)}
 html .film-inspector-head select{background:hsl(215,25%,98.5%);color:#0f172a;border:1px solid hsl(214,32%,86.0%)}
 html .film-item-edit label{color:#475569}
 html .film-item-edit input{background:hsl(228,55%,93.0%);border:1px solid hsl(26,50%,76.0%);color:#0f172a}
@@ -687,7 +681,6 @@ html .history-file-filters input,html .history-file-filters select{border:1px so
 html .history-asset-card{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,98.5%)}
 html .history-asset-copy small{color:#475569}
 html .history-asset-copy>b{color:hsl(19,100%,24.0%)}
-html .history-asset-full{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0 25%,hsl(215,25%,96.5%) 0 50%) 50%/20px 20px}
 html .history-asset-facts>span{background:hsl(215,25%,96.5%);color:#475569}
 html .history-extra-details,html .history-load-warning{border:1px solid hsl(214,32%,86.0%)}
 html .history-extra-details>div{border-bottom:1px solid hsl(214,32%,86.0%)}
@@ -730,7 +723,7 @@ html .preparer-dropzone.dragging{background:hsl(25,55%,93.0%)}
 html .preparer-working-source{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,98.5%)}
 html .preparer-working-source>small{color:#475569}
 html .preparer-working-source>select,html .preparer-draft-copy select{background:hsl(215,25%,100.0%);border:1px solid hsl(214,32%,86.0%);color:#0f172a}
-html .preparer-font-sample{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0 25%,hsl(215,25%,96.5%) 0 50%) 50%/18px 18px;color:#0f172a}
+html .preparer-font-sample{color:#0f172a}
 html .preparer-name-color{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,98.5%)}
 html .preparer-name-color p{color:#475569}
 html .preparer-name-color-controls input[type="color"]{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,98.5%)}
@@ -743,7 +736,6 @@ html .preparer-draft-copy>small,html .preparer-draft-copy>span{color:#475569}
 html .preparer-draft-copy>label{color:#0f172a}
 html .preparer-glyph{border:1px solid hsl(214,32%,86.0%);background:hsl(215,25%,96.5%)}
 html .preparer-glyph>b{color:hsl(21,100%,24.0%)}
-html .preparer-glyph>img,html .preparer-glyph>span{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0 25%,hsl(215,25%,96.5%) 0 50%) 50%/14px 14px}
 html .preparer-glyph>span{color:#475569}
 html .preparer-glyph>small{color:#475569}
 html .preparer-glyph.changed>small{color:hsl(179,60%,24.0%)}
@@ -861,7 +853,6 @@ html .partner-order-progress p,html .partner-order-footer p{color:var(--muted,#4
 html .partner-order-status select,html .partner-order-item select{background:var(--bg,hsl(215,25%,98.5%));border:1px solid var(--line,hsl(214,32%,86.0%))}
 html .partner-order-pending{background:hsl(29,55%,93.0%)}
 html .partner-order-item{border:1px solid var(--line,hsl(214,32%,86.0%));background:var(--panel,hsl(215,25%,98.5%))}
-html .partner-order-art{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0% 25%,hsl(215,25%,96.5%) 0% 50%) 50%/20px 20px}
 html .partner-order-item small{color:var(--muted,#475569)}
 
 /* venduss-artwork-archive.css */
@@ -1046,7 +1037,6 @@ html .qs-error{color:hsl(9,100%,24.0%)}
 html .qs-info{background:hsl(173,55%,93.0%);color:hsl(161,60%,24.0%)}
 html .qs-pick-card{background:hsl(215,25%,98.5%);border:1px solid hsl(214,32%,86.0%);color:#0f172a}
 html .qs-pick-card[aria-pressed=true]{background:hsl(22,55%,93.0%)}
-html .qs-pick-card>span:first-child{background:repeating-conic-gradient(hsl(215,25%,96.5%) 0 25%,hsl(215,25%,96.5%) 0 50%) 50%/16px 16px}
 html .qs-pick-card small{color:#475569}
 html .qs-pick-card>[data-choice]{color:hsl(24,100%,24.0%)}
 html .qs-picker [data-picker-error]{color:hsl(23,60%,24.0%)}
