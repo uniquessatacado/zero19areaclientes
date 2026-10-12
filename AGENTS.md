@@ -1,5 +1,21 @@
 # Regras do dono — Personalizações ZERO19
 
+- QR da produção integrado ao 019 (12/10, dono): "pronta" tem UMA fonte, as aplicações do 019 (z19p_zero19_work_items). Pronta com foto no QR conclui as aplicações no 019; "Já está pronta"/"Finalizar pedido inteiro" no 019 deixam QR e cliente em Pronta; "Voltar ao fluxo" no 019 tira de Pronta; "Entregue" no 019 (retirada) vira Entregue. O card do 019 mostra a etapa do QR, Envio/Retirada, Só arte DTF/Camisa do cliente, Não pago e a situação da etiqueta, com botão "Abrir no QR". Pagamento NUNCA bloqueia etapas, foto, pronta nem rastreio manual: só aviso "Pedido NÃO pago: receba do cliente antes de entregar/enviar" (cancelado continua bloqueando). Equipe = conta ZERO19 do NovoVenduss ou equipe do 019.
+
+- Próximo urgente (12/10, dono): botão fixo ao lado de "Ler próximo QR" abre o pedido mais urgente. Retirada: data prometida no 019 (sem data, 1 dia útil depois do pedido). Envio: dia de postar para chegar no prazo que o cliente viu (1 dia útil de produção + transporte, regra do checkout) e, até 23/10, para o frete escolhido chegar até 23/10. Atrasado primeiro; no mesmo dia, envio antes de retirada e frete mais longo antes. "Ver ordem de urgência" lista a fila; a página mostra "Nº mais urgente".
+
+- Tipo do pedido (12/10, dono): pedido só com arte DTF (sem camisa da loja nem do cliente) aparece "Só arte DTF · não prensar" e tem só "Arte separada" e "Pronta (com foto)"; camisa do cliente e camisa + arte avulsa destacadas. Só marca quando está explícito no pedido (pedido antigo sem marcação continua como camisa).
+
+- Etiqueta automática (12/10, dono): envio PAGO com frete SmartEnvios gera a etiqueta sozinho ao marcar pronta com foto, com as mesmas travas da página Etiquetas (pago, cotação salva, sem tentativa anterior, valor conferido, nunca compra duas vezes). Se não gerar, o motivo exato (mensagem que a API devolveu) fica salvo e destacado em vermelho no card de Etiquetas e no QR, com "Tentar de novo". Pedido não pago não gera etiqueta: avisa para receber antes.
+
+- Pedido antigo sem QR impresso (12/10, dono): venduss.com/producao/pronto (sem número) e o "Ler próximo QR" aceitam digitar o número do pedido e seguem igual a ler o QR (registra a abertura).
+
+- Público da camisa no QR (12/10, dono): resumo das camisas na própria página e em "Ver como o cliente montou" com moldura grossa azul = masculina, rosa = feminina, colorida = infantil (cinza = unissex, amarela = público a conferir) e tamanho grande em destaque, porque a foto base é a mesma.
+
+- Layout do 019 (12/10, dono): o dono quer o 019 no estilo da página do QR (claro, botões pastel por função, pouco texto, só funções usadas). Feito nos cards ZERO19 da produção (2.17.67). Demais telas e remoção de funções só depois de o dono dizer quais.
+
+- SQL para o dono (12/10): ao pedir para rodar SQL no Supabase, mandar o link clicável do arquivo (e o código no chat quando couber), nunca só o nome.
+
 - QR da produção — Ler próximo QR (10/10, dono): botão fixo embaixo "Ler próximo QR" abre a câmera na própria página e, ao ler o QR do cupom de outra camisa, já abre aquele pedido (registrando a leitura). Ignora QR que não é do cupom de produção e avisa se for o mesmo pedido.
 
 - Tela do QR da produção (10/10, dono): pouco texto, cada botão de etapa com sua cor pastel (peça=azul, peça+estampa=lilás, prensando=laranja, pronta=verde, voltar=rosa, ver montagem=amarelo), botão "Ver como o cliente montou" no topo para não estampar errado, e TODA mudança de etapa (inclusive pronta, voltar e rastreio manual) abre confirmação Confirmar/Cancelar antes de mudar.

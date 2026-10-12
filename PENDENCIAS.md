@@ -1,5 +1,8 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 12/10 — 2.17.67: cards ZERO19 da produção no estilo da página do QR (cabeçalho escuro, corpo claro, botões pastel por função) com faixas da etapa do QR, Envio/Retirada, Só arte DTF, Camisa do cliente, Não pago, etiqueta (gerada/erro/falta) e botão "Abrir no QR"; "Pronto para envio" quando o pedido é de envio. Build PASS; Edge 1280/390 com banco simulado PASS (scripts/zero19-flow-cards-browser-qa.mjs). As faixas dependem do SQL 20261012120000 do NovoVenduss (ver PENDENCIAS de lá); sem ele os cards aparecem no estilo novo sem faixas. Etiqueta automática só pelo QR (marcar pronta no 019 mostra "Falta gerar etiqueta" + Abrir no QR).
+- [ ] 12/10 — Perguntado ao dono: quais outras telas do 019 passar para o estilo do QR primeiro e quais funções ele considera sem uso (nada removido sem confirmação).
+
 - [~] 09/10 — NovoVenduss: trocar frete em Aguardando pagamento e na gestão do pedido (pedido do site não pago dava "precisa de uma peça física"). Git 304e1469; PENDENTE do dono: rodar SQL 20261009150000_zero19_pending_shipping_change.sql e reconstruir o frontend. Nada mudou no aplicativo Personalizações nesta frente.
 
 - [~] 09/10 — 2.17.66: "Montar no estúdio" no filme (estampas Estampa Política + escritas + cor + quantidade direto no filme). Build PASS; QA navegador Edge desktop/320 PASS com catálogo real e preparação simulada (scripts/film-studio-browser-qa.mjs). PENDENTE: teste logado real (preparo da estampa pela função zero19-vdr-import-art e escrita na fonte Brasil dentro do filme).
