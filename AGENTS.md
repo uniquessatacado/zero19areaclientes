@@ -2,7 +2,7 @@
 
 - Pedido antigo sem estúdio (12/10, dono): "Ver como o cliente montou" e o resumo do QR desenham a camisa Brasil do PDV antigo (escrita em cima, estampa do meio, escrita embaixo) como se fosse do estúdio, com público/tamanho/quantidade das personalizações; nunca mostrar a palavra interna "VDR"; "público a conferir" só quando o pedido não diz; texto longo quebra dentro do balão no celular. Pedido que não é Brasil mostra as camisas e "O que aplicar" (posição, medida, cor, camisa do cliente, só a arte).
 
-- Etiqueta de pedido só com estampa (12/10, dono): a estampa DTF é produto físico e vai no envelope (40×40×1, 50 g por arte); a etiqueta e a recotação reconhecem a estampa do site e a DTF sem aplicação do PDV mesmo sem camisa no pedido. Nunca exigir "peça física" nesse caso.
+- Etiqueta de pedido só com estampa (12/10, dono): a estampa DTF é produto físico e vai no envelope (40×40×1, 50 g por arte); a etiqueta e a recotação reconhecem a estampa do site e a DTF sem aplicação do PDV mesmo sem camisa no pedido. Nunca exigir "peça física" nesse caso. O banco marca a estampa como PRINT_ONLY na lista de itens da etiqueta (vale sem publicar função).
 
 - Espera na fila de urgência (12/10, dono): na página do QR, botão "Esperar" ao lado de "Nº mais urgente" pergunta quanto tempo (horas ou dias, 30 min a 30 dias) e por quê (motivo obrigatório); o pedido sai do "Próximo urgente", aparece em "Em espera" com até quando/motivo/quem (QR, lista de urgência e card do 019) e volta sozinho quando o prazo acaba; "Tirar da espera" volta na hora. Ao confirmar já abre o próximo urgente. Não muda etapa, pagamento, estoque, frete nem a pausa do 019.
 
@@ -18,7 +18,7 @@
 
 - Tipo do pedido (12/10, dono): pedido só com arte DTF (sem camisa da loja nem do cliente) aparece "Só arte DTF · não prensar" e tem só "Arte separada" e "Pronta (com foto)"; camisa do cliente e camisa + arte avulsa destacadas. Só marca quando está explícito no pedido (pedido antigo sem marcação continua como camisa).
 
-- Etiqueta automática (12/10, dono): envio PAGO com frete SmartEnvios gera a etiqueta sozinho ao marcar pronta com foto, com as mesmas travas da página Etiquetas (pago, cotação salva, sem tentativa anterior, valor conferido, nunca compra duas vezes). Se não gerar, o motivo exato (mensagem que a API devolveu) fica salvo e destacado em vermelho no card de Etiquetas e no QR, com "Tentar de novo". Pedido não pago não gera etiqueta: avisa para receber antes.
+- Etiqueta automática (12/10, dono): envio PAGO com frete SmartEnvios gera a etiqueta sozinho ao marcar pronta com foto, com as mesmas travas da página Etiquetas (pago, cotação salva, sem tentativa anterior, valor conferido, nunca compra duas vezes). Se não gerar, o motivo exato (mensagem que a API devolveu) fica salvo e destacado em vermelho no card de Etiquetas e no QR, com "Tentar de novo". Pedido não pago (12/10, dono): pergunta "Gerar etiqueta sem pagamento?"; confirmando, registra quem/quando (zero19_unpaid_label_authorizations) e gera; sem confirmação continua exigindo pagamento.
 
 - Pedido antigo sem QR impresso (12/10, dono): venduss.com/producao/pronto (sem número) e o "Ler próximo QR" aceitam buscar o pedido (número, nome ou telefone) e seguem igual a ler o QR (registra a abertura).
 
