@@ -1,1 +1,1 @@
-{"private":true,"type":"module","version":"2.17.71","scripts":{"build":"node scripts/build-v2176.mjs && node scripts/build-pending-status.mjs"}}
+{"private":true,"type":"module","version":"2.17.72","scripts":{"build":"node scripts/build-v2176.mjs && node scripts/build-pending-status.mjs && node scripts/build-bulk-film.mjs"}}
