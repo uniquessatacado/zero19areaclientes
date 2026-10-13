@@ -1,0 +1,70 @@
+/* Last stylesheet in the release: contain scroll in the canvas, not the page. */
+body .film-page,body .film-page *{box-sizing:border-box}
+body .film-page{width:100%;max-width:100%;min-width:0;padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+body .film-page :is(.film-workspace,.film-canvas-panel,.film-items-panel,.film-preview-shell,.film-controls,.film-inspector,.film-metrics){min-width:0;max-width:100%}
+body .film-page .film-workspace{grid-template-columns:minmax(240px,340px) minmax(0,1fr)}
+body .film-page .film-canvas-panel{width:100%}
+body .film-page .film-preview-shell{position:relative;width:100%;height:65vh;height:65svh;max-height:760px;min-height:240px;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y pinch-zoom;contain:inline-size;border:1px solid #cbd5e1;border-radius:14px;background:#e2e8f0;padding:0}
+body .film-page #filmPreview{position:relative;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:0!important;flex:none;box-sizing:content-box;overflow:visible}
+body .film-page .film-placement.visual-placement{touch-action:pan-x pan-y pinch-zoom}
+body .film-page .touch-move-enabled .film-placement.visual-placement{touch-action:none}
+body .film-page .film-placement.visual-placement img{max-width:none!important;max-height:none!important;min-width:0!important;object-fit:fill;position:absolute;top:50%;left:50%}
+body .film-page .film-ruler-x{max-width:100%;white-space:normal;font-size:11px;line-height:1.2;color:#0f172a}
+body .film-page .film-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;padding:10px;margin:0 0 12px}
+body .film-page .film-metrics>span{min-width:0;padding:9px;background:#f1f5f9;border-radius:10px;display:grid;gap:3px}
+body .film-page .film-metrics small{font-size:11px;white-space:normal;overflow-wrap:anywhere;color:#475569}
+body .film-page .film-metrics b{font-size:16px;color:#0f172a;overflow-wrap:anywhere}
+body .film-page .film-metrics>.film-layout-note{grid-column:1/-1;padding:8px;background:#ecfdf5;border-radius:8px;color:#14532d;line-height:1.4}
+body .film-page .film-view-toolbar{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 10px;align-items:center}
+body .film-page .film-view-toolbar .btn{min-height:44px;white-space:normal;line-height:1.2;padding:9px 12px}
+body .film-page .film-inspector{margin:0 0 10px;max-width:100%;padding:12px;gap:10px}
+body .film-page .film-inspector-head{display:flex;flex-wrap:wrap;gap:8px}
+body .film-page .film-inspector-head>div{min-width:0;flex:1 1 100%}
+body .film-page .film-inspector :is(button,select,input){min-width:0;min-height:44px;font-size:16px!important;max-width:100%}
+body .film-page .film-inspector :is(label,small,span){overflow-wrap:anywhere;white-space:normal}
+body .film-page .film-inspector-foot{flex-wrap:wrap}
+body .film-page .film-inspector-foot>span{flex:1 1 170px}
+body .film-page .film-inspector input[type=range]{width:120px}
+body .film-page .film-export-actions{display:flex;flex-wrap:wrap;gap:8px;position:static!important;margin-top:10px}
+body .film-page .film-export-actions>.btn{flex:1 1 150px;min-height:48px;white-space:normal}
+body .film-page .film-panel-title{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+body .film-page #filmItems{max-height:70vh;max-height:70svh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+body .film-page #filmItems[hidden]{display:none}
+body .film-page .film-item{min-width:0;max-width:100%}
+body .film-page .film-item :is(b,small,label){white-space:normal;overflow-wrap:anywhere}
+body .film-page .film-item-edit{flex-wrap:wrap}
+body .film-page .film-item-edit>*{min-width:0;max-width:100%}
+body .film-page [data-film-tools] :is(button,span){white-space:normal;overflow-wrap:anywhere}
+body .film-page :is(.film-draft-toolbar-actions,.film-controls){flex-wrap:wrap}
+body .film-page #filmCostSummary{min-width:0;max-width:100%;overflow-x:auto}
+body .film-page .film-expanded-view{position:fixed!important;inset:auto 0 0!important;top:var(--film-view-top,0px)!important;z-index:100000!important;height:var(--film-view-height,100dvh)!important;max-height:none!important;width:100%!important;max-width:100%!important;display:flex!important;flex-direction:column;gap:8px;background:#fff!important;border-radius:0!important;margin:0!important;padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(10px + env(safe-area-inset-bottom,0px))!important;overflow:hidden!important;box-shadow:none!important}
+body .film-page .film-expanded-view .film-view-toolbar{flex-shrink:0;margin:0}
+body .film-page .film-expanded-view .film-metrics{flex-shrink:0;margin:0;padding:0;gap:4px}
+body .film-page .film-expanded-view .film-metrics>span{padding:4px 7px}
+body .film-page .film-expanded-view .film-metrics b{font-size:13px}
+body .film-page .film-expanded-view .film-layout-note{display:none}
+body .film-page .film-expanded-view .film-inspector{flex:0 1 auto;max-height:28dvh;overflow:auto;margin:0;padding:8px}
+body .film-page .film-expanded-view .film-inspector-head>div{display:none}
+body .film-page .film-expanded-view .film-inspector-foot{display:none}
+body .film-page .film-expanded-view .film-preview-shell{flex:1 1 0;height:auto!important;min-height:100px;max-height:none;max-width:100%}
+body .film-page .film-expanded-view .film-export-actions{flex-shrink:0;margin:0}
+@media(max-width:760px){
+ body .film-page{padding-left:10px!important;padding-right:10px!important}
+ body .film-page .film-workspace{display:flex!important;flex-direction:column;gap:14px}
+ body .film-page .film-canvas-panel{order:-1;padding:12px!important}
+ body .film-page .film-items-panel{width:100%}
+ body .film-page .film-controls{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ body .film-page .film-controls :is(button,.field){min-width:0;width:100%;max-width:100%;white-space:normal}
+ body .film-page .film-controls :is(input,select){min-width:0;width:100%;font-size:16px;min-height:44px}
+ body .film-page .film-controls button{min-height:48px;line-height:1.25;padding:9px;font-size:13px}
+ body .film-page .film-name-field,body .film-page #calculateFilm{grid-column:1/-1}
+ body .film-page .film-view-toolbar{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+ body .film-page .film-view-toolbar [data-film-expand]{grid-column:span 6;background:#0f172a;color:white}
+ body .film-page .film-view-toolbar [data-film-fit],body .film-page .film-view-toolbar [data-film-overview]{grid-column:span 2}
+ body .film-page .film-view-toolbar .btn{padding:7px 4px;font-size:12px}
+ body .film-page #filmItems{max-height:48svh}
+ body .film-page .film-draft-toolbar-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+ body .film-page .film-draft-toolbar-actions button{min-width:0;width:100%;min-height:44px;white-space:normal}
+ body .film-page .film-selection-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body .film-page .film-expanded-view{padding-left:8px!important;padding-right:8px!important}
+}
