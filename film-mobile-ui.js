@@ -20,6 +20,7 @@ export function attachFilmViewport({element,inspector,getLayout,render,setView})
   else{panel.classList.remove('film-expanded-view');panel.removeAttribute('role');panel.removeAttribute('aria-modal');panel.removeAttribute('aria-label');doc.body.style.overflow=previousOverflow;doc.body.classList.remove('film-view-open');panel.style.removeProperty('--film-view-height');panel.style.removeProperty('--film-view-top');win.scrollTo(0,scrollY);}
   const b=bar.querySelector('[data-film-expand]');b.textContent=value?'Fechar visualização':'Ampliar filme';b.setAttribute('aria-expanded',String(value));reset();viewport();
  }
+ const beforeAction=event=>{if(expanded&&event.target?.closest?.('#exportFilm,#saveFilm'))full(false);};panel.addEventListener('click',beforeAction,true);
  bar.querySelector('[data-film-expand]').onclick=()=>full(!expanded);
  bar.querySelector('[data-film-fit]').onclick=reset;
  bar.querySelector('[data-film-overview]').onclick=()=>{zoom=1;overview=true;setView({zoom,overview});shell.scrollLeft=shell.scrollTop=0;};
@@ -28,7 +29,7 @@ export function attachFilmViewport({element,inspector,getLayout,render,setView})
  doc.addEventListener('keydown',keydown);win.addEventListener('resize',viewport);win.visualViewport?.addEventListener('resize',viewport);
  const ro=win.ResizeObserver?new win.ResizeObserver(schedule):null;ro?.observe(shell);
  const mo=new win.MutationObserver(()=>{if(!element.isConnected||!inspector.isConnected)destroy();});mo.observe(doc.body,{childList:true,subtree:true});
- function destroy(){if(stopped)return;full(false);stopped=true;cancelAnimationFrame(frame);ro?.disconnect();mo.disconnect();doc.removeEventListener('keydown',keydown);win.removeEventListener('resize',viewport);win.visualViewport?.removeEventListener('resize',viewport);bar.remove();if(element._filmViewport===api)delete element._filmViewport;}
+ function destroy(){if(stopped)return;full(false);stopped=true;cancelAnimationFrame(frame);ro?.disconnect();mo.disconnect();panel.removeEventListener('click',beforeAction,true);doc.removeEventListener('keydown',keydown);win.removeEventListener('resize',viewport);win.visualViewport?.removeEventListener('resize',viewport);bar.remove();if(element._filmViewport===api)delete element._filmViewport;}
  const api={destroy};element._filmViewport=api;lastWidth=shell.clientWidth;return api;
 }
 export function installFilmPageMobile(page){
