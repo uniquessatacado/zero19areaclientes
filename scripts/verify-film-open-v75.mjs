@@ -65,7 +65,7 @@ const cloud=fs.readFileSync(path.join(dist,'film-cloud-draft.js'),'utf8');verify
 verify(cloud.includes('if(revision===undefined)')&&cloud.includes("code:'DRAFT_CONFLICT'"),'unknown revision/conflict protections kept');
 verify(source.includes('await ensureFilmCatalog();\n      if(!await refreshOrders())'),'pending picker loads dependencies on demand');
 verify(!source.includes('void refreshOrders();void refreshFilmJobs(media);'),'no full queue load at mount');
-verify(source.includes('regenerateFilmDraftPreviews(null,[item],420)'),'only visible restored text gets lightweight preview');
+verify(source.includes('regenerateFilmDraftPreviews(null,[item],1200)'),'only visible restored text gets on-demand sharp preview');
 const calc=source.slice(source.indexOf('  async function calculateFilm('),source.indexOf('  function removeCurrentFilmEntry('));
 verify(calc.includes('upgradeCurrentLettering(current,stepProgress)')&&calc.includes('runNesting('),'calculation/physical-size checks untouched');
 verify(source.includes('assertCompleteFilmPhrases(items,layout)')&&source.includes('verifyFilmLetteringRevisions'),'export integrity rules kept');

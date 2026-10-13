@@ -10,7 +10,7 @@ export function createFilmPreviewSource({supabase,ownerId,actorId,items,assetUrl
    if(item.previewDataUrl)return item.previewDataUrl;
    if(typeof preparePreview!=='function')throw new Error('A prévia desta escrita ainda não está disponível.');
    await reader.ensure();
-   const url=await waitFilm(preparePreview(item),{signal,timeoutMs:12000});reader.check();
+   const url=await waitFilm(preparePreview(item),{signal,timeoutMs:45000});reader.check();
    if(!url)throw new Error('Não foi possível preparar a prévia desta escrita. Tente novamente.');
    return url;
   }
