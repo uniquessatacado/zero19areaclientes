@@ -38,12 +38,14 @@ const boot=`    let media;
     for(const item of filmItems)ctx.assetUrls?.register?.(item);
     filmCostPanel?.destroy();filmCostPanel=null;
     const profiles=[],readySets=[],assetMap=new Map(),filmCatalogWarnings=[];
+    // Catalogue lifetime follows the page, NOT the calculation counter.
+    const catalogCurrent=()=>pageCurrent()&&uid()===openingActor;
     const ensureFilmCatalog=lazyFilmCatalogue(async()=>{
       const [loadedProfiles,loadedSets]=await Promise.all([
         allProductionRows('z19p_asset_print_profiles','*',q=>q.eq('ready_for_print',true),'asset_id'),
         allProductionRows('z19p_customization_sets','*',q=>q.eq('status','ready'))
       ]);
-      if(!openingCurrent())throw new DOMException('A página mudou.','AbortError');
+      if(!catalogCurrent())throw new DOMException('A página mudou.','AbortError');
       const assetIds=loadedProfiles.map(p=>p.asset_id),setIds=loadedSets.map(s=>s.id);
       const [assets,sources,glyphs,palettes]=await Promise.all([
         productionByIds('z19p_assets','id',assetIds),productionByIds('z19p_customization_sources','set_id',setIds),
@@ -51,7 +53,7 @@ const boot=`    let media;
       ]);
       const kits=await productionByIds('z19p_team_kits','id',[...new Set(loadedSets.map(s=>s.kit_id))]);
       const teams=await productionByIds('z19p_teams','id',[...new Set(kits.map(k=>k.team_id))]);
-      if(!openingCurrent())throw new DOMException('A página mudou.','AbortError');
+      if(!catalogCurrent())throw new DOMException('A página mudou.','AbortError');
       const kitMap=new Map(kits.map(k=>[k.id,k])),teamMap=new Map(teams.map(t=>[t.id,t]));
       for(const set of loadedSets){const kit=kitMap.get(set.kit_id),team=teamMap.get(kit?.team_id),ss=sources.filter(s=>s.set_id===set.id);
         set._team=team;set._kit=kit;set._kind=customizationKind(set);set._sources=ss;
@@ -62,7 +64,7 @@ const boot=`    let media;
       }
       profiles.splice(0,profiles.length,...loadedProfiles);readySets.splice(0,readySets.length,...loadedSets);
       for(const asset of assets){assetMap.set(asset.id,asset);ctx.assetUrls?.register?.(asset);}
-    },{isCurrent:openingCurrent,onState:message=>{let status=app.querySelector('[data-film-catalog-loading]');if(!status){status=document.createElement('p');status.dataset.filmCatalogLoading='';status.setAttribute('role','status');app.querySelector('.film-hero')?.after(status);}status.textContent=message;status.hidden=!message;}});
+    },{isCurrent:catalogCurrent,onState:message=>{let status=app.querySelector('[data-film-catalog-loading]');if(!status){status=document.createElement('p');status.dataset.filmCatalogLoading='';status.setAttribute('role','status');app.querySelector('.film-hero')?.after(status);}status.textContent=message;status.hidden=!message;}});
 `;
 prod=prod.slice(0,a)+boot+prod.slice(b);
 prod=once(prod,"Sua montagem aparece primeiro; catálogos auxiliares carregam em seguida.","Recuperando as posições salvas. Imagens carregam somente na parte visível do filme.");
