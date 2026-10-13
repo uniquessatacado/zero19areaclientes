@@ -1,5 +1,6 @@
 -- Conferência de impressão (13/10, dono): página que mostra pedidos pagos sem nenhuma leitura
 -- do QR do cupom (cupom talvez não impresso), lidos sem rastreio e com rastreio.
+-- Ler o QR (ou mudar a etapa pelo QR) = impresso: 'first' traz a primeira leitura/ação (quando e quem).
 -- SOMENTE LEITURA: resume as leituras/ações já gravadas pelo QR da produção. Não muda pedido,
 -- etapa, pagamento, estoque, frete nem etiqueta.
 create or replace function public.zero19_qr_activity(p_order_ids uuid[]) returns jsonb
@@ -14,7 +15,9 @@ begin
       'last_open_at', max(e.created_at) filter (where e.action = 'QR_OPEN'),
       'moves', count(*) filter (where e.action <> 'QR_OPEN'),
       'last', (select jsonb_build_object('action', l.action, 'at', l.created_at, 'by', l.actor_name)
-        from public.zero19_order_progress_events l where l.order_id = e.order_id order by l.created_at desc limit 1)) info
+        from public.zero19_order_progress_events l where l.order_id = e.order_id order by l.created_at desc limit 1),
+      'first', (select jsonb_build_object('action', f.action, 'at', f.created_at, 'by', f.actor_name)
+        from public.zero19_order_progress_events f where f.order_id = e.order_id order by f.created_at asc limit 1)) info
     from public.zero19_order_progress_events e
     where e.order_id = any(coalesce(p_order_ids, '{}'::uuid[])) and e.tenant_id = '0e885daf-b461-4384-b2c2-8ed2cf33478b'
     group by e.order_id) g), '{}'::jsonb);
