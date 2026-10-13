@@ -12,7 +12,7 @@ update('nesting-core.js',s=>{
  s="import {preferBatchNesting,nestBatchRectangles,validateRectangularFilm} from './nesting-batch-core.js?v=2.17.73';\n"+s;
  const mark='export function validateFilmPlacements(items,placements,options={}){';
  s=patch(s,mark,mark+"\n  if(preferBatchNesting(items)){const rectangular=validateRectangularFilm(items,placements,options);if(rectangular)return rectangular;}\n");
- s=patch(s,'  const settings={...normalized,lockedPlacements};','  if(preferBatchNesting(items)||options.quickPacking===true){const batch=nestBatchRectangles(items,options);if(batch)return batch;}\n  const settings={...normalized,lockedPlacements};');
+ s=patch(s,'  const settings={...normalized,lockedPlacements};','  if(preferBatchNesting(items)||options.quickPacking===true){let batch=nestBatchRectangles(items,options);if(batch){if(!lockedPlacements.length){const alternatives=rectangleCandidates(expanded,{...normalized,lockedPlacements},[]);for(const candidate of alternatives.results)if(candidate.lengthMm<batch.lengthMm-EPSILON){const checked=validateRectangularFilm(items,candidate.placements,options);if(checked)batch={...checked,batchOptimized:true};}}return batch;}}\n  const settings={...normalized,lockedPlacements};');
  s=patch(s,"catch(error){if(!winner)throw error;winner={...winner,nestingSearchLimited:true,nestingSearchWarning:error.message};}","catch(error){if(!winner){const fallback=nestBatchRectangles(items,options);if(fallback)return {...fallback,nestingSearchLimited:true,nestingSearchWarning:'Encaixe retangular completo validado; busca por contornos limitada.'};throw error;}winner={...winner,nestingSearchLimited:true,nestingSearchWarning:error.message};}");
  return s;
 });
@@ -40,6 +40,14 @@ update('film-preview.js',s=>{
   render();return {getLayout:()=>layout,deleteSelected:removeSelected,destroy:()=>viewport.destroy()};`);
  return s;
 });
+update('film-mobile.css',s=>s+`
+body .film-page .film-inspector{background:#f8fafc;color:#0f172a;border-color:#cbd5e1}
+body .film-page .film-inspector :is(label,small,[data-help]){color:#475569}
+body .film-page .film-inspector :is(input,select){background:#fff;color:#0f172a;border-color:#cbd5e1}
+body .film-page .film-selection-controls{background:#f1f5f9;color:#0f172a;border-color:#cbd5e1}
+body .film-page .film-expanded-view .film-export-actions::before{display:none}
+body .film-page .film-expanded-view #exportFilm,body .film-page .film-expanded-view #saveFilm{flex:1 1 0!important;min-width:0;min-height:44px!important;padding:8px!important;font-size:13px!important}
+`);
 update('index.html',s=>patch(s,'</head>','  <link rel="stylesheet" href="/film-mobile.css?v=2.17.73">\n</head>'));
 for(const name of fs.readdirSync(dist).filter(n=>/\.(js|html|css)$/.test(n)))update(name,s=>s.replace(/\b2\.17\.72\b/g,'2.17.73'));
 for(const name of ['nesting-core.js','nesting-batch-core.js','production-v217.js','film-preview.js','film-mobile-ui.js'])execFileSync(process.execPath,['--check',path.join(dist,name)],{stdio:'inherit'});
