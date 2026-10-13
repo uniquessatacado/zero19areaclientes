@@ -1,5 +1,9 @@
 # Regras do dono — Personalizações ZERO19
 
+- Camisa Brasil sem estampa (12/10, dono): no estúdio do site, opção para comprar só a camisa Brasil amarela, sem estampa e sem escrita: 1 = R$ 80, 2 = R$ 90, 3 = R$ 100 e a cada 3 fecha R$ 100 (4 = 180, 5 = 190, 6 = 200). Conta masculina, feminina e infantil misturadas (o dono chama de "gênero"). Só vale para camisa sem nada aplicado; camisa com estampa/escrita segue a tabela normal. No pedido a camisa vai a R$ 80 e a diferença do combo entra como desconto. Chamada aparece no editor do estúdio e no carrinho. Não entra na produção (019), só separa e envia.
+
+- Aguardando pagamento — comprovante (12/10, dono, substitui "sobe ao topo" de 09/10): pedido com comprovante enviado fica numa aba própria "Comprovante" (vermelha, piscando, com contador) ao lado de "Ainda não chamei" e "Já chamei", e não aparece mais em cima dos outros cards. Nas outras abas só um aviso de uma linha leva para a aba. O card continua em vermelho e só sai ao marcar pago.
+
 - Pedido antigo sem estúdio (12/10, dono): "Ver como o cliente montou" e o resumo do QR desenham a camisa Brasil do PDV antigo (escrita em cima, estampa do meio, escrita embaixo) como se fosse do estúdio, com público/tamanho/quantidade das personalizações; nunca mostrar a palavra interna "VDR"; "público a conferir" só quando o pedido não diz; texto longo quebra dentro do balão no celular. Pedido que não é Brasil mostra as camisas e "O que aplicar" (posição, medida, cor, camisa do cliente, só a arte).
 
 - Etiqueta de pedido só com estampa (12/10, dono): a estampa DTF é produto físico e vai no envelope (40×40×1, 50 g por arte); a etiqueta e a recotação reconhecem a estampa do site e a DTF sem aplicação do PDV mesmo sem camisa no pedido. Nunca exigir "peça física" nesse caso. O banco marca a estampa como PRINT_ONLY na lista de itens da etiqueta (vale sem publicar função).
