@@ -1,1 +1,1 @@
-{"private":true,"type":"module","version":"2.17.74","scripts":{"build":"node scripts/build-v2176.mjs && node scripts/build-pending-status.mjs && node scripts/build-bulk-film.mjs && node scripts/build-film-responsive.mjs && node scripts/build-film-v74.mjs"}}
+{"private":true,"type":"module","version":"2.17.75","scripts":{"build":"node scripts/build-v2176.mjs && node scripts/build-pending-status.mjs && node scripts/build-bulk-film.mjs && node scripts/build-film-responsive.mjs && node scripts/build-film-v74.mjs && node scripts/build-film-open-v75.mjs"}}
