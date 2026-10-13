@@ -49,8 +49,9 @@ rpcError=null;await api.markProduction([{type:'asset',officialProjectId:'png-pro
 
 const source=readFileSync(new URL('../production-v217.js',import.meta.url),'utf8');
 assert.match(source,/letteringProductionSnapshot:structuredClone\(production\)/);assert.match(source,/letteringApplicationParts=structuredClone\(parts\)/);
-assert.equal((source.match(/await verifyFilmLetteringRevisions\(/g)||[]).length,4,'Before opening export, PNG, TIFF and record');
-assert.match(source,/markProduction\?\.\(items,\[\.\.\.selectedProductionGroups\],layout\)/);
+assert.equal((source.match(/await verifyFilmLetteringRevisions\(/g)||[]).length,3,'Before opening export, PNG and TIFF; the queue update rechecks each order inside markProduction');
+assert.match(source,/ctx\.officialOrders\.markProduction\(entry\.items,remaining,entry\.layout/);
+assert.match(source,/releaseEntry\.selectedKeys=\[\.\.\.new Set\(\[\.\.\.releaseEntry\.releasedKeys,\.\.\.selectedProductionGroups\]\)\]/);
 const proof=readFileSync(new URL('film-v2176-functions.txt',import.meta.url),'utf8');assert.match(proof,/const candidates=.*!item\.phraseManifests\?\.length&&!item\.zero19WorkItemId/,'Split parts and linked application text cannot be edited by generic proof');
 console.log('PASS film lettering snapshots: owner-scoped dedupe, source/revision/font/quantity CAS payload, source production JSON, missing parts/copies, stale/legacy/read/race errors cannot release application, PNG/history untouched.');
 {

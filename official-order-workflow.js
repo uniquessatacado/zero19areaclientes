@@ -466,14 +466,33 @@ export function createOfficialOrderWorkflow(ctx){
     }
     return [...groups.values()].map(group=>({...group,placementIds:[...new Set(group.placementIds)]}));
   }
-  async function markProduction(items,selectedGroupKeys,layout=null){
-    assertCompleteFilmPhrases(items,layout);
-    const selected=new Set(selectedGroupKeys||[]),groups=exportGroups(items).filter(group=>selected.has(group.key));if(!groups.length)return {projects:0,placements:0};
-    const projectIds=[...new Set(groups.map(group=>group.projectId).filter(Boolean))],placementIds=[...new Set(groups.flatMap(group=>group.placementIds))];
+  // 13/10 (dono: filme de 40 m gerado e nada saiu da fila): um pedido por vez. Um pedido
+  // alterado, ocupado ou lento não segura mais os outros; o que falhar volta com o motivo.
+  const transientProductionError=error=>/em atualiza|statement timeout|canceling statement|deadlock|could not obtain lock|failed to fetch|networkerror|load failed|fetch failed|gateway|\b50[234]\b/i.test(String(error?.message||error||''));
+  const productionPause=ms=>new Promise(resolve=>typeof setTimeout==='function'?setTimeout(resolve,ms):resolve());
+  const productionGroupLabel=group=>(group.companyName||'Cliente')+' · '+(group.projectId?'Pedido '+(group.orderRef||String(group.projectId).slice(0,8)):(group.groupName||'Grupo manual'));
+  async function markProductionGroup(items,group){
+    const projectIds=group.projectId?[group.projectId]:[],placementIds=[...new Set(group.placementIds)];
     const saleIds=[...new Set(items.filter(item=>item.zero19WorkItemId&&projectIds.includes(item.officialProjectId||item.projectId)).map(item=>item.externalOrderItemRef).filter(value=>/^[0-9a-f-]{36}$/i.test(String(value))))];
     const lettering=items.filter(item=>item.type==='team_customization'&&item.zero19WorkItemId&&projectIds.includes(item.officialProjectId||item.projectId)),expected=[...new Map(lettering.map(item=>[item.zero19WorkItemId,{work_item_id:item.zero19WorkItemId,personalization_sale_id:item.externalOrderItemRef,lettering_revision:item.letteringRevision??null,quantity:Number(item.applicationQuantity??item.quantity),font_set_id:item.customizationSetId||item.sourceId,production:item.letteringProductionSnapshot}])).values()];
     if(expected.length){const account=owner(),actor=user();await verifyFilmLetteringRevisions({supabase,ownerId:account,items:lettering,isCurrent:()=>account===owner()&&actor===user()});}
-    const {data,error}=await supabase.rpc(expected.length?'z19p_mark_selected_order_production_lettering':'z19p_mark_selected_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds,p_sale_ids:saleIds,...(expected.length?{p_expected_lettering:expected}:{})});if(error)throw error;return data||{projects:0,placements:0};
+    for(let attempt=1;;attempt++){
+      let response;try{response=await supabase.rpc(expected.length?'z19p_mark_selected_order_production_lettering':'z19p_mark_selected_order_production',{p_project_ids:projectIds,p_placement_ids:placementIds,p_sale_ids:saleIds,...(expected.length?{p_expected_lettering:expected}:{})});}catch(error){response={error};}
+      if(!response?.error)return response?.data||{projects:0,placements:0};
+      if(attempt>=4||!transientProductionError(response.error))throw response.error;
+      await productionPause(700*attempt*attempt);
+    }
+  }
+  async function markProduction(items,selectedGroupKeys,layout=null,{onProgress}={}){
+    assertCompleteFilmPhrases(items,layout);
+    const selected=new Set(selectedGroupKeys||[]),groups=exportGroups(items).filter(group=>selected.has(group.key)),result={projects:0,placements:0,done:[],failed:[]};if(!groups.length)return result;
+    for(const group of groups){
+      try{const data=await markProductionGroup(items,group);result.projects+=Number(data?.projects||0);result.placements+=Number(data?.placements||0);result.done.push(group.key);}
+      catch(error){result.failed.push({key:group.key,label:productionGroupLabel(group),message:String(error?.message||error||'erro desconhecido')});}
+      onProgress?.({done:result.done.length+result.failed.length,total:groups.length});
+    }
+    if(!result.done.length){const error=new Error(result.failed[0].message);error.failed=result.failed;throw error;}
+    return result;
   }
   return {loadPositions,loadManualGroups,chooseManualGroup,openPositionSettings,openPlacementWizard,openPlacementPreview,offerAfterUpload,openPendingProductionPicker,exportGroups,markProduction,pendingRows,pendingFilmItems:(rows,quantities)=>filmItemsFromPending(rows,quantities)};
 }

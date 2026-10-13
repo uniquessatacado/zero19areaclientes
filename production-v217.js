@@ -22,6 +22,7 @@ import {createCloudFilmDraftStore} from './film-cloud-draft.js?v=2.17.5';
 import {attachAssetStudioActions} from './asset-studio-actions.js?v=2.17.5';
 import {createFilmProduction,filmExportIdentity,filmItemFromOrder,filmOrderRowKey,pendingQuantity} from './film-production.js?v=2.17.12';
 import {isCompanyPortalProject} from './service-readiness.js?v=2.17.12';
+import {createFilmReleaseStore,pendingReleaseKeys} from './film-release-store.js?v=2.17.77';
 
 const OPERATIONAL_STAGES=new Set(['art_work','ready_production','production']);
 const STAGE_LABELS={art_work:'Preparar artes',ready_production:'Liberados',production:'Em produção'};
@@ -920,6 +921,8 @@ export function createProductionModule(ctx){
     const controls=app.querySelector('.film-controls');controls.after(advanced);
     for(const node of [app.querySelector('#filmMode').closest('.field'),app.querySelector('#filmGap').closest('.field'),freeControl.closest('.film-free-rotation')])advanced.querySelector('div').append(node);
     const ordersSlot=document.createElement('section');ordersSlot.className='film-order-pending';ordersSlot.dataset.filmOrders='';ordersSlot.hidden=true;controls.before(ordersSlot);
+    const releaseSlot=document.createElement('section');releaseSlot.dataset.filmReleases='';releaseSlot.hidden=true;const releaseAnchor=app.querySelector('.film-hero');if(releaseAnchor)releaseAnchor.after(releaseSlot);else controls.before(releaseSlot);
+    filmReleaseRedraw=()=>pageCurrent()?drawFilmReleases(releaseSlot,pageCurrent,()=>refreshOrders()):null;void filmReleaseRedraw();
     let orderRows=null,fontOrderRows=[],officialPendingRows=[],vendussPendingRows=[],vdrPendingRows=[],ordersRequest=0;
     const production=createFilmProduction({supabase,isCurrent:pageCurrent});
     const drawOrders=()=>{
@@ -1427,6 +1430,74 @@ export function createProductionModule(ctx){
       await drawPreparedLetteringLine(g,layout.numberLine,layout.families,(layout.widthCm-layout.numberLine.widthCm)/2,layout.numberYcm,colorFor(item,'number'),item.vectorColorOverrides);
     }finally{g.restore()}
   }
+  // 13/10 (dono: gerou PNG de 40 m e as estampas continuaram em Aguardando produção).
+  // Gerar o arquivo e tirar da fila são passos separados: cada pedido sai sozinho, com nova
+  // tentativa automática, e o que faltar fica guardado com o motivo até sair da fila.
+  const filmReleaseStore=createFilmReleaseStore();let filmReleaseRedraw=null;
+  const filmReleaseGroupLabel=group=>(group.companyName||'Cliente')+' · '+(group.projectId?'Pedido '+(group.orderRef||String(group.projectId).slice(0,8)):(group.groupName||'Grupo manual'));
+  const transientFilmRelease=error=>/em atualiza|statement timeout|canceling statement|deadlock|could not obtain lock|failed to fetch|networkerror|load failed|fetch failed|gateway|\b50[234]\b/i.test(String(error?.message||error||''));
+  async function releaseExportedFilm(entry,{isCurrent=()=>true,recorder=createFilmProduction({supabase,isCurrent}),onStatus=()=>{}}={}){
+    const report={recorded:entry.recorded||null,recordError:'',failed:[],done:[...(entry.releasedKeys||[])],projects:0,placements:0,complete:false};
+    if(!entry.quoteRecorded){
+      onStatus('Atualizando as quantidades dos pedidos…');
+      for(let attempt=1;;attempt++){
+        try{report.recorded=await recorder.record(entry.items,entry.layout,entry.identity);entry.recorded=report.recorded;entry.quoteRecorded=true;break}
+        catch(error){if(attempt>=3||!transientFilmRelease(error)||!isCurrent()){report.recordError=error.message||String(error);break}await new Promise(resolve=>setTimeout(resolve,900*attempt))}
+      }
+    }
+    const remaining=pendingReleaseKeys(entry);
+    if(remaining.length&&ctx.officialOrders?.markProduction){
+      onStatus('Tirando da fila Aguardando produção… 0/'+remaining.length+' pedido(s)');
+      try{const marked=await ctx.officialOrders.markProduction(entry.items,remaining,entry.layout,{onProgress:progress=>onStatus('Tirando da fila Aguardando produção… '+progress.done+'/'+progress.total+' pedido(s)')});report.projects=Number(marked?.projects||0);report.placements=Number(marked?.placements||0);report.done.push(...(marked?.done||remaining));report.failed=marked?.failed||[]}
+      catch(error){report.failed=error.failed||remaining.map(key=>({key,label:entry.labels?.[key]||'Pedido',message:error.message||String(error)}))}
+    }else if(remaining.length)report.failed=remaining.map(key=>({key,label:entry.labels?.[key]||'Pedido',message:'Fila de pedidos indisponível nesta tela. Atualize a página e tente de novo.'}));
+    entry.releasedKeys=[...new Set(report.done)];
+    report.complete=Boolean(entry.quoteRecorded)&&!pendingReleaseKeys(entry).length;
+    try{if(report.complete)await filmReleaseStore.remove(entry.ownerId,entry.id);else await filmReleaseStore.put(entry)}catch(error){console.warn('filme pendente',error)}
+    return report;
+  }
+  function filmReleaseStyles(){
+    if(document.getElementById('film-release-styles'))return;
+    const style=document.createElement('style');style.id='film-release-styles';
+    style.textContent='.film-release-pending{display:grid;gap:10px;margin:0 0 16px}.film-release-pending[hidden]{display:none}.film-release-report{display:grid;gap:8px;padding:14px 16px;border-radius:14px;line-height:1.5;font-size:14px;margin-top:10px}.film-release-report.err{border:3px solid #dc2626;background:#fef2f2;color:#7f1d1d}.film-release-report.ok{border:2px solid #16a34a;background:#f0fdf4;color:#14532d;font-weight:700}.film-release-report b{font-size:15px}.film-release-report small{display:block;color:inherit;opacity:.9}.film-release-report ul{margin:0;padding-left:20px;max-height:220px;overflow:auto;overflow-wrap:anywhere}.film-release-report div{display:flex;flex-wrap:wrap;gap:8px}.film-release-report p{margin:0;font-weight:700}.film-release-report p:empty{display:none}';
+    document.head.appendChild(style);
+  }
+  function showFilmReleaseReport(target,report,retry){
+    filmReleaseStyles();
+    const recorded=report.recorded&&!report.recorded.unlinked?(report.recorded.added_quantity>0?report.recorded.added_quantity+' estampa(s) de empresas registradas. ':'Estampas de empresas já registradas antes, sem duplicar. '):'';
+    if(report.complete){
+      target.className='film-release-report ok';target.textContent='✔ Saiu da fila Aguardando produção: '+recorded+(report.projects||report.placements?report.projects+' pedido(s) e '+report.placements+' item(ns) agora em produção.':'tudo o que estava marcado neste filme.')+' O que não estava neste filme continua aguardando.';
+      ctx.toast('Fila atualizada: as estampas deste filme saíram de Aguardando produção.','ok');return;
+    }
+    const problems=[...(report.recordError?[{label:'Estampas de empresas',message:report.recordError}]:[]),...report.failed];
+    target.className='film-release-report err';target.setAttribute('role','alert');
+    target.innerHTML='<b>⚠ O arquivo foi gerado, mas '+problems.length+' item(ns) ainda NÃO saíram de Aguardando produção</b>'+(report.done.length?'<small>'+report.done.length+' pedido(s) já saíram da fila.</small>':'')+'<ul>'+problems.slice(0,12).map(problem=>'<li><b>'+h(problem.label)+'</b>: '+h(problem.message)+'</li>').join('')+(problems.length>12?'<li>… e mais '+(problems.length-12)+'.</li>':'')+'</ul><small>Não gere o arquivo de novo. Este filme ficou guardado neste computador: se fechar ou atualizar a tela, o aviso aparece no topo do filme.</small>';
+    const button=document.createElement('button');button.className='btn primary small';button.textContent='Tentar de novo (só o que faltou)';button.onclick=()=>{button.disabled=true;retry()};target.append(button);
+    ctx.toast('Atenção: '+problems.length+' item(ns) do filme ainda estão em Aguardando produção. Veja o aviso vermelho.','err');
+  }
+  async function drawFilmReleases(slot,isCurrent,afterRelease){
+    let list=[];try{list=await filmReleaseStore.list(owner())}catch{list=[]}
+    if(!isCurrent())return;
+    filmReleaseStyles();list=list.filter(entry=>!entry.quoteRecorded||pendingReleaseKeys(entry).length);
+    slot.hidden=!list.length;slot.className='film-release-pending';
+    slot.innerHTML=list.map((entry,index)=>{const keys=pendingReleaseKeys(entry),names=keys.map(key=>entry.labels?.[key]||'Pedido'),when=entry.savedAt?new Date(entry.savedAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+      return '<article class="film-release-report err" role="alert"><b>⚠ Filme gerado '+h(when)+' ainda não saiu todo da fila</b><small>'+h(entry.name||'Filme')+' · '+(keys.length?keys.length+' pedido(s) ainda em Aguardando produção: '+h(names.slice(0,6).join(', '))+(names.length>6?' e mais '+(names.length-6):''):'estampas de empresas ainda não registradas')+(entry.releasedKeys?.length?' · '+entry.releasedKeys.length+' já saíram':'')+'</small><div><button class="btn primary small" data-release-now="'+index+'">Tirar da fila agora</button><button class="btn ghost small" data-release-forget="'+index+'">Apagar este aviso</button></div><p data-release-status="'+index+'"></p></article>';}).join('');
+    slot.querySelectorAll('[data-release-now]').forEach(button=>button.onclick=async()=>{
+      const entry=list[Number(button.dataset.releaseNow)],status=slot.querySelector('[data-release-status="'+button.dataset.releaseNow+'"]');if(!entry||button.disabled)return;
+      slot.querySelectorAll('button').forEach(control=>control.disabled=true);
+      const report=await releaseExportedFilm(entry,{isCurrent,onStatus:text=>{if(isCurrent())status.textContent=text}});
+      if(!isCurrent())return;
+      if(report.complete){ctx.toast('Pronto: as estampas desse filme saíram de Aguardando produção.','ok');await afterRelease?.();return drawFilmReleases(slot,isCurrent,afterRelease)}
+      showFilmReleaseReport(status,report,()=>button.click());
+      slot.querySelectorAll('button').forEach(control=>control.disabled=false);await afterRelease?.();
+    });
+    slot.querySelectorAll('[data-release-forget]').forEach(button=>button.onclick=async()=>{
+      const entry=list[Number(button.dataset.releaseForget)];if(!entry)return;
+      if(!confirm('Apagar este aviso? Os pedidos que ainda não saíram continuam em Aguardando produção e você terá que tirá-los da fila de outro jeito.'))return;
+      try{await filmReleaseStore.remove(entry.ownerId,entry.id)}catch{}
+      await drawFilmReleases(slot,isCurrent,afterRelease);
+    });
+  }
   async function exportFilm(media,assetMap){
     if(!lastFilm||document.querySelector('.film-export-modal'))return;
     const startingAccount=String(owner()||''),startingGeneration=productionAccountGeneration,exportRoute=location.hash;
@@ -1449,7 +1520,7 @@ export function createProductionModule(ctx){
     const currentExport=()=>!closed&&exportGeneration===productionAccountGeneration&&exportAccount===String(owner()||'')&&exportRoute===location.hash;
     const requireCurrentExport=()=>{if(!currentExport())throw new DOMException('Exportação encerrada por troca de conta.','AbortError')};
     modal.className='modal-backdrop';modal.innerHTML='<style>.film-export-modal{width:min(720px,calc(100vw - 24px));max-height:calc(100dvh - 30px);overflow:auto}.film-export-options{display:grid;gap:12px;margin:20px 0}.film-export-option{display:flex;gap:12px;padding:15px;border:1px solid #39393f;border-radius:14px;cursor:pointer;align-items:flex-start}.film-export-option input{width:20px;height:20px;flex:0 0 20px;accent-color:#ff6428}.film-export-option small{display:block;line-height:1.5;color:#a9a9b5;margin-top:6px}.film-export-result{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 0;border-top:1px solid #35353b}.film-export-result small{display:block;color:#aaa;line-height:1.5}.film-export-error{color:#ff9d91;min-height:24px}.film-export-hint{font-size:12px;line-height:1.6;color:#aaa}.curve-panel{margin:14px 0;padding:14px;border:1px solid #484852;border-radius:16px;background:#16161b}.curve-panel h3{margin:0 0 4px}.curve-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.curve-field{display:grid;gap:5px;font-size:11px;font-weight:800;text-transform:uppercase}.curve-field input,.curve-field select{width:100%}.curve-value{display:grid;grid-template-columns:1fr 72px;gap:7px}.curve-preview{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.curve-preview figure{margin:0;min-width:0}.curve-preview canvas{display:block;width:100%;height:112px;border:1px solid #474751;border-radius:10px;background:#fff;object-fit:contain}.curve-preview figcaption{margin-top:4px;font-size:10px;color:#b9b9c3;text-align:center}.curve-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}.curve-name{flex:1 1 180px;min-width:0}.curve-current{margin:8px 0 0;color:#ffb08d;font-size:11px;font-weight:800}@media(max-width:480px){.film-export-result{grid-template-columns:1fr}.film-export-result .btn{justify-content:center;width:100%}.curve-grid,.curve-preview{grid-template-columns:1fr}}</style><div class="modal film-export-modal" role="dialog" aria-modal="true" aria-labelledby="filmExportTitle"><div class="modal-head"><div><div class="eyebrow">Arquivo final · fundo transparente</div><h2 id="filmExportTitle">Exportar filme em 300 DPI</h2></div><button class="btn ghost small" data-close-film-export aria-label="Fechar">×</button></div><p class="film-export-hint"><b>Recorte automático no limite real das artes.</b> O arquivo sempre remove margens transparentes externas, sem ampliar, reduzir ou alterar as posições. Será gerado um único filme contínuo em 300 DPI.</p><p class="film-export-error" role="alert" data-film-export-error></p><div data-film-export-results></div><div class="modal-footer"><button class="btn" data-close-film-export>Fechar</button><button class="btn primary" data-generate-film-export>Preparar PNG</button></div></div>';
-    const close=()=>{if(busy||closed)return;closed=true;curveOverlay?.remove();modal.remove();for(const url of urls)URL.revokeObjectURL(url);previousFocus?.focus?.();document.removeEventListener('keydown',onKey);window.removeEventListener('z19:account-changing',accountChanging);window.removeEventListener('hashchange',accountChanging)};
+    const close=()=>{if(busy||closed)return;closed=true;if(releaseEntry.savedAt&&!exportRecorded)void filmReleaseRedraw?.();curveOverlay?.remove();modal.remove();for(const url of urls)URL.revokeObjectURL(url);previousFocus?.focus?.();document.removeEventListener('keydown',onKey);window.removeEventListener('z19:account-changing',accountChanging);window.removeEventListener('hashchange',accountChanging)};
     const accountChanging=()=>{spotController?.abort();busy=false;close()};window.addEventListener('z19:account-changing',accountChanging);
     window.addEventListener('hashchange',accountChanging);
     const onKey=event=>{if(event.key==='Escape'){if(curveOverlay&&!curveOverlay.hidden){curveOverlay.hidden=true;curveLauncher?.querySelector('[data-open-curve]')?.focus();return}close()}if(event.key==='Tab'){const controls=[...modal.querySelectorAll('button:not(:disabled):not([hidden]),input:not(:disabled),a[href]')].filter(node=>node.getClientRects().length),first=controls[0],last=controls.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}}};
@@ -1484,29 +1555,33 @@ export function createProductionModule(ctx){
     const spotStatus=document.createElement('div');spotStatus.hidden=true;spotStatus.dataset.spotStatus='';spotStatus.innerHTML='<p role="status" aria-live="polite" data-spot-stage></p><progress style="width:100%" aria-label="Progresso do TIFF"></progress><button class="btn small" data-cancel-spot-export>Cancelar TIFF</button>';modal.querySelector('[data-film-export-results]').before(spotStatus);
     const spotButton=document.createElement('button');spotButton.className='btn';spotButton.dataset.generateSpotExport='';spotButton.textContent='Gerar TIFF';modal.querySelector('[data-generate-film-export]').before(spotButton);modal.querySelector('.modal-footer').style.flexWrap='wrap';
     const productionRecorder=createFilmProduction({supabase,isCurrent:currentExport});
+    // 13/10 (dono): filme reaberto (salvo/rascunho) que já foi gerado sai da fila sem gerar 40 m de novo.
+    const releaseOnlyButton=document.createElement('button');releaseOnlyButton.className='btn';releaseOnlyButton.dataset.releaseWithoutFile='';releaseOnlyButton.textContent='Já gerei este filme · só tirar da fila';
+    releaseOnlyButton.onclick=async()=>{
+      if(busy||!currentExport()||exportRecorded)return;
+      if(!confirm('Tirar da fila "Aguardando produção" os pedidos marcados nesta janela SEM gerar o arquivo de novo?\n\nUse somente se o arquivo deste MESMO filme já foi gerado.'))return;
+      busy=true;modal.querySelectorAll('button,input,select').forEach(control=>control.disabled=true);
+      try{await recordExportOnce()}finally{busy=false;modal.querySelectorAll('button,input,select').forEach(control=>control.disabled=false);syncTiffOptions()}
+    };
+    modal.querySelector('[data-generate-film-export]').before(releaseOnlyButton);
     const productionNotice=document.createElement('div');productionNotice.className='film-export-hint';productionNotice.dataset.productionResult='';modal.querySelector('[data-film-export-results]').after(productionNotice);
     const productionGroups=ctx.officialOrders?.exportGroups?.(items)||[],selectedProductionGroups=new Set(productionGroups.map(group=>group.key));
     if(productionGroups.length){const box=document.createElement('section');box.className='film-export-orders';box.innerHTML='<b>Marcar como em produção</b><small>Pedidos oficiais e grupos manuais vêm marcados. Desmarque o que ainda não foi impresso neste arquivo.</small><div>'+productionGroups.map(group=>'<label><input type="checkbox" data-production-group="'+h(group.key)+'" checked><span>'+h(group.companyName)+' · '+(group.projectId?'Pedido '+h(group.orderRef||group.projectId.slice(0,8)):h(group.groupName||'Grupo manual'))+'</span></label>').join('')+'</div>';productionNotice.before(box);box.querySelectorAll('[data-production-group]').forEach(input=>input.onchange=()=>input.checked?selectedProductionGroups.add(input.dataset.productionGroup):selectedProductionGroups.delete(input.dataset.productionGroup));}
+    // 13/10 (dono): o filme gerado fica guardado neste aparelho até sair da fila; se algo
+    // falhar, o aviso vermelho volta no topo do filme mesmo depois de atualizar a tela.
+    const releaseEntry={id:exportId,ownerId:exportAccount,savedAt:null,name:filmExportBase(media),items,layout,identity,selectedKeys:[],releasedKeys:[],quoteRecorded:false,labels:Object.fromEntries(productionGroups.map(group=>[group.key,filmReleaseGroupLabel(group)]))};
     const recordExportOnce=async()=>{
       if(!currentExport()||exportRecorded)return;
-      productionNotice.textContent=items.some(item=>item.orderLink)?'Atualizando as quantidades dos pedidos…':'';
-      try{
-        assertCompleteFilmPhrases(items,layout);
-        await verifyFilmLetteringRevisions({supabase,ownerId:exportAccount,items,isCurrent:currentExport});
-        const recorded=await productionRecorder.record(items,layout,identity);
-        if(!currentExport())return;
-        const officialRecorded=await ctx.officialOrders?.markProduction?.(items,[...selectedProductionGroups],layout);
-        if(!currentExport())return;
-        exportRecorded=true;
-        let skipFinance=false;
-        if(!recorded.unlinked){productionNotice.textContent=recorded.added_quantity>0?`${recorded.added_quantity} estampa(s) registrada(s). Pedidos em produção; as quantidades restantes continuam pendentes.`:'Filme já registrado. Reexportação sem duplicar quantidades.';if(recorded.has_previous_items&&recorded.added_quantity>0)productionNotice.textContent+=' Esta montagem também contém peças já registradas; o custo anterior não será lançado novamente.';skipFinance=recorded.added_quantity===0||recorded.has_previous_items;}
-        if(officialRecorded?.projects||officialRecorded?.placements)productionNotice.textContent+=(productionNotice.textContent?' ':'')+`${officialRecorded?.projects||0} pedido(s) e ${officialRecorded?.placements||0} item(ns) marcados como em produção.`;
-        if(skipFinance)return;
-      }catch(error){
-        if(!currentExport())return;
-        productionNotice.textContent=error.message+' O arquivo continua disponível abaixo. Não gere outro filme para tentar corrigir.';
-        const retry=document.createElement('button');retry.className='btn small';retry.textContent='Tentar atualizar a fila';retry.onclick=()=>{retry.disabled=true;void recordExportOnce()};productionNotice.append(document.createElement('br'),retry);return;
-      }
+      releaseEntry.selectedKeys=[...new Set([...releaseEntry.releasedKeys,...selectedProductionGroups])];releaseEntry.savedAt=releaseEntry.savedAt||new Date().toISOString();
+      try{await filmReleaseStore.put(releaseEntry)}catch(error){console.warn('filme pendente não guardado',error)}
+      productionNotice.className='film-export-hint';productionNotice.textContent='Tirando da fila Aguardando produção…';
+      const report=await releaseExportedFilm(releaseEntry,{isCurrent:currentExport,recorder:productionRecorder,onStatus:text=>{if(currentExport())productionNotice.textContent=text}});
+      if(!currentExport())return;
+      showFilmReleaseReport(productionNotice,report,()=>void recordExportOnce());
+      if(!report.complete)return;
+      exportRecorded=true;
+      const recorded=report.recorded||{unlinked:true};
+      if(!recorded.unlinked&&(recorded.added_quantity===0||recorded.has_previous_items))return;
       if(!ctx.getCostUI?.()||!ctx.onFilmExported)return;
       const financeItems=items.map(item=>({...item,workspaceId:item.workspaceId||assetMap.get(item.sourceId)?.workspace_id||null}));
       const companies=financeItems.filter(item=>item.workspaceId).map(item=>({id:item.workspaceId,name:item.companyName||state().workspaces?.find(workspace=>workspace.id===item.workspaceId)?.company_name||item.label?.split(' • ')[0]||'Empresa'}));
