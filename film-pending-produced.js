@@ -1,5 +1,7 @@
+import {watchPendingStatuses} from './film-pending-status.js?v=2.17.71';
 // Reuses the audited per-application action; never completes an entire order.
-export function bindPendingProducedActions({entries,modal,isCurrent,getBusy,setBusy,selected,updateCount,markProduced,onProduced,onError}){
+export function bindPendingProducedActions({supabase,ownerId,entries,modal,isCurrent,getBusy,setBusy,selected,updateCount,markProduced,onProduced,onError}){
+ watchPendingStatuses({supabase,ownerId,entries,modal,isCurrent,getBusy,setBusy,selected,updateCount,onChanged:onProduced});
  if(typeof markProduced!=='function')return;
  entries.forEach((entry,index)=>{
   if(!['font','vdr','venduss'].includes(entry.kind)||!entry.row?.id)return;
