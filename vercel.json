@@ -1,5 +1,5 @@
 {
-  "buildCommand":"node scripts/build-v2176.mjs",
+  "buildCommand":"npm run build",
   "outputDirectory":"dist",
   "headers":[
     {"source":"/(.*)","headers":[{"key":"X-Content-Type-Options","value":"nosniff"},{"key":"Cache-Control","value":"no-cache,max-age=0,must-revalidate"}]},
