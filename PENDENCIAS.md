@@ -308,3 +308,12 @@ Estados: `[ ]` pendente · `[~]` em andamento/parcial · `[x]` concluído com pr
 - [x] Publicação desta etapa: código `b984077` enviado ao GitHub, Personalizações **2.17.41** publicada na Vercel, deployment `dpl_GXLvrhLDBeDyFJGzyoag7qwGqsgx` READY com SHA correspondente e alias de produção confirmado. HTTP 200 no domínio oficial, meta 2.17.41 e JS com `awaiting_release`/importação da arte confirmados. Build/testes passaram. Isto NÃO encerra as pendências acima: navegador conectado indisponível (`agent.browsers.list()` vazio), sem inspeção visual autenticada desktop/mobile.
 
 Dependência cruzada: acompanhar também `C:\sistemas visualcode\venduss\novovendus\PENDENCIAS.md`.
+
+
+## 14/10/2026 — Finalizar checkout no PDV e etiqueta de estampa avulsa
+
+- Aplicado no Supabase: checkout existente recebido no PDV preserva IDs, composição e arquivos; o gatilho de pagamento reserva estoque/libera produção uma única vez. ZERO19 respeita venda sem estoque habilitada. Não afeta outras lojas.
+- Teste transacional com os 51 itens do pedido #50240: pagamento de R$ 1.430, estoque disponível zero, repetição sem duplicar reserva/produção/pagamento e produção iniciada. Todas as alterações de negócio do teste foram revertidas; pedido real não foi pago pelo teste.
+- Corrigido o frete/etiqueta do #49733: base virtual de estampa avulsa não conta como camisa física. Validação de quantidades preservada, mensagem sem sigla interna. Testes cobrem base virtual, camisa, estampa legada e quantidades divergentes.
+- Publicadas smartenvios-requote-order v6 e smartenvios-generate-label v126, autenticação preservada. Não comprada etiqueta de teste. Conferência final no navegador pelo operador ainda não realizada.
+- Limite: preservação no PDV vale para composição existente inalterada (preços/pagamento podem mudar); editar peças/quantidades segue fluxo próprio. Nenhuma pendência anterior foi encerrada por esta correção.
