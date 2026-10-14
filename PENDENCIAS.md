@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 14/10 — NovoVenduss (ver PENDENCIAS de lá, item 14/10 (7)): botão "Etiqueta sumiu? Gerar de novo" em Etiquetas pendentes (guarda a etiqueta antiga no histórico, recalcula o frete e gera a nova pelas mesmas travas) e avisos de prazo até 23/10 sempre pela data/hora de agora, sem a data do pagamento (frete que não chega mostra só a diferença de valor). Nada muda no aplicativo 019. Git NovoVenduss 51254561. PENDENTE do dono: rodar RODAR_NO_SUPABASE_14-10_gerar_etiqueta_de_novo.sql (nesta pasta) e rebuild do NovoVenduss. A etiqueta antiga não é cancelada sozinha na SmartEnvios (cancelar no portal).
+
 - [x] 14/10 — NovoVenduss (ver PENDENCIAS de lá, item 14/10 (6)): todas as 219 estampas ativas do estúdio com arquivo de produção pronto (faltavam 23 artes + 106 Números Brasil). Nada muda no aplicativo 019.
 
 - [~] 14/10 — NovoVenduss (ver PENDENCIAS de lá, item 14/10): página Mandar rastreio feita e testada (Git e8c85661). Nada muda no 019. PENDENTE: rebuild do NovoVenduss.
