@@ -4,7 +4,7 @@
 
 
 -- ============================================================
--- 1/7 · 13/10 "Já despachado" (Etiquetas pendentes / Mandar rastreio)
+-- 1/8 · 13/10 "Já despachado" (Etiquetas pendentes / Mandar rastreio)
 -- ============================================================
 -- Já despachado (13/10, dono): na aba "Enviar hoje · prazo" a equipe marca que o pacote já foi
 -- postado/entregue à transportadora; sai da tela e fica no filtro "Despachados" (com quem/quando e Desfazer).
@@ -52,7 +52,7 @@ grant execute on function public.zero19_dispatches(uuid[]) to authenticated;
 
 
 -- ============================================================
--- 2/7 · 13/10 Manter o frete do cliente
+-- 2/8 · 13/10 Manter o frete do cliente
 -- ============================================================
 -- Manter o frete do cliente (13/10, dono): o cliente comprou já sabendo que o frete escolhido não chega
 -- até 23/10. A equipe marca "seguir com este frete": somem os alertas de trocar frete, o prazo passa a ser
@@ -114,7 +114,7 @@ $patch$;
 
 
 -- ============================================================
--- 3/7 · 13/10 Conferir impressão (leituras do QR)
+-- 3/8 · 13/10 Conferir impressão (leituras do QR)
 -- ============================================================
 -- Conferência de impressão (13/10, dono): página que mostra pedidos pagos sem nenhuma leitura
 -- do QR do cupom (cupom talvez não impresso), lidos sem rastreio e com rastreio.
@@ -146,7 +146,7 @@ comment on function public.zero19_qr_activity(uuid[]) is 'Leituras do QR do cupo
 
 
 -- ============================================================
--- 4/7 · 13/10 Cancelar sempre, venda sem estoque e "pedido impresso" (pode rodar de novo)
+-- 4/8 · 13/10 Cancelar sempre, venda sem estoque e "pedido impresso" (pode rodar de novo)
 -- ============================================================
 -- RODAR NO SUPABASE (13/10, dono). Pode rodar o arquivo inteiro de novo sem problema.
 -- 1) Cancelar SEMPRE (não trava mais pedido do site com estampa em produção)
@@ -280,7 +280,7 @@ notify pgrst, 'reload schema';
 
 
 -- ============================================================
--- 5/7 · 12/10 Camisa Brasil sem estampa 1/2/3 por R$ 80/90/100 (pode rodar de novo)
+-- 5/8 · 12/10 Camisa Brasil sem estampa 1/2/3 por R$ 80/90/100 (pode rodar de novo)
 -- ============================================================
 -- Camisa Brasil SEM estampa no estúdio do site (dono 12/10).
 -- Preço: cada 3 camisas sem estampa = R$ 100; sobra 1 = R$ 80, sobra 2 = R$ 90
@@ -343,7 +343,7 @@ commit;
 
 
 -- ============================================================
--- 6/7 · 14/10 Etiqueta sumiu? Gerar de novo (precisa do 1/7)
+-- 6/8 · 14/10 Etiqueta sumiu? Gerar de novo (precisa do 1/7)
 -- ============================================================
 -- Gerar etiqueta de novo (14/10, dono): "tem pedido que a etiqueta sumiu, preciso gerar de novo".
 -- Libera a etiqueta atual do pedido (ou a tentativa de compra travada) para a equipe gerar outra pelo
@@ -459,7 +459,7 @@ notify pgrst, 'reload schema';
 
 
 -- ============================================================
--- 7/7 · 15/10 Endereço do site no cadastro, ZERO19 TV (entraram hoje/desistências), medida das artes
+-- 7/8 · 15/10 Endereço do site no cadastro, ZERO19 TV (entraram hoje/desistências), medida das artes
 -- ============================================================
 -- 15/10 (dono): "endereço que cliente está cadastrando no site não está ficando salvo no cadastro do cliente".
 -- Causas no checkout do site (political_checkout_create):
@@ -689,6 +689,37 @@ select name as "fica pela altura (22 no nome)" from public.political_prints
 where political_private.brasil_number_digits(id::text) is null and political_private.art_sized_by_height(id,name) order by name;
 
 -- ============================================================
+-- 8/8 · 15/10 Etapas reais com etiqueta já gerada + "impresso" só pela leitura do QR
+-- ============================================================
+-- 15/10 (dono): (1) pedido com etiqueta gerada antes de separar/prensar/pronta: as etapas continuam a fazer
+-- e podem ser marcadas no QR (antes o banco recusava: "O pedido já está pronto"); só trava depois de PRONTA
+-- de verdade (com foto) ou entregue. (2) "Pedido impresso" no Acompanhar meu pedido só com a LEITURA do QR
+-- do cupom (abrir pelo número ou mudar etapa não conta). Não muda pedido, pagamento, estoque, frete nem etiqueta.
+do $patch$
+declare definition text;
+  old_guard constant text := 'if before_stage in (''READY'',''SHIPPED'',''DELIVERED'') then raise exception ''O pedido já está pronto. Esta etapa não pode mudar por aqui.''; end if;';
+  new_guard constant text := 'if before_stage in (''READY'',''DELIVERED'') or (political_private.zero19_order_progress_row(o.id)->''times''->>''ready_at'') is not null then raise exception ''O pedido já está pronto. Esta etapa não pode mudar por aqui.''; end if;';
+begin
+  definition := pg_get_functiondef('public.zero19_order_progress_action(uuid,text,text)'::regprocedure);
+  if position(new_guard in definition) > 0 then raise notice 'Etapas com etiqueta gerada: já aplicado.';
+  elsif position(old_guard in definition) = 0 then raise warning 'Etapas com etiqueta gerada NÃO aplicado: a função mudou. Avise o desenvolvedor.';
+  else execute replace(definition, old_guard, new_guard); end if;
+end $patch$;
+
+do $patch$
+declare definition text;
+  old_printed constant text := '(select min(pe.created_at) from public.zero19_order_progress_events pe where pe.order_id = o.id)';
+  new_printed constant text := '(select min(pe.created_at) from public.zero19_order_progress_events pe where pe.order_id = o.id and pe.action = ''QR_OPEN'')';
+begin
+  definition := pg_get_functiondef('political_private.zero19_order_progress_row(uuid)'::regprocedure);
+  if position(new_printed in definition) > 0 then raise notice 'Impresso só pelo QR: já aplicado.';
+  elsif position(old_printed in definition) = 0 then raise notice 'Impresso: o "pedido impresso" ainda não existe neste banco (nada a mudar).';
+  else execute replace(definition, old_printed, new_printed); end if;
+end $patch$;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- CONFERÊNCIA (só leitura): todas as linhas devem dizer OK
 -- ============================================================
 select item as "o que", case when ok then 'OK' else 'NÃO APLICADO — avise o desenvolvedor' end as "situação" from (values
@@ -700,5 +731,6 @@ select item as "o que", case when ok then 'OK' else 'NÃO APLICADO — avise o d
  (6,'Etiqueta: gerar de novo (14/10)',to_regprocedure('public.zero19_release_shipping_label(uuid,text,text)') is not null),
  (7,'Endereço do site no cadastro (15/10)',coalesce(pg_get_functiondef(to_regprocedure('public.political_checkout_create(uuid,text,jsonb)')) like '%checkout_save_customer%',false)),
  (8,'ZERO19 TV: entraram hoje e desistências (15/10)',to_regprocedure('public.political_site_funnel_today()') is not null),
- (9,'Medida das artes: largura / 22 e números pela altura (15/10)',to_regprocedure('political_private.art_sized_by_height(uuid,text)') is not null)
+ (9,'Medida das artes: largura / 22 e números pela altura (15/10)',to_regprocedure('political_private.art_sized_by_height(uuid,text)') is not null),
+ (10,'Etapas do QR com etiqueta já gerada (15/10)',coalesce(pg_get_functiondef(to_regprocedure('public.zero19_order_progress_action(uuid,text,text)')) like '%''times''->>''ready_at''%',false))
 ) t(n,item,ok) order by n;
