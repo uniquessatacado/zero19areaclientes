@@ -3,6 +3,11 @@
 // rows to the PNG/TIFF encoder. Nothing is resized, split into files or moved.
 const ROWS=64;
 const cancelled=signal=>{if(signal?.aborted)throw new DOMException('Exportação cancelada.','AbortError')};
+// Filme gigante (35 m+): devolve a vez ao navegador a cada ~40 ms para o Chrome não
+// mostrar "Página sem resposta". MessageChannel não é atrasado em aba de fundo.
+let lastPause=0;
+const nextTask=()=>new Promise(resolve=>{if(typeof MessageChannel!=='function')return setTimeout(resolve,0);const channel=new MessageChannel();channel.port1.onmessage=()=>{channel.port1.close();resolve()};channel.port2.postMessage(0)});
+export async function pauseForBrowser(force=false){const now=Date.now();if(!force&&now-lastPause<40)return;await nextTask();lastPause=Date.now()}
 
 export function filmBandRows(width,budgetBytes=128e6){
   const rows=Math.floor(budgetBytes/(Math.max(1,width)*4)/ROWS)*ROWS;
@@ -44,7 +49,7 @@ export async function scanBandAlpha({width,height,renderBand,signal,onProgress=(
       const count=Math.min(ROWS,height-start),rgba=await reader.read(0,start,width,count);
       for(let y=0;y<count;y++){const row=y*width*4;for(let x=0;x<width;x++)if(rgba[row+x*4+3]!==0){if(x<left)left=x;if(x>right)right=x;if(start+y<top)top=start+y;bottom=start+y}}
       onProgress({stage:'bounds',done:start+count,total:height});
-      if(start%1024===0)await new Promise(resolve=>setTimeout(resolve,0));
+      await pauseForBrowser();
     }
   }finally{reader.dispose()}
   cancelled(signal);
@@ -83,6 +88,7 @@ export async function encodePngRows({width,height,readRows,dpi=300,signal,onProg
       }
       await writer.write(filtered);
       onProgress({stage:'encode',done:y+count,total:height});
+      await pauseForBrowser();
     }
     await writer.close();await collect;
   }catch(error){try{await writer.abort(error)}catch{}try{await collect}catch{}throw error}
@@ -113,7 +119,7 @@ export function createFilmBandPainter({width,placements,loadImage,drawPlacement,
       for(const [key,image] of images)if(!keys.has(key)){if(image)image.src='';images.delete(key)}
       g.translate(0,-top);
       for(const p of needed){
-        cancelled(signal);check();
+        cancelled(signal);check();await pauseForBrowser();
         if(!images.has(p.id))images.set(p.id,await loadImage(p));
         cancelled(signal);check();
         await drawPlacement(g,p,images.get(p.id));
