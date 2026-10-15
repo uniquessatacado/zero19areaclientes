@@ -1,8 +1,4 @@
--- 15/10 — rodar UMA vez no Supabase (SQL Editor) do projeto ZERO19. Pode rodar de novo sem problema.
--- 1) Endereço digitado no checkout do site vai para o cadastro do cliente (compras novas).
--- 2) ZERO19 TV: pessoas que entraram hoje e onde desistiram.
--- 3) Medida das artes do estúdio: comum pela LARGURA (28/25/20), 22 no nome e números pela ALTURA (pedidos novos).
--- No final aparece a lista das estampas que ficam pela altura (com 22 no nome).
+-- 15/10 — já está DENTRO de RODAR_NO_SUPABASE_TUDO_QUE_FALTA_15-10.sql (use aquele). Pode rodar de novo sem problema.
 
 -- 15/10 (dono): "endereço que cliente está cadastrando no site não está ficando salvo no cadastro do cliente".
 -- Causas no checkout do site (political_checkout_create):
@@ -76,7 +72,8 @@ begin
  if strpos(body,find_phone)=0 or strpos(body,created)=0
   or (length(body)-length(replace(body,find_phone,'')))<>length(find_phone)
   or (length(body)-length(replace(body,created,'')))<>length(created) then
-  raise exception 'A função do checkout mudou; nada foi alterado. Avise o desenvolvedor.';
+  -- Não derruba o resto do arquivo: a tabela de conferência no final mostra se ficou aplicado.
+  raise warning 'A função do checkout mudou; endereço no cadastro NÃO foi aplicado. Avise o desenvolvedor.';return;
  end if;
  body:=replace(body,find_phone,find_phone||E'\n if cid is null and coalesce(customer->>''cpf'','''')~''^[0-9]{11}$'' then select id into cid from public.customers where tenant_id=tid and regexp_replace(coalesce(cpf,''''),''[^0-9]'','''',''g'')=customer->>''cpf'' order by created_at limit 1;end if;');
  body:=replace(body,created,created||E'\n perform political_private.checkout_save_customer(tid,cid,customer,p_payload->>''delivery_method''=''DELIVERY'');');
