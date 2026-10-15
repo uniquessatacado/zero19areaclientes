@@ -38,6 +38,8 @@ const context={app,ctx:{shell:s=>s,bindCommon(){},assetUrls:{register(){registra
  filmItems:items,filmSettings:{mediaId:media[0].id,mode:'maximum',gapMm:3,name:'Saved film'},lastFilm:layout,
  restoreFilmDraft:async()=>{},regenerateFilmDraftPreviews:forbidden,preloadFilmPickerMeta:forbidden,allProductionRows:forbidden,productionByIds:forbidden,optionalProductionByIds:forbidden,
  h:s=>String(s??''),filmItemsHTML:()=>'<article>807 saved items</article>',createFilmReader,loadFilmOpening,lazyFilmCatalogue,showFilmOpeningFailure:()=>{throw Error('unexpected boot error');},resolveFilmDraftMedia,
+ // 2.17.78: miniaturas da lista são criadas na abertura, mas só carregam depois (nunca seguram a abertura).
+ filmListThumbs:null,createFilmListThumbs:()=>({markup:()=>'',attach(){},destroy(){}}),createFilmThumbSource:()=>async()=>{throw Error('Opening must not load thumbnails');},
  DOMException,setTimeout,clearTimeout,console};
 vm.createContext(context);vm.runInContext(prefix,context);
 const start=performance.now(),opened=await vm.runInContext('renderFilm()',context),elapsed=performance.now()-start;
