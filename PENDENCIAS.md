@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 16/10 (3) URGENTE — NovoVenduss (ver PENDENCIAS de lá, item 16/10 (3)): erro "duplicate key … z19p_projects_workspace_id_sequence_no_key" ao finalizar no PDV (número do pedido do cliente na produção 019 repetia) + trocar envio ↔ retirada na correção do pedido no PDV. Toca a tabela z19p_projects do 019 só com um gatilho que escolhe o próximo número livre quando o número já está ocupado (vale também para "Projeto N" criado pelo aplicativo 019; nada mais muda no aplicativo). PENDENTE do dono: rodar RODAR_NO_SUPABASE_16-10_pdv_erro_e_retirada.sql (nesta pasta) e rebuild do NovoVenduss.
+
 - [~] 16/10 (2) — NovoVenduss: TV com as desistências do dia fixas abaixo do online (ver PENDENCIAS de lá). Nada muda no 019. PENDENTE: rebuild do NovoVenduss.
 - [~] 16/10 — NovoVenduss (ver PENDENCIAS de lá, item 16/10): 8 artes novas no estúdio (já no banco, com arquivo de produção 300 DPI) e medida por arte (22 = 28/23/18 de altura; pisando no Lula = 30/25/20 de largura). Nada muda no aplicativo 019 (as medidas chegam nos pedidos novos). PENDENTE do dono: rodar RODAR_NO_SUPABASE_16-10_medida_artes.sql (nesta pasta) e rebuild do NovoVenduss.
 - [~] 15/10 (noite) — NovoVenduss (ver PENDENCIAS de lá, item 15/10 noite): foto de CADA peça pronta no QR (uma por montagem, só com personalização) e Acompanhar meu pedido só com as camisas desenhadas + foto ao lado + valores. Nada muda no aplicativo 019. PENDENTE do dono: rodar RODAR_NO_SUPABASE_15-10_fotos_por_peca.sql (nesta pasta) e rebuild do NovoVenduss.
