@@ -274,7 +274,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ## 12. Situação em 19/10/2026 (detalhes no PENDENCIAS.md)
 
-- **PDV novo da ZERO19** (partes 1 a 4 + Camisas prontas): no ramo local `pdv-novo-zero19` do NovoVenduss, sem envio ao GitHub. Aguarda o dono testar em http://localhost:5502/dashboard/pdv; depois merge/push e rebuild.
+- **PDV novo da ZERO19** (partes 1 a 4 + Camisas prontas): enviado ao `main` do NovoVenduss em 19/10 a pedido do dono. Falta o dono reconstruir o frontend no Portainer; o "PDV antigo" continua no menu Mais.
 - **Regras de frete + Melhor Envio**: banco e funções no ar. Falta o rebuild do frontend, o dono conectar o Melhor Envio e confirmar o remetente (hoje copiado da Venduss).
 - Vários itens `[~]` aguardam só o rebuild do NovoVenduss ou o teste do dono.
 - Observação: os `RODAR_NO_SUPABASE_*.sql` da raiz do 019 saem públicos no site da Vercel (só código de funções, sem senha). Tirar do build depende do dono.
