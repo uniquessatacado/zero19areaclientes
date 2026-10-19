@@ -160,7 +160,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
   node scripts/zero19-pdv-browser-qa.mjs <pasta>/app.css <pasta-das-fotos>
   ```
 
-  PDV: `PDV_QA_MODE=novo|janelas|prontas|antigo|outra-loja` e `PDV_QA_ONLY=pc1440,celular`. **Olhe as fotos** antes de dizer que está bom.
+  PDV: `PDV_QA_MODE=novo|janelas|prontas|variacoes|antigo|outra-loja` e `PDV_QA_ONLY=pc1440,celular`. Teste sempre com dados parecidos com os reais (ex.: `variacoes` = produto com 21 variações de nome comprido; com poucas variações o defeito de 19/10 não apareceu). **Olhe as fotos** antes de dizer que está bom.
 - Testes de regra: `scripts/*-unit.cjs|mjs` (os `*-postgres-unit.*` rodam o SQL num Postgres em memória).
 - Larguras usadas: PC 1920/1440/1366/1280/1024, tablet 820, celular 390/360/320, totem 1080×1920. Sem rolagem lateral, nada cortado, botões grandes no toque.
 
@@ -296,5 +296,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 - Acrescente uma linha no histórico abaixo.
 
 ### Histórico do manual
+
+- 19/10/2026 — Teste `variacoes` do PDV e lição: testar com dados parecidos com os reais.
 
 - 19/10/2026 — Criado pelo Claude a pedido do dono ("documento dentro do sistema com tudo que sabe sobre o sistema, sempre atualizado, para quando trocar de IA ela saber tudo").
