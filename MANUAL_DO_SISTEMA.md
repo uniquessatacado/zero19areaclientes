@@ -170,6 +170,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 **019 Personalizações**
 
 - `npm run build` roda as conferências de cada camada (para se algo esperado sumiu).
+- No Mac, rode o build com `TMPDIR=$PWD/tmp/buildtmp npm run build` (crie a pasta antes; `tmp/` não vai para o Git nem para o site): o build copia tudo para a pasta temporária do sistema (`/private/var/...` no Mac) e o `test-film-job-list.mjs` falha porque procura a palavra "private" na mensagem de erro. Na Vercel (Linux) não acontece.
 - Testes em `scripts/test-*.mjs` e `scripts/verify-*.mjs`; tela: `scripts/app-ui-snapshot.mjs` (app inteiro com banco simulado) e `scripts/ui-snapshot.mjs`.
 - Tema claro: `node scripts/gen-qr-theme.mjs` gera `qr-theme.css` (rode de novo depois de mudar qualquer CSS); ajustes finos à mão em `qr-screens.css`.
 
@@ -302,6 +303,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 20/10/2026 — Build do 019 no Mac (TMPDIR) e camada 2.17.81 do filme.
 - 20/10/2026 — TV repaginada (programa em blocos, cenas novas, teste de tela).
 - 20/10/2026 — Rankings do site e miniaturas das artes.
 - 20/10/2026 — Fluxo de compra do Estampa Política (arquivos, contato antes do frete, teste de tela), PGlite no Mac e testes antigos que já falham.

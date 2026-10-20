@@ -177,6 +177,30 @@ export function assertCompleteFilmPhrases(items,layout=null){
   return true;
 }
 
+// 20/10 (dono: "permita exportar mesmo faltando frase… não avisa de qual frase é"). Só lista,
+// por aplicação, o que falta e de qual frase; não bloqueia a exportação. Tirar da fila continua
+// exigindo a aplicação inteira (assertCompleteFilmPhrases), então o pedido segue aguardando.
+export function filmPhraseProblems(items,layout=null){
+  const applications=new Map(),problems=[];
+  for(const item of items||[]){const key=phraseApplicationKey(item);if(!applications.has(key))applications.set(key,[]);applications.get(key).push(item);}
+  for(const [applicationKey,parts] of applications){
+    if(!parts.some(item=>item.phrasePart||item.phraseManifests?.length||item.letteringApplicationParts))continue;
+    try{assertCompleteFilmPhrases(parts,layout);}
+    catch(error){
+      const present=new Set(parts.map(item=>item.localId)),texts=[],missing=[];let label='';
+      for(const manifest of new Map(parts.flatMap(item=>item.phraseManifests||[]).map(manifest=>[manifest.id,manifest])).values()){
+        texts.push(name(manifest.sourceText));label=label||manifest.sourceLabel||'';
+        manifest.words.forEach((word,index)=>{if(!present.has(manifest.partIds[index]))missing.push(word);});
+      }
+      const expected=parts.find(item=>Array.isArray(item.letteringApplicationParts))?.letteringApplicationParts||[];
+      if(!texts.length&&expected.length)texts.push(expected.map(part=>[part.name,part.number].filter(Boolean).join(' ')).join(' '));
+      for(const part of expected)if(!present.has(part.localId)&&!missing.includes(part.name||part.number))missing.push([part.name,part.number].filter(Boolean).join(' '));
+      problems.push({applicationKey,items:parts,label:label||parts[0]?.label||'',text:texts.filter(Boolean).join(' / ')||name(parts[0]?.name)||'Escrita',missing:missing.filter(Boolean),message:String(error?.message||error).replace(/^Frase separada incompleta: /u,'').replace(/\. Reúna a frase[\s\S]*$/u,'')});
+    }
+  }
+  return problems;
+}
+
 // New source snapshots retain every name/number part of their application.
 // In particular, a digit or full line cannot be removed and still release the
 // application by printing only its remaining sibling. Legacy manual items have
