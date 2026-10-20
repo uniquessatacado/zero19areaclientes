@@ -198,6 +198,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   | Prioridade 23/10 | `prioridade-23-zero19` |
   | Conferir impressão | `conferir-impressao-zero19` |
   | Mandar rastreio | `mandar-rastreio-zero19` |
+  | Etiquetas de roupa (preço, código de barras, QR, tamanho; modelos em `system_config` chave `zero19_garment_tags`; regras em `src/lib/zero19GarmentTags.ts`; teste `scripts/zero19-garment-tags-browser-qa.mjs`) | `etiquetas-roupa-zero19` |
   | Pedidos duplicados | `pedidos-duplicados-zero19` |
   | Regras de frete | `regras-frete-zero19` |
   | Produtos ZERO19 | `produtos-zero19` |
@@ -303,6 +304,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 20/10/2026 — Página Etiquetas de roupa (NovoVenduss).
 - 20/10/2026 — Publicação do 019 pela CLI da Vercel (o Git não publica mais sozinho).
 - 20/10/2026 — Build do 019 no Mac (TMPDIR) e camada 2.17.81 do filme.
 - 20/10/2026 — TV repaginada (programa em blocos, cenas novas, teste de tela).
