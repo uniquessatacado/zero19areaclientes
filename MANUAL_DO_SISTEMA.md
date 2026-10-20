@@ -209,7 +209,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 - **Estampa Política**: `src/pages/public/PoliticalCatalogPage.tsx`; regras em `src/lib/politicalCatalog.ts` (catálogo, artes, medidas Brasil), `politicalCheckout.ts` (preços: `checkoutPiecePrice`), `studioGallery.ts` (acervo "Camisas já montadas"), `studioCart.ts`, `studioShipping.ts`; funções `political-catalog`, `political-checkout`, `political-live`, `political-preview`.
 - **Frete ZERO19**: motor único `supabase/functions/_shared/zero19-freight.ts` + página Regras de frete; no navegador `zero19FreightRules.ts`, `zero19MelhorEnvio.ts`, `zero19ShippingPromise.ts` (prazo e data limite), `zero19ElectionDeadline.ts`.
 - **Etiquetas**: `zero19Shipments.ts`, `zero19LabelRegenerate.ts`; funções `smartenvios-generate-label`, `smartenvios-requote-order`, `smartenvios-refresh-shipment`, `zero19-freight`.
-- **TV**: `StoreTvPage`, `zero19TvProgramming.ts`, `zero19LiveDirector.ts`.
+- **TV**: `StoreTvPage` → `PoliticalLiveTv.tsx`; programa em blocos `src/lib/zero19TvProgram.ts` (tempo 15–30 s; o 5–10 antigo salvo vira 15–30), cenas novas `TvProgramScenes.tsx` + `src/styles/political-tv-v2.css`, ao vivo `zero19LiveDirector.ts`, vídeos/tempo do painel `zero19TvProgramming.ts`. `lojazero19.com/tv?cena=SALES_RANKING` fixa uma cena para conferir. Teste de tela: `node scripts/zero19-tv-browser-qa.mjs <css> <pasta>` (TV e totem).
 
 ### 019 Personalizações
 
@@ -280,7 +280,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 - **PDV novo da ZERO19** (partes 1 a 4 + Camisas prontas): enviado ao `main` do NovoVenduss em 19/10 a pedido do dono. Falta o dono reconstruir o frontend no Portainer; o "PDV antigo" continua no menu Mais.
 - **Regras de frete + Melhor Envio**: banco e funções no ar. Falta o rebuild do frontend, o dono conectar o Melhor Envio e confirmar o remetente (hoje copiado da Venduss).
-- **Estampa Política repaginada** (20/10): carrinho → entrega → pagamento novos e contato antes do frete no Git. Falta o SQL `RODAR_NO_SUPABASE_20-10_contato_antes_do_frete.sql`, publicar as funções do frete (motoboy e menor prazo do Melhor Envio) e o rebuild. Estúdio, vitrine e Meus pedidos ainda por repaginar.
+- **Estampa Política repaginada** (20/10): carrinho → entrega → pagamento novos e contato antes do frete no Git. Falta o SQL `RODAR_NO_SUPABASE_20-10_contato_antes_do_frete.sql`, publicar as funções do frete (motoboy e menor prazo do Melhor Envio) e o rebuild. Estúdio, vitrine, Meus pedidos, rankings e TV também repaginados. SQL único: `RODAR_NO_SUPABASE_20-10_TUDO.sql`.
 - Vários itens `[~]` aguardam só o rebuild do NovoVenduss ou o teste do dono.
 - Observação: os `RODAR_NO_SUPABASE_*.sql` da raiz do 019 saem públicos no site da Vercel (só código de funções, sem senha). Tirar do build depende do dono.
 
@@ -302,6 +302,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 20/10/2026 — TV repaginada (programa em blocos, cenas novas, teste de tela).
 - 20/10/2026 — Rankings do site e miniaturas das artes.
 - 20/10/2026 — Fluxo de compra do Estampa Política (arquivos, contato antes do frete, teste de tela), PGlite no Mac e testes antigos que já falham.
 
