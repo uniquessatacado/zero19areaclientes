@@ -115,13 +115,41 @@ export function createZero19PdvSync(ctx){
     })();
     return autoSyncPromise;
   }
+  // 20/10 (dono: números do estúdio e estampas do pedido #50417 não apareciam no filme): a fila passou
+  // de 1000 itens e o Supabase entrega no máximo 1000 linhas por consulta, então os pedidos mais novos
+  // sumiam do filme e dos cards. Lê em páginas até o total e divide listas grandes de IDs.
+  const PAGE_ROWS=1000,ID_CHUNK=120;
+  async function readAllRows(build){
+    const rows=[];let offset=0,total=null;
+    for(let page=0;page<200;page++){
+      const {data,error,count}=await build(page===0).range(offset,offset+PAGE_ROWS-1);
+      if(error)return {data:null,error};
+      const batch=data||[];if(page===0&&Number.isFinite(count))total=count;
+      rows.push(...batch);offset+=batch.length;
+      if(!batch.length||(total!=null?offset>=total:batch.length<PAGE_ROWS))break;
+    }
+    const seen=new Set();
+    return {data:rows.filter(row=>!row?.id||(!seen.has(row.id)&&seen.add(row.id))),error:null};
+  }
+  async function readRowsByIds(ids,build){
+    const unique=[...new Set((ids||[]).filter(Boolean))],parts=[];
+    for(let index=0;index<unique.length;index+=ID_CHUNK)parts.push(unique.slice(index,index+ID_CHUNK));
+    const results=await Promise.all(parts.map(part=>readAllRows(withCount=>build(part,withCount))));
+    const failed=results.find(result=>result.error);if(failed)return {data:null,error:failed.error};
+    return {data:results.flatMap(result=>result.data),error:null};
+  }
+  const countOption=withCount=>withCount?{count:'exact'}:undefined;
+  function newestOrderFirst(a,b){
+    const time=row=>{const value=Date.parse(row?.source_order_created_at||'');return Number.isFinite(value)?value:null},x=time(a),y=time(b);
+    if(x===y)return 0;if(x===null)return 1;if(y===null)return -1;return y-x;
+  }
   async function load(force=false){
     const owner=accountOwnerId();if(!owner)return {items:[],projects:[],workspaces:[],summaries:[]};
     const actor=state().session?.user?.id,previewCurrent=()=>owner===accountOwnerId()&&actor===state().session?.user?.id;
     if(!force&&cache&&Date.now()-cacheAt<12000)return cache;
     void ensureAutomaticSync(false);
     const [wi,sla,libraryResult,pauseResult,reasonsResult]=await Promise.all([
-      supabase.from('z19p_zero19_work_items').select('*').eq('owner_id',owner).in('stage',STAGE_ORDER).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at'),
+      readAllRows(withCount=>supabase.from('z19p_zero19_work_items').select('*',countOption(withCount)).eq('owner_id',owner).in('stage',STAGE_ORDER).order('promised_at',{ascending:true,nullsFirst:false}).order('created_at').order('id')),
       supabase.rpc('zero19_personalization_ops_snapshot',{p_tenant_id:ZERO19_TENANT_ID}),
       supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).eq('workspace_type','library_zero19').limit(1),
       supabase.from('z19p_production_pauses').select('id,project_id,scope,reason_id,note,started_at').eq('owner_id',owner).is('ended_at',null),
@@ -129,15 +157,15 @@ export function createZero19PdvSync(ctx){
     ]);
     const firstError=wi.error||libraryResult.error;if(firstError)throw firstError;
     let items=wi.data||[];const saleIds=[...new Set(items.map(row=>row.personalization_sale_id).filter(Boolean))];
-    if(saleIds.length){const source=await supabase.from('personalization_sales').select('id,public_tracking_token,personalization_code').in('id',saleIds);if(!source.error){const sourceMap=new Map((source.data||[]).map(row=>[row.id,row]));items=items.map(item=>({...item,metadata:{...(item.metadata||{}),public_tracking_token:sourceMap.get(item.personalization_sale_id)?.public_tracking_token||item.metadata?.public_tracking_token,personalization_code:sourceMap.get(item.personalization_sale_id)?.personalization_code||item.metadata?.personalization_code}}))}}
+    if(saleIds.length){const source=await readRowsByIds(saleIds,(part,withCount)=>supabase.from('personalization_sales').select('id,public_tracking_token,personalization_code',countOption(withCount)).in('id',part).order('id'));if(!source.error){const sourceMap=new Map((source.data||[]).map(row=>[row.id,row]));items=items.map(item=>({...item,metadata:{...(item.metadata||{}),public_tracking_token:sourceMap.get(item.personalization_sale_id)?.public_tracking_token||item.metadata?.public_tracking_token,personalization_code:sourceMap.get(item.personalization_sale_id)?.personalization_code||item.metadata?.personalization_code}}))}}
     items=await hydrateProductionArtworkPreviews({supabase,items,isCurrent:previewCurrent});
     const projectIds=[...new Set(items.map(row=>row.project_id).filter(Boolean))];
-    const pr=projectIds.length?await supabase.from('z19p_projects').select('*').eq('owner_id',owner).in('id',projectIds).order('source_order_created_at',{ascending:false,nullsFirst:false}):{data:[],error:null};
+    const pr=projectIds.length?await readRowsByIds(projectIds,(part,withCount)=>supabase.from('z19p_projects').select('*',countOption(withCount)).eq('owner_id',owner).in('id',part).order('id')):{data:[],error:null};
     if(pr.error)throw pr.error;
-    const projects=pr.data||[],workspaceIds=[...new Set(projects.map(row=>row.workspace_id).filter(Boolean))],zero19Library=libraryResult.data?.[0]||null;
+    const projects=(pr.data||[]).sort(newestOrderFirst),workspaceIds=[...new Set(projects.map(row=>row.workspace_id).filter(Boolean))],zero19Library=libraryResult.data?.[0]||null;
     const orderIds=[...new Set(projects.map(row=>row.official_order_ref).filter(ref=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref||'')))];
     // Mesma etapa do QR da produção (12/10, dono): envio/retirada, tipo, pagamento, etiqueta.
-    const [ws,flowResult]=await Promise.all([workspaceIds.length?supabase.from('z19p_workspaces').select('*').eq('owner_id',owner).in('id',workspaceIds):{data:[],error:null},orderIds.length?supabase.rpc('zero19_orders_flow',{p_order_ids:orderIds}).then(r=>r,()=>({data:null})):{data:null}]);
+    const [ws,flowResult]=await Promise.all([workspaceIds.length?readRowsByIds(workspaceIds,(part,withCount)=>supabase.from('z19p_workspaces').select('*',countOption(withCount)).eq('owner_id',owner).in('id',part).order('id')):{data:[],error:null},orderIds.length?supabase.rpc('zero19_orders_flow',{p_order_ids:orderIds}).then(r=>r,()=>({data:null})):{data:null}]);
     const flows=flowResult&&!flowResult.error&&flowResult.data&&typeof flowResult.data==='object'?flowResult.data:{};
     if(ws.error)throw ws.error;
     const workspaces=[...(ws.data||[])];if(zero19Library&&!workspaces.some(row=>row.id===zero19Library.id))workspaces.push(zero19Library);
@@ -176,7 +204,7 @@ export function createZero19PdvSync(ctx){
   async function orderProgress(projectIds){
     const ids=[...new Set(projectIds.filter(Boolean))];
     if(!ids.length)return new Map();
-    const {data,error}=await supabase.from('z19p_zero19_work_items').select('id,project_id,stage').eq('owner_id',accountOwnerId()).in('project_id',ids);
+    const owner=accountOwnerId(),{data,error}=await readRowsByIds(ids,(part,withCount)=>supabase.from('z19p_zero19_work_items').select('id,project_id,stage',countOption(withCount)).eq('owner_id',owner).in('project_id',part).order('id'));
     if(error)throw error;
     return new Map(ids.map(id=>[id,orderItemProgress((data||[]).filter(item=>item.project_id===id))]));
   }
