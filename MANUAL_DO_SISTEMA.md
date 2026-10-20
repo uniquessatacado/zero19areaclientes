@@ -134,7 +134,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 
 1. Testes e `npm run build` passando.
 2. Commit em `main` com **`[skip bootstrap]`** na mensagem (impede o workflow antigo `bootstrap-v210` de reconstruir a fonte velha).
-3. `git push origin main` → a Vercel publica sozinha.
+3. `git push origin main`. **A Vercel NÃO publica sozinha pelo Git** (projeto `019-personalizacoes`, time `uniquess`, sem repositório ligado; conferido 20/10). Publique pela CLI a partir de uma cópia limpa do commit: `git archive HEAD | tar -x -C <pasta>`, copie `.vercel/project.json` (crie com `npx vercel link --yes --project 019-personalizacoes --scope uniquess`; precisa de `npx vercel login` uma vez, o dono autoriza pelo link) e rode `npx vercel deploy --prod --yes --scope uniquess` dentro da pasta. Leva ~2 min.
 4. Confira a versão servida em https://019-personalizacoes.vercel.app (meta de versão no `index.html`, ex.: 2.17.80).
 
 **NovoVenduss**:
@@ -303,6 +303,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 20/10/2026 — Publicação do 019 pela CLI da Vercel (o Git não publica mais sozinho).
 - 20/10/2026 — Build do 019 no Mac (TMPDIR) e camada 2.17.81 do filme.
 - 20/10/2026 — TV repaginada (programa em blocos, cenas novas, teste de tela).
 - 20/10/2026 — Rankings do site e miniaturas das artes.
