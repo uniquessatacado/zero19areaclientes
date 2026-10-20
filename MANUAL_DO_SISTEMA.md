@@ -6,7 +6,7 @@
 >
 > Nunca escreva aqui senha, token, chave secreta ou dado pessoal de cliente.
 
-Última revisão: 19/10/2026.
+Última revisão: 20/10/2026.
 
 ---
 
@@ -109,7 +109,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 
   | Esquema | Assunto |
   |---|---|
-  | `political_private` | Estampa Política, checkout, artes |
+  | `political_private` | Estampa Política, checkout, artes; `site_contacts` = contato (nome + WhatsApp + carrinho) deixado no site antes do frete |
   | `political_live_private` | TV ao vivo, visitas e desistências do site |
   | `shipping_label_private` | tentativas de etiqueta |
   | `zero19_freight_private` | Regras de frete, Melhor Envio |
@@ -162,6 +162,9 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 
   PDV: `PDV_QA_MODE=novo|janelas|prontas|variacoes|antigo|outra-loja` e `PDV_QA_ONLY=pc1440,celular`. Teste sempre com dados parecidos com os reais (ex.: `variacoes` = produto com 21 variações de nome comprido; com poucas variações o defeito de 19/10 não apareceu). **Olhe as fotos** antes de dizer que está bom.
 - Testes de regra: `scripts/*-unit.cjs|mjs` (os `*-postgres-unit.*` rodam o SQL num Postgres em memória).
+  O PGlite não vem instalado no Mac: instale numa pasta temporária (`npm install @electric-sql/pglite@0.2.17` lá dentro) e rode com `CREDIT_TEST_PGLITE=<pasta>/node_modules/@electric-sql/pglite/dist/index.js node scripts/<teste>-postgres-unit.mjs`.
+- **Estampa Política (compra)**: `node scripts/political-checkout-browser-qa.mjs <css> <pasta-das-fotos>` percorre carrinho → seus dados → entrega/frete → pagamento → Pix (e carrinho vazio + retirada) com o retrato do catálogo público `scripts/political-qa-catalog.json`; `EP_QA_ONLY=pc1440,celular390` para menos larguras. Nada é gravado e não conta visita na TV.
+- Alguns testes antigos do estúdio já falham por causa do simulador (não do sistema): `political-studio-completion-unit`, `political-gallery-ui-unit`, `political-studio-completed-presence-unit`, `political-studio-freight-continuation-unit`. Compare com o `HEAD` antes de achar que quebrou.
 - Larguras usadas: PC 1920/1440/1366/1280/1024, tablet 820, celular 390/360/320, totem 1080×1920. Sem rolagem lateral, nada cortado, botões grandes no toque.
 
 **019 Personalizações**
@@ -202,6 +205,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   | Produção integrada | `producao-integrada` |
 
   Fora do `/dashboard`: página do QR `/producao/pronto` e `/producao/pronto/:orderId`; ao vivo `/aovivo`; TV `/tv`.
+- **Estampa Política — compra**: `PoliticalStudioPage.tsx` (carrinho), `StudioCheckout.tsx` (etapa 2: **Seus dados** primeiro, depois receber/retirar e frete), `StudioPayment.tsx` (etapa 3: dados, endereço, Pix/cartão, tela do Pix), `StudioSteps.tsx` (1 Carrinho · 2 Entrega · 3 Pagamento) e o visual em `src/components/political/studio-flow.css`. O contato é gravado por `src/lib/siteContact.ts` → função `public.political_site_contact` (cliente pelo WhatsApp + carrinho em `political_private.site_contacts`; nunca devolve dados).
 - **Estampa Política**: `src/pages/public/PoliticalCatalogPage.tsx`; regras em `src/lib/politicalCatalog.ts` (catálogo, artes, medidas Brasil), `politicalCheckout.ts` (preços: `checkoutPiecePrice`), `studioGallery.ts` (acervo "Camisas já montadas"), `studioCart.ts`, `studioShipping.ts`; funções `political-catalog`, `political-checkout`, `political-live`, `political-preview`.
 - **Frete ZERO19**: motor único `supabase/functions/_shared/zero19-freight.ts` + página Regras de frete; no navegador `zero19FreightRules.ts`, `zero19MelhorEnvio.ts`, `zero19ShippingPromise.ts` (prazo e data limite), `zero19ElectionDeadline.ts`.
 - **Etiquetas**: `zero19Shipments.ts`, `zero19LabelRegenerate.ts`; funções `smartenvios-generate-label`, `smartenvios-requote-order`, `smartenvios-refresh-shipment`, `zero19-freight`.
@@ -276,6 +280,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 - **PDV novo da ZERO19** (partes 1 a 4 + Camisas prontas): enviado ao `main` do NovoVenduss em 19/10 a pedido do dono. Falta o dono reconstruir o frontend no Portainer; o "PDV antigo" continua no menu Mais.
 - **Regras de frete + Melhor Envio**: banco e funções no ar. Falta o rebuild do frontend, o dono conectar o Melhor Envio e confirmar o remetente (hoje copiado da Venduss).
+- **Estampa Política repaginada** (20/10): carrinho → entrega → pagamento novos e contato antes do frete no Git. Falta o SQL `RODAR_NO_SUPABASE_20-10_contato_antes_do_frete.sql`, publicar as funções do frete (motoboy e menor prazo do Melhor Envio) e o rebuild. Estúdio, vitrine e Meus pedidos ainda por repaginar.
 - Vários itens `[~]` aguardam só o rebuild do NovoVenduss ou o teste do dono.
 - Observação: os `RODAR_NO_SUPABASE_*.sql` da raiz do 019 saem públicos no site da Vercel (só código de funções, sem senha). Tirar do build depende do dono.
 
@@ -296,6 +301,8 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 - Acrescente uma linha no histórico abaixo.
 
 ### Histórico do manual
+
+- 20/10/2026 — Fluxo de compra do Estampa Política (arquivos, contato antes do frete, teste de tela), PGlite no Mac e testes antigos que já falham.
 
 - 19/10/2026 — Teste `variacoes` do PDV e lição: testar com dados parecidos com os reais.
 
