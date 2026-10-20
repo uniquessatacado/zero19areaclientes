@@ -205,7 +205,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   | Produção integrada | `producao-integrada` |
 
   Fora do `/dashboard`: página do QR `/producao/pronto` e `/producao/pronto/:orderId`; ao vivo `/aovivo`; TV `/tv`.
-- **Estampa Política — compra**: `PoliticalStudioPage.tsx` (carrinho), `StudioCheckout.tsx` (etapa 2: **Seus dados** primeiro, depois receber/retirar e frete), `StudioPayment.tsx` (etapa 3: dados, endereço, Pix/cartão, tela do Pix), `StudioSteps.tsx` (1 Carrinho · 2 Entrega · 3 Pagamento) e o visual em `src/components/political/studio-flow.css`. O contato é gravado por `src/lib/siteContact.ts` → função `public.political_site_contact` (cliente pelo WhatsApp + carrinho em `political_private.site_contacts`; nunca devolve dados).
+- **Estampa Política — compra**: `PoliticalStudioPage.tsx` (carrinho), `StudioCheckout.tsx` (etapa 2: **Seus dados** primeiro, depois receber/retirar e frete), `StudioPayment.tsx` (etapa 3: dados, endereço, Pix/cartão, tela do Pix), `StudioSteps.tsx` (1 Carrinho · 2 Entrega · 3 Pagamento) e o visual em `src/components/political/studio-flow.css`. O contato é gravado por `src/lib/siteContact.ts` → função `public.political_site_contact` (cliente pelo WhatsApp + carrinho em `political_private.site_contacts`; nunca devolve dados). Rankings (estampas mais vendidas, frases mais pedidas): `src/lib/politicalRankings.ts` → `public.political_rankings()` (fonte: `z19p_zero19_work_items` de pedidos pagos; esconder em `political_private.ranking_hidden`, aba Rankings do painel); componentes em `PoliticalRankings.tsx`. Miniaturas das artes: `src/lib/politicalThumb.ts` (rota `render/image` do Supabase, só no Estampa Política).
 - **Estampa Política**: `src/pages/public/PoliticalCatalogPage.tsx`; regras em `src/lib/politicalCatalog.ts` (catálogo, artes, medidas Brasil), `politicalCheckout.ts` (preços: `checkoutPiecePrice`), `studioGallery.ts` (acervo "Camisas já montadas"), `studioCart.ts`, `studioShipping.ts`; funções `political-catalog`, `political-checkout`, `political-live`, `political-preview`.
 - **Frete ZERO19**: motor único `supabase/functions/_shared/zero19-freight.ts` + página Regras de frete; no navegador `zero19FreightRules.ts`, `zero19MelhorEnvio.ts`, `zero19ShippingPromise.ts` (prazo e data limite), `zero19ElectionDeadline.ts`.
 - **Etiquetas**: `zero19Shipments.ts`, `zero19LabelRegenerate.ts`; funções `smartenvios-generate-label`, `smartenvios-requote-order`, `smartenvios-refresh-shipment`, `zero19-freight`.
@@ -302,6 +302,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 20/10/2026 — Rankings do site e miniaturas das artes.
 - 20/10/2026 — Fluxo de compra do Estampa Política (arquivos, contato antes do frete, teste de tela), PGlite no Mac e testes antigos que já falham.
 
 - 19/10/2026 — Teste `variacoes` do PDV e lição: testar com dados parecidos com os reais.
