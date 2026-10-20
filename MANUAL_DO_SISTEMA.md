@@ -280,7 +280,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 - **PDV novo da ZERO19** (partes 1 a 4 + Camisas prontas): enviado ao `main` do NovoVenduss em 19/10 a pedido do dono. Falta o dono reconstruir o frontend no Portainer; o "PDV antigo" continua no menu Mais.
 - **Regras de frete + Melhor Envio**: banco e funções no ar. Falta o rebuild do frontend, o dono conectar o Melhor Envio e confirmar o remetente (hoje copiado da Venduss).
-- **Estampa Política repaginada** (20/10): carrinho → entrega → pagamento novos e contato antes do frete no Git. Falta o SQL `RODAR_NO_SUPABASE_20-10_contato_antes_do_frete.sql`, publicar as funções do frete (motoboy e menor prazo do Melhor Envio) e o rebuild. Estúdio, vitrine, Meus pedidos, rankings e TV também repaginados. SQL único: `RODAR_NO_SUPABASE_20-10_TUDO.sql`.
+- **Estampa Política repaginada** (20/10): carrinho → entrega → pagamento novos e contato antes do frete no Git. SQL de 20/10 (`RODAR_NO_SUPABASE_20-10_TUDO.sql`) já aplicado; falta publicar as funções do frete (motoboy e menor prazo do Melhor Envio) e o rebuild. Estúdio, vitrine, Meus pedidos, rankings e TV também repaginados. SQL único: `RODAR_NO_SUPABASE_20-10_TUDO.sql`.
 - Vários itens `[~]` aguardam só o rebuild do NovoVenduss ou o teste do dono.
 - Observação: os `RODAR_NO_SUPABASE_*.sql` da raiz do 019 saem públicos no site da Vercel (só código de funções, sem senha). Tirar do build depende do dono.
 
