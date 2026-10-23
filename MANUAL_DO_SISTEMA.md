@@ -162,7 +162,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
   node scripts/zero19-pdv-browser-qa.mjs <pasta>/app.css <pasta-das-fotos>
   ```
 
-  PDV: `PDV_QA_MODE=novo|janelas|prontas|variacoes|antigo|outra-loja` e `PDV_QA_ONLY=pc1440,celular`. Teste sempre com dados parecidos com os reais (ex.: `variacoes` = produto com 21 variações de nome comprido; com poucas variações o defeito de 19/10 não apareceu). **Olhe as fotos** antes de dizer que está bom.
+  PDV: `PDV_QA_MODE=novo|janelas|prontas|variacoes|rapida|antigo|outra-loja` e `PDV_QA_ONLY=pc1440,celular`. Teste sempre com dados parecidos com os reais (ex.: `variacoes` = produto com 21 variações de nome comprido; com poucas variações o defeito de 19/10 não apareceu). **Olhe as fotos** antes de dizer que está bom.
 - Testes de regra: `scripts/*-unit.cjs|mjs` (os `*-postgres-unit.*` rodam o SQL num Postgres em memória).
   O PGlite não vem instalado no Mac: instale numa pasta temporária (`npm install @electric-sql/pglite@0.2.17` lá dentro) e rode com `CREDIT_TEST_PGLITE=<pasta>/node_modules/@electric-sql/pglite/dist/index.js node scripts/<teste>-postgres-unit.mjs`.
 - **Estampa Política (compra)**: `node scripts/political-checkout-browser-qa.mjs <css> <pasta-das-fotos>` percorre carrinho → seus dados → entrega/frete → pagamento → Pix (e carrinho vazio + retirada) com o retrato do catálogo público `scripts/political-qa-catalog.json`; `EP_QA_ONLY=pc1440,celular390` para menos larguras. Nada é gravado e não conta visita na TV.
@@ -190,6 +190,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   - `src/components/pdv/SalesInterface.tsx` (~8.700 linhas): estado e regras do PDV de todas as lojas (carrinho, pagamento, caixa, cupons, frete, troca, correção de pedido).
   - `src/components/pdv/zero19/`: telas do **PDV novo** da ZERO19 (`Zero19SalesScreen`, `Zero19PaymentPanel`, `Zero19CustomerScreen`, `Zero19ReadyShirtsDialog`). Escolha novo/antigo por aparelho em `src/lib/zero19PdvLayout.ts`; cache de busca/mais vendidos em `src/lib/zero19PdvCache.ts`.
   - Estúdio no PDV: `PdvStudioDialog.tsx` · VDR: `VdrSaleDialog.tsx` · personalização avulsa: `Zero19PersonalizationDialog.tsx`.
+  - **Venda rápida Brasil** (botões SC/CC na tela do cliente): regras e cupons em `src/lib/zero19QuickSale.ts`, janela `zero19/Zero19QuickSaleDialog.tsx`, configurações em `system_config` chave `zero19_quick_sale` (Configurações → Venda rápida). Linhas da sacola levam `zero19_quick_sale` (`PROMO`/`EXTRA`/`PRINT`); a estampa "leva pronta agora" é uma linha sem produto com `zero19_print_value` e grava como `PRINT` (vendas de estampa), sem produção. Teste: `PDV_QA_MODE=rapida` e `node scripts/zero19-quick-sale-unit.mjs`.
 - **Páginas do menu ZERO19** (`src/pages/dashboard/Zero19*Page.tsx`, rotas em `/dashboard/...`):
 
   | Página | Rota |
@@ -306,6 +307,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 23/10/2026 — Venda rápida Brasil no PDV (arquivos, configuração, teste).
 - 20/10/2026 — Limite de 1000 linhas do Supabase (fila do 019, 2.17.82), `npx supabase db query` e cópia LF no Windows.
 - 20/10/2026 — Página Etiquetas de roupa (NovoVenduss).
 - 20/10/2026 — Publicação do 019 pela CLI da Vercel (o Git não publica mais sozinho).
