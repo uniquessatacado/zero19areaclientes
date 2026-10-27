@@ -214,7 +214,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 - **Estampa Política**: `src/pages/public/PoliticalCatalogPage.tsx`; regras em `src/lib/politicalCatalog.ts` (catálogo, artes, medidas Brasil), `politicalCheckout.ts` (preços: `checkoutPiecePrice`), `studioGallery.ts` (acervo "Camisas já montadas"), `studioCart.ts`, `studioShipping.ts`; funções `political-catalog`, `political-checkout`, `political-live`, `political-preview`.
 - **Frete ZERO19**: motor único `supabase/functions/_shared/zero19-freight.ts` + página Regras de frete; no navegador `zero19FreightRules.ts`, `zero19MelhorEnvio.ts`, `zero19ShippingPromise.ts` (prazo e data limite), `zero19ElectionDeadline.ts`.
 - **Etiquetas**: `zero19Shipments.ts`, `zero19LabelRegenerate.ts`; funções `smartenvios-generate-label`, `smartenvios-requote-order`, `smartenvios-refresh-shipment`, `zero19-freight`.
-- **TV**: `StoreTvPage` → `PoliticalLiveTv.tsx`; programa em blocos `src/lib/zero19TvProgram.ts` (tempo 15–30 s; o 5–10 antigo salvo vira 15–30), cenas novas `TvProgramScenes.tsx` + `src/styles/political-tv-v2.css`, ao vivo `zero19LiveDirector.ts`, vídeos/tempo do painel `zero19TvProgramming.ts`. `lojazero19.com/tv?cena=SALES_RANKING` fixa uma cena para conferir. Teste de tela: `node scripts/zero19-tv-browser-qa.mjs <css> <pasta>` (TV e totem).
+- **TV** (desde 27/10, TV da LOJA): `StoreTvPage` → `PoliticalLiveTv.tsx` com o programa `buildStoreTvProgram` (`src/lib/zero19TvProgram.ts`), cenas da loja em `TvStoreScenes.tsx` + `src/styles/store-tv.css` e dados públicos em `src/lib/zero19TvStore.ts` (catálogo do totem `get_personalization_totem_store_catalog`, promoções `get_public_quick_catalog_promotions`, mais vendidos `zero19_tv_store_best_sellers`). Antes (20/10): programa em blocos `src/lib/zero19TvProgram.ts` (tempo 15–30 s; o 5–10 antigo salvo vira 15–30), cenas novas `TvProgramScenes.tsx` + `src/styles/political-tv-v2.css`, ao vivo `zero19LiveDirector.ts`, vídeos/tempo do painel `zero19TvProgramming.ts`. `lojazero19.com/tv?cena=SALES_RANKING` fixa uma cena para conferir. Teste de tela: `node scripts/zero19-tv-browser-qa.mjs <css> <pasta>` (TV e totem).
 
 ### 019 Personalizações
 
@@ -307,6 +307,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 27/10/2026 — TV da loja (programa, cenas, dados públicos, função de mais vendidos).
 - 23/10/2026 — Venda rápida Brasil no PDV (arquivos, configuração, teste).
 - 20/10/2026 — Limite de 1000 linhas do Supabase (fila do 019, 2.17.82), `npx supabase db query` e cópia LF no Windows.
 - 20/10/2026 — Página Etiquetas de roupa (NovoVenduss).

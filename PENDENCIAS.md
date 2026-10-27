@@ -1,5 +1,6 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 27/10 — NovoVenduss: TV da loja (ver PENDENCIAS de lá, 27/10). SQL [RODAR_NO_SUPABASE_27-10_tv_mais_vendidos.sql](RODAR_NO_SUPABASE_27-10_tv_mais_vendidos.sql) aguardando autorização para rodar. Nada muda no app 019.
 - [~] 23/10 — NovoVenduss: Venda rápida Brasil no PDV (ver PENDENCIAS de lá, 23/10). 27/10: subiu DESLIGADA a pedido do dono (liga em Configurações). Nada muda no 019. PENDENTE: rebuild do NovoVenduss.
 - [~] 20/10 (4) — NovoVenduss: Etiquetas de roupa pulando faixa e cortando o começo da etiqueta da direita (ver PENDENCIAS de lá, 20/10 (4)). SQL [RODAR_NO_SUPABASE_20-10_etiquetas_roupa.sql](RODAR_NO_SUPABASE_20-10_etiquetas_roupa.sql) APLICADO pelo Claude a pedido do dono em 20/10 às 20:04 e conferido (folha 100 mm; só os 3 números mudaram). Nada muda no 019.
 
