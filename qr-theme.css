@@ -1008,6 +1008,12 @@ html .portal-proportion-hint{color:hsl(25,78%,24.0%);border-top:1px solid hsl(26
 html .portal-art-name input[readonly]{color:hsl(216,60%,24.0%);background:hsl(215,25%,96.5%)}
 html .portal-status-box>small{color:#475569}
 
+/* film-mobile.css */
+@media(max-width:760px){html body .film-page .film-view-toolbar [data-film-expand]{background:hsl(222,55%,93.0%);color:#0f172a}}
+
+/* film-v74.css */
+html body .film-page .film-view-toolbar [data-expand]{background:hsl(222,55%,93.0%);color:#0f172a}
+
 /* quote-services.css */
 html .quote-service-modal .modal-head p,html .qs-picker .modal-head p{color:#475569}
 html .quote-service-modal label,html .qs-picker-search{color:#0f172a}
@@ -1059,6 +1065,7 @@ html .sap-clear{color:#475569}
 html .sap-status{color:hsl(27,100%,24.0%)}
 
 /* production-v217.js (estilo dentro do JS) */
+html .film-release-report.err{border:3px solid hsl(0,72%,76.0%)}
 html .film-export-option{border:1px solid hsl(214,32%,86.0%)}
 html .film-export-option small{color:#475569}
 html .film-export-result{border-top:1px solid hsl(214,32%,86.0%)}

@@ -654,18 +654,44 @@ function openAssetActions(a){
   $('#deleteAsset',m).onclick=async()=>{if(!confirm(`Excluir “${a.name}” definitivamente?`))return;const {error}=await supabase.from('z19p_assets').delete().eq('id',a.id);if(error)return toast(error.code==='23503'?'Esta arte está vinculada a um filme salvo e deve ser preservada.':error.message,'err');const paths=[...new Set([a.original_path,a.processed_path].filter(Boolean))];if(paths.length){const {error:se}=await supabase.storage.from(BUCKET).remove(paths);if(se)toast('Cadastro excluído; o arquivo foi preservado no armazenamento por falha na limpeza.','err')}m.remove();toast('Arquivo excluído.','ok');renderWorkspace(currentWorkspace.id);};
 }
 
-function openUploadModal({presetType='arte',standaloneHalftone=false,readyForPrint=false,orderContext=null}={}){
+// 28/10 (dono): arte já vai para a pasta pronta para impressão; dá para vincular a um pedido pendente pelo número,
+// nome ou WhatsApp sem sair da janela (os arquivos escolhidos vão junto); quem veio do filme tem "Voltar para o filme".
+let pendingUploadCarry=null;
+function defaultReadyFolderId(){
+  const folders=currentFolders||[],ready=folders.filter(folder=>productionModule?.folderInReadyTree?.(folder.id));
+  return (ready.find(folder=>folder.purpose==='artes_prontas'&&!folder.parent_id)||ready.find(folder=>folder.purpose==='artes_prontas')||ready[0])?.id||'';
+}
+function showBackToFilm(){
+  document.querySelector('.z19-back-to-film')?.remove();
+  const bar=document.createElement('div');bar.className='z19-back-to-film';bar.setAttribute('role','status');
+  bar.innerHTML='<span>✓ Arte salva na biblioteca</span><button class="btn primary" type="button">← Voltar para o filme</button><button class="btn ghost small" type="button" aria-label="Fechar">×</button>';
+  const [back,dismiss]=bar.querySelectorAll('button');back.onclick=()=>{bar.remove();nav('/filme')};dismiss.onclick=()=>bar.remove();
+  document.body.appendChild(bar);const off=()=>{bar.remove();window.removeEventListener('hashchange',off)};window.addEventListener('hashchange',off);
+}
+function openUploadModal({presetType='arte',standaloneHalftone=false,readyForPrint=false,orderContext=null,fromFilm=false}={}){
+  const carry=pendingUploadCarry&&Date.now()-pendingUploadCarry.at<180000?pendingUploadCarry:null;pendingUploadCarry=null;
+  if(carry){fromFilm=fromFilm||carry.fromFilm;readyForPrint=readyForPrint||carry.readyForPrint;}
   if(presetType==='arte'&&currentWorkspace?.workspace_type==='client'&&!clientUploadWithoutOrderEnabled&&!workspaceHasOfficialOrder(currentWorkspace.id)){
     toast('Este cliente ainda não possui pedido oficial. Ative “Permitir subir arte em cliente sem pedido” em Configurações para liberar temporariamente.','err');return;
   }
   uploadQueue=[];const isMockupMode=presetType==='mockup';const m=document.createElement('div');m.className='modal-backdrop';m.innerHTML=`<div class="modal wide upload-modal"><div class="modal-head"><div><div class="eyebrow">${isMockupMode?'Mockup do projeto':'Preparar para produção'}</div><h2>${isMockupMode?'Adicionar mockup':'Subir arte'}</h2></div><button class="btn ghost small close">×</button></div><div class="dropzone" id="dropzone"><div class="dz-icon">⇧</div><h3>${isMockupMode?'Selecione um ou vários mockups':'Selecione uma ou várias artes'}</h3><p>PNG, JPG ou WEBP. O nome original do arquivo não será usado como nome da arte.</p><input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" multiple hidden><button class="btn primary" id="chooseFiles" style="margin-top:12px">Escolher arquivos</button></div>${isMockupMode?'':`<div class="upload-required-bar"><div><b>Organização obrigatória</b><small>Antes de salvar cada arte, informe um nome claro e escolha uma pasta.</small></div><button class="btn small" id="uploadCreateFolder" type="button">${icon('plus')} Criar pasta</button></div>`}<div id="uploadList" class="upload-list"></div>${isMockupMode?'':`<div class="process-card"><div class="process-title"><div><b>Tratamento da arte</b><span>Configurações simples para o arquivo final.</span></div></div><label class="option minimal"><input type="checkbox" id="optTrim" checked><div><b>Remover prancheta transparente</b><span>Encontra o limite real dos pixels visíveis sem cortar a borda da arte.</span></div></label><div class="quality-row"><div><b>Resolução automática para 300 DPI</b><span>Informe a medida física em cada arte. O sistema mantém o original e só amplia até os pixels realmente necessários.</span></div><strong>AUTO 300 DPI</strong></div></div>`}<div class="hint quality-hint">Saída de arte: PNG transparente, 300 DPI, sem redução do original. Ampliação usa interpolação de alta qualidade; ela preserva e suaviza melhor, mas não cria detalhes que não existiam na imagem de origem.</div><div class="progress hidden" id="progress"><div></div></div><div id="progressText" class="hint" style="margin-top:7px"></div><div class="modal-footer"><button class="btn close" type="button">Cancelar</button><button class="btn primary" id="processUpload" disabled>${isMockupMode?'Salvar mockup':'Processar e salvar'}</button></div></div>`;document.body.appendChild(m);$$('.close',m).forEach(b=>b.onclick=()=>m.remove());
-  m.orderContext=orderContext;
+  m.orderContext=orderContext;m.fromFilm=fromFilm;
+  if(!isMockupMode){
+    const linkedProject=orderContext?.projectId?(currentProjects||[]).find(project=>project.id===orderContext.projectId):null;
+    const bar=document.createElement('div');bar.className='upload-order-link';
+    bar.innerHTML=orderContext?`<div><b>✓ Vinculada ao pedido</b><small>${escapeHTML(linkedProject?.title||'Pedido escolhido')} · ao salvar, a arte vai para a personalização deste pedido e o status muda sozinho.</small></div>`:`<div><b>Vincular a um pedido pendente</b><small>Número do pedido, nome do cliente ou WhatsApp. A arte vai para a personalização do pedido e o status muda sozinho. Os arquivos escolhidos vão junto.</small></div><form class="upload-order-search"><input id="uploadOrderQuery" placeholder="Ex.: 49801, Ana ou (19) 99999-0000" autocomplete="off" aria-label="Número do pedido, nome ou WhatsApp"><button class="btn primary" type="submit">Buscar pedido</button></form>`;
+    $('.modal-head',m).after(bar);
+    bar.querySelector('form')?.addEventListener('submit',event=>{event.preventDefault();const query=$('#uploadOrderQuery',m).value.trim();if(!query){toast('Digite o número do pedido, o nome ou o WhatsApp.','err');return}if(!zero19Sync?.openGlobalUpload){toast('Busca de pedidos indisponível agora.','err');return}
+      pendingUploadCarry={at:Date.now(),fromFilm,readyForPrint,items:uploadQueue.map(q=>({file:q.file,name:q.name,widthCm:q.widthCm,heightCm:q.heightCm,sizeAxis:q.sizeAxis,aspectRatio:q.aspectRatio,preview:q.preview}))};
+      uploadQueue=[];m.remove();void zero19Sync.openGlobalUpload(query);});
+    if(fromFilm){const back=document.createElement('button');back.type='button';back.className='btn small upload-back-film';back.textContent='← Voltar para o filme';back.onclick=()=>{uploadQueue.forEach(q=>q.preview&&URL.revokeObjectURL(q.preview));uploadQueue=[];m.remove();nav('/filme')};$('.modal-head .close',m)?.before(back);}
+  }
   const input=$('#fileInput',m),dz=$('#dropzone',m);$('#chooseFiles',m).onclick=()=>input.click();input.onchange=()=>void addFiles([...input.files]);dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};dz.ondragleave=()=>dz.classList.remove('drag');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');void addFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')))};
   $('#uploadCreateFolder',m)?.addEventListener('click',async()=>{try{const name=prompt('Nome da nova pasta:');if(!name?.trim())return;const projectId=currentWorkspace?.workspace_type==='client'?(currentProjects[0]?.id||null):null,folder={id:crypto.randomUUID(),owner_id:accountOwnerId(),workspace_id:currentWorkspace.id,project_id:projectId,parent_id:null,name:name.trim(),sort_order:(currentFolders.length+1)*10,created_by:session.user.id,updated_by:session.user.id};const {error}=await supabase.from('z19p_folders').insert(folder);if(error)throw error;currentFolders=[...currentFolders,folder];for(const item of uploadQueue)if(item.type==='arte'&&!item.folderId)item.folderId=folder.id;renderUploadList(m,{lockedType:isMockupMode});toast('Pasta criada e selecionada.','ok')}catch(error){console.error(error);toast(error.message||'Não foi possível criar a pasta.','err')}});
   async function addFiles(files){
     for(const f of files){
       const preview=URL.createObjectURL(f);
-      uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:Boolean(readyForPrint),widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
+      uploadQueue.push({file:f,name:'',type:presetType,folderId:presetType==='arte'?defaultReadyFolderId():'',readyForPrint:Boolean(readyForPrint),widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
       const item=uploadQueue[uploadQueue.length-1];
       try{const bmp=await createImageBitmap(f);let c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d',{willReadFrequently:true}).drawImage(bmp,0,0);bmp.close?.();if(presetType!=='mockup')c=trimTransparentSafe(c);item.aspectRatio=c.height>0?c.width/c.height:0;c.width=c.height=1}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
     }
@@ -674,6 +700,7 @@ function openUploadModal({presetType='arte',standaloneHalftone=false,readyForPri
     setTimeout(()=>$('#uploadList input[data-k="name"]',m)?.focus(),0);
   }
   $('#processUpload',m).onclick=()=>processQueue(m,{mockupMode:isMockupMode});
+  if(carry?.items?.length){for(const item of carry.items)uploadQueue.push({file:item.file,name:item.name||'',type:presetType,folderId:presetType==='arte'?defaultReadyFolderId():'',readyForPrint:Boolean(readyForPrint),widthCm:item.widthCm||'',heightCm:item.heightCm||'',sizeAxis:item.sizeAxis,aspectRatio:item.aspectRatio||0,standaloneHalftone:Boolean(standaloneHalftone),preview:item.preview});dz.classList.add('has-files');renderUploadList(m,{lockedType:isMockupMode});}
 }
 function renderUploadList(m,{lockedType=false}={}){
   const list=$('#uploadList',m);
@@ -1324,6 +1351,7 @@ processQueue = async function(m,{mockupMode=false}={}){
 
   stage(uploadWorkspace?.workspace_type==='client'?`Concluído: ${done} de ${queue.length}. Abrindo posição…`:`Concluído: ${done} de ${queue.length}. Arte salva na biblioteca.`);
   uploadQueue.forEach(item=>item.preview&&URL.revokeObjectURL(item.preview));uploadQueue=[];m.remove();
+  if(m.fromFilm)setTimeout(showBackToFilm,300);
   try{
     if(savedAssets.length&&officialOrders&&uploadWorkspace?.workspace_type==='client'){
       await officialOrders.offerAfterUpload(savedAssets,{workspace:uploadWorkspace,projects:uploadProjects,allowWithoutOrder:clientUploadWithoutOrderEnabled});
@@ -1500,7 +1528,7 @@ renderWorkspace=async function(id){
     const warning=projects.length?'':`<div class="official-order-page-alert"><i></i><div><strong>Pendente de pedido oficial</strong><span>Este cliente ainda não recebeu um pedido sincronizado do outro sistema. Assim que o pedido oficial chegar, esta pendência desaparece automaticamente.</span></div></div>`;
     banner?.insertAdjacentHTML('afterend',warning+`<section class="client-projects-simple"><div class="section-title-row"><div><div class="eyebrow">Projetos</div><h2>Pedidos do cliente</h2><p>Somente pedidos oficiais sincronizados aparecem aqui.</p></div></div><div class="client-project-list">${projectHtml}</div></section>`);
   }
-  if(pendingQuickUploadWorkspaceId===id){const mode=pendingQuickUploadMode,orderContext=pendingQuickUploadContext;pendingQuickUploadWorkspaceId=null;pendingQuickUploadMode=null;pendingQuickUploadContext=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte',standaloneHalftone:mode==='halftone',readyForPrint:mode==='film',orderContext})},0);}
+  if(pendingQuickUploadWorkspaceId===id){const mode=pendingQuickUploadMode,orderContext=pendingQuickUploadContext;pendingQuickUploadWorkspaceId=null;pendingQuickUploadMode=null;pendingQuickUploadContext=null;setTimeout(()=>{if(currentWorkspace?.id===id)openUploadModal({presetType:'arte',standaloneHalftone:mode==='halftone',readyForPrint:mode==='film',orderContext,fromFilm:mode==='film'})},0);}
   zero19Sync?.enhanceWorkspace?.(currentWorkspace,currentAssets,currentProjects);
   if(ticket)routeViewport.complete(ticket);
 };

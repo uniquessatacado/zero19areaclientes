@@ -863,5 +863,5 @@ export function createZero19PdvSync(ctx){
     if(!workspace||workspace.workspace_type!=='library_zero19')return;
     for(const card of app.querySelectorAll('[data-asset]')){const id=card.dataset.asset,asset=(assets||[]).find(a=>a.id===id),actions=card.querySelector('.asset-actions');if(!asset||!actions||actions.querySelector('[data-z19-transfer]'))continue;const b=document.createElement('button');b.className='btn small z19-transfer-button';b.dataset.z19Transfer=id;b.textContent='Transferir para cliente';b.onclick=()=>openTransfer(asset);actions.appendChild(b)}
   }
-  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareStudioArtFilmItem,prepareVdrFilmItem,refreshArtworkPreview,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced};
+  return {renderHome,enhanceDashboard,renderQueue,renderDelivered,enhanceSettings,enhanceWorkspace,load,openTransfer,openWorkspaceStage,syncRecent,invalidate,ensureAutomaticSync,pendingVendussFilmRows,prepareVendussFilmItem,pendingVdrFilmRows,prepareStudioArtFilmItem,prepareVdrFilmItem,refreshArtworkPreview,resolveOrderArtwork,chooseUploadTarget,orderProgress,markItemProduced,openGlobalUpload};
 }

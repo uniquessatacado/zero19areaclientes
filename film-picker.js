@@ -93,7 +93,27 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   document.body.style.overflow = 'hidden';
   const dialog = root.querySelector('.film-picker');
   const find = selector => root.querySelector(selector);
-  const report = message => { find('.fp-status').textContent = message; };
+  const report = (message, tone = 'ok') => { const status = find('.fp-status'); status.textContent = message; status.dataset.tone = tone; status.classList.add('is-visible'); clearTimeout(statusTimer); statusTimer = setTimeout(() => status.classList.remove('is-visible'), 3200); };
+  // Atualiza só o cartão (sem redesenhar a lista): o campo que está sendo digitado não perde o foco.
+  function patchCard(id) {
+    const entry = entries.get(id), card = [...root.querySelectorAll('[data-card-id]')].find(item => item.dataset.cardId === id);
+    if (!entry || !card) return;
+    const chosen = selected.get(id), quantity = quantityOf((chosen || startSelection(entry)).quantity);
+    card.classList.toggle('is-selected', Boolean(chosen));
+    const ribbon = card.querySelector('.fp-in-film'); if (ribbon) { ribbon.hidden = !chosen; ribbon.textContent = `✓ NO FILME · ${quantity}×`; }
+    const check = card.querySelector('.fp-check'); if (check) check.textContent = chosen ? '✓' : '＋';
+    const action = card.querySelector('.fp-card-actions .fp-button');
+    if (action) { action.dataset.action = chosen ? 'toggle' : 'quick'; action.className = `fp-button ${chosen ? 'fp-button-selected' : 'fp-button-quick'}`; action.innerHTML = chosen ? `✓ Adicionada · ${quantity}× <span class="fp-undo">tirar</span>` : `＋ Adicionar${quantity > 1 ? ` ${quantity}` : ''} ao filme`; }
+    const input = card.querySelector('[data-input="quantity"]'); if (input && document.activeElement !== input) input.value = String(quantity);
+  }
+  function setQuantity(id, value, {live = false} = {}) {
+    const entry = entries.get(id); if (!entry) return;
+    const quantity = quantityOf(value);
+    typedQuantities.set(id, quantity);
+    // Arte ainda não escolhida: só guarda a quantidade; o botão passa a dizer "Adicionar N ao filme".
+    if (selected.has(id)) { selected.get(id).quantity = quantity; if (!live) report(`${entry.asset.name || 'Arte'}: ${quantity} ${quantity === 1 ? 'cópia' : 'cópias'} no filme.`); }
+    patchCard(id); renderSelection(); renderCompanies();
+  }
   const imageURL = entry => { try { const path=assetPreviewPath(entry.asset)||entry.path;return (previewUrl?.(path,entry.asset)||publicUrl(path))||''; } catch { return ''; } };
   const imageFallbackURL = entry => { try { return publicUrl(assetPreviewPath(entry.asset)||entry.path)||''; } catch { return ''; } };
   const visibleEntries = () => catalogue.filter(entry => (activeCompany === 'all' || entry.workspaceId === activeCompany) && (!artQuery || entry.search.includes(artQuery)));
@@ -101,7 +121,11 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   // 15/10 (dono): o tamanho digitado vale na hora, mesmo sem apertar "Usar tamanho" — antes ia o tamanho
   // cadastrado quando a pessoa digitava e já clicava em Adicionar/Selecionar.
   const typedSizes = new Map();
-  const startSelection = entry => ({...defaults(entry), ...(typedSizes.get(entry.id) || {})});
+  // 28/10 (dono: "coloco quantidade mais de 1 de uma arte e volta para 1"): a quantidade digitada fica guardada
+  // por arte e vale ao adicionar, ao tirar e pôr de novo e ao trocar o tamanho.
+  const typedQuantities = new Map();
+  const startSelection = entry => ({...defaults(entry), ...(typedSizes.get(entry.id) || {}), ...(typedQuantities.has(entry.id) ? {quantity: typedQuantities.get(entry.id)} : {})});
+  let confirmedSize = null, statusTimer = 0;
   function showCardSize(id) {
     const entry = entries.get(id), card = [...root.querySelectorAll('[data-card-id]')].find(item => item.dataset.cardId === id);
     if (!entry || !card) return;
@@ -188,17 +212,17 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
   function cardHTML(entry) {
     const chosen = selected.get(entry.id), dims = chosen || startSelection(entry), changed = Math.abs(dims.widthCm-entry.widthCm) > .0001 || Math.abs(dims.heightCm-entry.heightCm) > .0001;
     return `<article class="fp-art-card ${chosen?'is-selected':''}" data-card-id="${escapeHTML(entry.id)}">
-      <button class="fp-preview-button" data-action="toggle" data-id="${escapeHTML(entry.id)}" aria-pressed="${Boolean(chosen)}" aria-label="${chosen?'Remover':'Selecionar'} ${escapeHTML(entry.asset.name || 'arte')}">${imageHTML(entry)}<span class="fp-check" aria-hidden="true">${chosen?'✓':'＋'}</span>${entry.profile.halftone?'<span class="fp-halftone">Halftone</span>':''}</button>
+      <button class="fp-preview-button" data-action="toggle" data-id="${escapeHTML(entry.id)}" aria-pressed="${Boolean(chosen)}" aria-label="${chosen?'Remover':'Selecionar'} ${escapeHTML(entry.asset.name || 'arte')}">${imageHTML(entry)}<span class="fp-check" aria-hidden="true">${chosen?'✓':'＋'}</span><span class="fp-in-film" ${chosen?'':'hidden'}>✓ NO FILME · ${quantityOf(dims.quantity)}×</span>${entry.profile.halftone?'<span class="fp-halftone">Halftone</span>':''}</button>
       <div class="fp-art-copy"><small>${escapeHTML(entry.companyName)}</small><h4 title="${escapeHTML(entry.asset.name)}">${escapeHTML(entry.asset.name || 'Arte sem nome')}</h4><p class="fp-art-location">${escapeHTML([entry.projectName,entry.folderName].filter(Boolean).join(' / ') || 'Biblioteca de artes')}</p>
-        <div class="fp-size-line"><strong>${formatCm(dims.widthCm)} <span>×</span> ${formatCm(dims.heightCm)} <small>cm</small></strong><button class="fp-text-button" data-action="size" data-id="${escapeHTML(entry.id)}" aria-expanded="${sizeEditing===entry.id}">Alterar tamanho</button></div><p class="fp-size-caption">${changed?'Tamanho personalizado neste filme':'Tamanho cadastrado · proporção original'}</p>
-        <label class="fp-card-quantity">Quantidade desta arte<input data-input="quantity" data-id="${escapeHTML(entry.id)}" type="number" inputmode="numeric" min="1" step="1" value="${quantityOf(dims.quantity)}" aria-label="Quantidade de ${escapeHTML(entry.asset.name || 'arte')}"></label>
+        <div class="fp-size-line"><strong>${formatCm(dims.widthCm)} <span>×</span> ${formatCm(dims.heightCm)} <small>cm</small></strong><button class="fp-text-button fp-size-toggle" data-action="size" data-id="${escapeHTML(entry.id)}" aria-expanded="${sizeEditing===entry.id}">✎ Trocar tamanho</button></div><p class="fp-size-caption ${changed?'is-custom':''} ${confirmedSize===entry.id?'is-confirmed':''}">${confirmedSize===entry.id?`✓ Tamanho novo aplicado: ${formatCm(dims.widthCm)} × ${formatCm(dims.heightCm)} cm`:changed?'Tamanho só deste filme (o cadastro não muda)':'Tamanho cadastrado · proporção original'}</p>
+        <div class="fp-card-quantity"><span>Quantidade</span><div class="fp-qty"><button type="button" class="fp-qty-step" data-action="qty-minus" data-id="${escapeHTML(entry.id)}" aria-label="Menos uma cópia">−</button><input data-input="quantity" data-id="${escapeHTML(entry.id)}" type="number" inputmode="numeric" min="1" step="1" value="${quantityOf(dims.quantity)}" aria-label="Quantidade de ${escapeHTML(entry.asset.name || 'arte')}"><button type="button" class="fp-qty-step" data-action="qty-plus" data-id="${escapeHTML(entry.id)}" aria-label="Mais uma cópia">+</button></div></div>
         ${sizeEditing===entry.id?sizeFormHTML(entry,dims):''}
-        <div class="fp-card-actions"><button class="fp-button ${chosen?'fp-button-selected':'fp-button-quick'}" data-action="${chosen?'toggle':'quick'}" data-id="${escapeHTML(entry.id)}">${chosen?'✓ Selecionada':'＋ Adicionar rápido'}</button></div>
+        <div class="fp-card-actions"><button class="fp-button ${chosen?'fp-button-selected':'fp-button-quick'}" data-action="${chosen?'toggle':'quick'}" data-id="${escapeHTML(entry.id)}">${chosen?`✓ Adicionada · ${quantityOf(dims.quantity)}× <span class="fp-undo">tirar</span>`:`＋ Adicionar${quantityOf(dims.quantity)>1?` ${quantityOf(dims.quantity)}`:''} ao filme`}</button></div>
         ${[onMockup,onEdit].some(callback=>typeof callback==='function')?`<div class="fp-studio-actions" aria-label="Ferramentas da arte">${typeof onMockup==='function'?`<button class="fp-button" data-action="mockup" data-id="${escapeHTML(entry.id)}" aria-label="Ver ${escapeHTML(entry.asset.name || 'arte')} na camisa"><span>Ver na camisa</span></button>`:''}${typeof onEdit==='function'?`<button class="fp-button" data-action="edit" data-id="${escapeHTML(entry.id)}" aria-label="Editar ${escapeHTML(entry.asset.name || 'arte')}"><span>Editar arte</span></button>`:''}</div>`:''}
       </div></article>`;
   }
   function sizeFormHTML(entry,dims) {
-    return `<form class="fp-size-form" data-size-form="${escapeHTML(entry.id)}"><p><span aria-hidden="true">↔</span> Proporção travada</p><div class="fp-size-fields"><label>Largura (cm)<input name="width" inputmode="decimal" value="${formatInput(dims.widthCm)}" autocomplete="off" aria-label="Largura da arte em centímetros"></label><span aria-hidden="true">×</span><label>Altura (cm)<input name="height" inputmode="decimal" value="${formatInput(dims.heightCm)}" autocomplete="off" aria-label="Altura da arte em centímetros"></label></div><div class="fp-size-error" role="alert"></div><div class="fp-size-actions"><button type="button" class="fp-text-button" data-action="restore-size" data-id="${escapeHTML(entry.id)}">Restaurar cadastrado</button><button type="submit" class="fp-button fp-button-primary">Usar tamanho</button></div><small>Vale na hora para este filme, assim que você digita. O tamanho cadastrado da arte não muda.</small></form>`;
+    return `<form class="fp-size-form" data-size-form="${escapeHTML(entry.id)}"><p><span aria-hidden="true">↔</span> Proporção travada</p><div class="fp-size-fields"><label>Largura (cm)<input name="width" inputmode="decimal" value="${formatInput(dims.widthCm)}" autocomplete="off" aria-label="Largura da arte em centímetros"></label><span aria-hidden="true">×</span><label>Altura (cm)<input name="height" inputmode="decimal" value="${formatInput(dims.heightCm)}" autocomplete="off" aria-label="Altura da arte em centímetros"></label></div><div class="fp-size-error" role="alert"></div><div class="fp-size-actions"><button type="button" class="fp-text-button" data-action="restore-size" data-id="${escapeHTML(entry.id)}">Restaurar cadastrado</button><button type="submit" class="fp-button fp-button-primary">✓ Usar este tamanho</button></div><small>Vale na hora para este filme e já deixa a arte adicionada. O tamanho cadastrado não muda.</small></form>`;
   }
   function renderGrid() {
     const visible = visibleEntries();
@@ -212,8 +236,8 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     const rows = [...selected.entries()], totalQuantity = rows.reduce((total,[,item]) => total+quantityOf(item.quantity),0);
     const summary = find('.fp-selection-summary');
     summary.querySelector('.fp-count').textContent = rows.length;
-    summary.querySelector('b').textContent = rows.length ? `${rows.length} ${rows.length===1?'arte selecionada':'artes selecionadas'}` : 'Nenhuma arte selecionada';
-    summary.querySelector('small').textContent = rows.length ? `${totalQuantity} ${totalQuantity===1?'impressão':'impressões'} · toque para revisar` : 'Escolha uma ou várias empresas.';
+    summary.querySelector('b').textContent = rows.length ? `${rows.length} ${rows.length===1?'arte':'artes'} · ${totalQuantity} ${totalQuantity===1?'impressão':'impressões'}` : 'Nenhuma arte escolhida';
+    summary.querySelector('small').textContent = rows.length ? 'Vão entrar no filme · toque para revisar' : 'Toque em “Adicionar ao filme” nas artes.';
     summary.setAttribute('aria-expanded',String(trayOpen));
     find('.fp-selection-tray').hidden = !trayOpen;
     replacePreviewMarkup(find('.fp-selection-list'), rows.length ? rows.map(([id,item]) => {
@@ -222,13 +246,14 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     }).join('') : '<p class="fp-empty-selection">Selecione as miniaturas para montar seu filme.</p>');
     const submit = find('[data-action="submit"]');
     submit.disabled = busy || !rows.length;
-    submit.innerHTML = busy ? 'Adicionando…' : `Adicionar${rows.length?` ${rows.length}`:''} ao filme <span aria-hidden="true">↗</span>`;
+    submit.innerHTML = busy ? 'Adicionando…' : rows.length ? `Colocar no filme <span class="fp-submit-count">${totalQuantity} ${totalQuantity===1?'impressão':'impressões'}</span>` : 'Colocar no filme';
     watchImages(find('.fp-selection-list'));
   }
   function renderAll() { renderCompanies(); renderGrid(); renderSelection(); }
-  function select(entry, restore = false) {
-    if (!selected.has(entry.id) || restore) selected.set(entry.id,startSelection(entry));
-    report(`${entry.asset.name || 'Arte'} adicionada à seleção. Você pode escolher outras empresas antes de concluir.`);
+  function select(entry) {
+    if (!selected.has(entry.id)) selected.set(entry.id,startSelection(entry));
+    const quantity = quantityOf(selected.get(entry.id).quantity);
+    report(`✓ ${entry.asset.name || 'Arte'} adicionada · ${quantity} ${quantity===1?'cópia':'cópias'}. Escolha outras ou toque em “Colocar no filme”.`);
   }
   function openSize(id) {
     const entry = entries.get(id);
@@ -260,13 +285,14 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
       useTypedSize(form, entry);
     }
   });
+  root.addEventListener('input',event=>{
+    if (closed || busy || event.target.dataset.input!=='quantity' || event.target.value.trim()==='') return;
+    setQuantity(event.target.dataset.id, event.target.value, {live:true});
+  });
   root.addEventListener('change',event=>{
     if (closed || busy || event.target.dataset.input!=='quantity') return;
-    const id=event.target.dataset.id,entry=entries.get(id);if(!entry)return;const item=selected.get(id)||startSelection(entry);selected.set(id,item);
-    if (!item) return;
-    item.quantity=quantityOf(event.target.value);
-    renderAll();
-    [...root.querySelectorAll('[data-input="quantity"]')].find(input=>input.dataset.id===id)?.focus({preventScroll:true});
+    const id=event.target.dataset.id;setQuantity(id, event.target.value);
+    [...root.querySelectorAll('[data-input="quantity"]')].filter(input=>input.dataset.id===id&&input!==event.target).forEach(input=>{input.value=String(quantityOf(event.target.value));});
   });
   root.addEventListener('submit',event=>{
     if(closed)return;
@@ -279,10 +305,10 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
       const size=readSize(form,entry);
       if (Math.abs(size.widthCm-entry.widthCm) <= .0001) typedSizes.delete(entry.id); else typedSizes.set(entry.id,size);
       selected.set(entry.id,{...(selected.get(entry.id)||startSelection(entry)),...size});
-      sizeEditing=null;
+      sizeEditing=null;confirmedSize=entry.id;
       renderAll();
       focusAction('size',entry.id);
-      report(`Tamanho de ${entry.asset.name || 'arte'}: ${formatCm(size.widthCm)} por ${formatCm(size.heightCm)} cm. O cadastro original foi preservado.`);
+      report(`✓ ${entry.asset.name || 'Arte'} no filme com ${formatCm(size.widthCm)} × ${formatCm(size.heightCm)} cm. O cadastro original não muda.`);
     } catch(error) { form.querySelector('.fp-size-error').textContent=error.message; }
   });
   root.addEventListener('click',async event=>{
@@ -298,8 +324,9 @@ export function openFilmAssetPicker({profiles = [], assetMap = new Map(), worksp
     if (action==='select-visible') { visibleEntries().forEach(item=>{if(!selected.has(item.id))selected.set(item.id,startSelection(item));});renderAll();report(`${selected.size} artes selecionadas. Confira as quantidades na sua seleção.`);focusAction(action);return; }
     if (action==='clear') { selected.clear();sizeEditing=null;renderAll();report('Seleção limpa. Nenhum cadastro foi alterado.');focusAction('toggle-tray');return; }
     if (action==='remove') { selected.delete(id);renderAll();report('Arte removida da seleção.');focusAction('toggle-tray');return; }
-    if (action==='toggle' && entry) { if(selected.has(id)){selected.delete(id);report('Arte removida da seleção.');}else select(entry);renderAll();focusAction('toggle',id);return; }
-    if (action==='quick' && entry) { select(entry,true);renderAll();focusAction('toggle',id);return; }
+    if (action==='toggle' && entry) { if(selected.has(id)){selected.delete(id);report(`${entry.asset.name || 'Arte'} tirada da seleção.`,'off');}else select(entry);renderAll();focusAction('toggle',id);return; }
+    if (action==='quick' && entry) { const typed=[...root.querySelectorAll('[data-input="quantity"]')].find(input=>input.dataset.id===id);if(typed&&typed.value.trim())typedQuantities.set(id,quantityOf(typed.value));select(entry);renderAll();focusAction('toggle',id);return; }
+    if ((action==='qty-minus'||action==='qty-plus') && entry) { const current=quantityOf((selected.get(id)||startSelection(entry)).quantity);setQuantity(id,Math.max(1,current+(action==='qty-plus'?1:-1)));const input=[...root.querySelectorAll('[data-input="quantity"]')].find(item=>item.dataset.id===id);if(input)input.value=String(typedQuantities.get(id));return; }
     if ((action==='size'||action==='cart-size') && entry) { if(sizeEditing===id && action==='size'){sizeEditing=null;renderGrid();focusAction('size',id);}else openSize(id);return; }
     if (action==='restore-size' && entry) { const form=button.closest('form');form.elements.width.value=formatInput(entry.widthCm);form.elements.height.value=formatInput(entry.heightCm);form.querySelector('.fp-size-error').textContent='';useTypedSize(form,entry);return; }
     if ((action==='mockup'||action==='edit') && entry) {

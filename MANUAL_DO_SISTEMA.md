@@ -173,6 +173,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 
 - `npm run build` roda as conferências de cada camada (para se algo esperado sumiu).
 - No Mac, rode o build com `TMPDIR=$PWD/tmp/buildtmp npm run build` (crie a pasta antes; `tmp/` não vai para o Git nem para o site): o build copia tudo para a pasta temporária do sistema (`/private/var/...` no Mac) e o `test-film-job-list.mjs` falha porque procura a palavra "private" na mensagem de erro. Na Vercel (Linux) não acontece.
+- Filme na tela (Chrome headless, PC e celular, fotos numa pasta temporária): `scripts/film-delete-browser-qa.mjs` (Delete), `scripts/film-picker-browser-qa.mjs` (Arte de empresa), `scripts/film-oven-browser-qa.mjs` (linha do forno). Rode depois do build (usam o `dist/`).
 - Testes em `scripts/test-*.mjs` e `scripts/verify-*.mjs`; tela: `scripts/app-ui-snapshot.mjs` (app inteiro com banco simulado) e `scripts/ui-snapshot.mjs`.
 - Tema claro: `node scripts/gen-qr-theme.mjs` gera `qr-theme.css` (rode de novo depois de mudar qualquer CSS); ajustes finos à mão em `qr-screens.css`.
 
@@ -307,6 +308,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 28/10/2026 — 019 2.17.85: linha do forno (`film-oven-cuts.js`: `applyOvenCuts` depois do encaixe, `usedFilmWidth`; camada `scripts/build-film-oven-v85.mjs`), quantidade guardada por arte no seletor (`typedQuantities` em film-picker.js), subir arte com pasta pronta/pedido/voltar ao filme (`defaultReadyFolderId`, `pendingUploadCarry` no app.js). Testes de tela `scripts/film-oven-browser-qa.mjs` e `scripts/film-picker-browser-qa.mjs`.
 - 28/10/2026 — 019 2.17.84: Delete no filme sem remontar (`applyRemoval` no film-preview.js) e botão Ver filme; teste `scripts/film-delete-browser-qa.mjs`. Etiquetas de roupa no rolo de 107 mm (`edgeMm` em src/lib/zero19GarmentTags.ts).
 - 28/10/2026 — Cupom de produção ZERO19: `buildProductionCouponHtml` (src/lib/productionReceiptPieces.ts) é o mesmo na via do PDV (PaymentFlow) e na 2ª via (src/utils/printPdvOrderCopies.ts).
 - 28/10/2026 — 019 2.17.83: prancheta cortada até o pixel, medidas sempre proporcionais (`trimTransparentSafe` no app.js, `print-art-preparation.js`, `placementDimensions`, `film-picker.js`; teste `scripts/test-trim-proportion.mjs`).

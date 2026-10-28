@@ -43,7 +43,8 @@ assert.ok(!app.includes('Fila: Desenvolver arte'));
 assert.ok(!app.includes('Fila: Iniciar produção'));
 assert.ok(!app.includes('Fila: Estampar'));
 assert.match(app,/return nav\('\/filme'\)/);
-assert.match(app,/uploadQueue\.push\(\{file:f,name:'',type:presetType,folderId:''/);
+// 28/10 (dono): a arte já vem na pasta pronta para impressão (antes a pasta começava vazia).
+assert.match(app,/uploadQueue\.push\(\{file:f,name:'',type:presetType,folderId:presetType==='arte'\?defaultReadyFolderId\(\):''/);
 assert.match(app,/Organização obrigatória/);
 assert.match(app,/Escolha uma pasta/);
 assert.match(app,/Dê um nome claro para cada arquivo antes de salvar/);

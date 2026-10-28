@@ -39,7 +39,7 @@ const center=placement=>evaluate(`(()=>{const n=[...document.querySelectorAll('[
 const state=()=>evaluate(`(()=>{const s=fixture.snapshot();return {count:s.layout?.placements.length||0,keys:(s.layout?.placements||[]).map(p=>JSON.stringify([p.id,p.copy])),selected:document.querySelector('[data-placement].selected')?.dataset.placement||null,busy:!!document.querySelector('.film-preview-busy,[aria-busy=true]'),deleteDisabled:document.querySelector('[data-delete]')?.disabled??null,imgs:[...document.querySelectorAll('.film-placement img')].filter(i=>!(i.complete&&i.naturalWidth)).length,expanded:document.body.classList.contains('film-view-open'),msg:document.querySelector('.film-preview-message,[data-message]')?.textContent||''}})()`);
 const report=[];
 try{
-  let url;for(let n=0;n<80&&!url;n++){try{url=(await(await fetch('http://127.0.0.1:'+port+'/json/list')).json()).find(p=>p.type==='page')?.webSocketDebuggerUrl}catch{}await delay(100)}
+  let url;for(let n=0;n<300&&!url;n++){try{url=(await(await fetch('http://127.0.0.1:'+port+'/json/list')).json()).find(p=>p.type==='page')?.webSocketDebuggerUrl}catch{}await delay(100)}
   socket=new WebSocket(url);await new Promise(r=>socket.addEventListener('open',r,{once:true}));
   socket.addEventListener('message',e=>{const p=JSON.parse(e.data);if(p.id){const q=pending.get(p.id);if(q){pending.delete(p.id);p.error?q.reject(Error(p.error.message)):q.resolve(p.result)}return}if(p.method==='Runtime.exceptionThrown')errors.push(p.params.exceptionDetails.exception?.description||p.params.exceptionDetails.text);if(p.method==='Runtime.consoleAPICalled'&&p.params.type==='error')errors.push('console: '+p.params.args.map(a=>a.value||a.description).join(' '))});
   await send('Page.enable');await send('Runtime.enable');

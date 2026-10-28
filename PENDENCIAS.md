@@ -1,5 +1,6 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 28/10 (3) — 019 2.17.85 (filme): linha do forno (pedaços de até 38 cm sem arte em cima da linha, só na tela), largura usada em cm/px, Arte de empresa com quantidade que não volta para 1, subir arte na pasta pronta / vinculando a pedido / "Voltar para o filme". Testado: build completo (todos os testes, Mac com TMPDIR), test-film-oven-cuts, navegador (Chrome headless, PC e celular) com o seletor de artes, Delete no filme e a linha do forno desenhada (film-oven-browser-qa). NÃO testado: filme real do dono cortado no forno; vincular a pedido com o banco real.
 - [x] 28/10 — 019 2.17.83 no ar: prancheta cortada até o pixel e medidas proporcionais. PERGUNTAR ao dono: corrigir no banco as 59 medidas antigas esticadas (altura = largura ÷ proporção da arte); o filme e o posicionamento já usam a medida certa.
 - [~] 28/10 (2) — NovoVenduss: cupom de produção novo (sem checklist, 4 QRs) e 2ª via igual à via do PDV. Falta rebuild no Portainer.
 - [~] 28/10 — NovoVenduss: PDV com reforma de camisa de time (chega no 019 como peça do cliente com aviso REFORMA) e "Já entregue pronto" (não vem para o 019). Ver PENDENCIAS de lá; falta rebuild no Portainer.

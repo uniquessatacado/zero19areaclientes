@@ -165,3 +165,72 @@ body .film-page .film-inspector{background:#f8fafc!important;border:2px solid #e
 body .film-page .film-inspector-head select{background:#fff!important;color:#0f172a!important;border:2px solid #cbd5e1!important;font-size:13px!important}
 body .film-page .film-items-panel .film-item{border:2px solid #e2e8f0;border-radius:16px;background:#fff}
 body .film-page .film-item-thumb{background:repeating-conic-gradient(#c3cad4 0 25%,#ffffff 0 50%) 0 0/10px 10px!important;border-radius:10px}
+
+/* 2.17.85 · Arte de empresa mais visual (28/10, dono: "muito confuso… botões de adicionar no filme muito pequenos;
+   onde mostra quantas artes serão adicionadas também pequeno; ao trocar tamanho não sei se adicionou"). */
+body .film-picker .fp-art-grid{grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:14px}
+body .film-picker .fp-art-card{border:2px solid #e2e8f0!important;border-radius:18px;background:#fff!important;transition:border-color .15s,box-shadow .15s,transform .15s}
+body .film-picker .fp-art-card.is-selected{border:3px solid #ff6428!important;box-shadow:0 8px 24px rgba(255,100,40,.22)!important;background:#fff7ed!important}
+body .film-picker .fp-image{aspect-ratio:1.7}
+body .film-picker .fp-image img{padding:12px}
+body .film-picker .fp-in-film{position:absolute;left:10px;top:10px;border-radius:999px;padding:6px 12px;background:#16a34a;color:#fff;font-size:13px;font-weight:900;letter-spacing:.02em;box-shadow:0 4px 12px rgba(22,163,74,.35)}
+body .film-picker .fp-in-film[hidden]{display:none!important}
+body .film-picker .fp-check{width:38px;height:38px;font-size:22px;border-radius:12px;background:#fff!important;color:#ea580c!important;border:2px solid #fdba74!important}
+body .film-picker .fp-art-card.is-selected .fp-check{background:#16a34a!important;color:#fff!important;border-color:#16a34a!important}
+body .film-picker .fp-art-copy{padding:12px 14px 14px}
+body .film-picker .fp-art-copy h4{font-size:16px;color:#0f172a!important}
+body .film-picker .fp-art-location{margin-bottom:8px}
+body .film-picker .fp-size-line{background:#f1f5f9;border-radius:12px;padding:6px 6px 6px 12px}
+body .film-picker .fp-size-line strong{font-size:20px;color:#0f172a!important}
+body .film-picker .fp-size-toggle{min-height:38px!important;padding:0 12px!important;border-radius:10px!important;background:#e0f2fe!important;color:#075985!important;border:2px solid #7dd3fc!important;font-size:13px!important;font-weight:900!important}
+body .film-picker .fp-size-caption{margin:6px 0 10px;font-size:12px!important;color:#64748b!important}
+body .film-picker .fp-size-caption.is-custom{color:#9a3412!important;font-weight:800}
+body .film-picker .fp-size-caption.is-confirmed{display:block;padding:8px 10px;border-radius:10px;background:#dcfce7!important;color:#14532d!important;border:2px solid #86efac;font-weight:900;font-size:13px!important}
+body .film-picker .fp-card-quantity{display:flex!important;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px!important;font-size:13px!important;font-weight:900;color:#334155!important}
+body .film-picker .fp-qty{display:grid;grid-template-columns:46px 64px 46px;border:2px solid #cbd5e1;border-radius:14px;overflow:hidden;background:#fff}
+body .film-picker .fp-qty-step{height:46px;border:0!important;background:#f1f5f9!important;color:#0f172a!important;font-size:24px!important;font-weight:900!important;line-height:1}
+body .film-picker .fp-qty-step:active{background:#e2e8f0!important}
+body .film-picker .fp-qty input{width:100%!important;height:46px!important;border:0!important;border-radius:0!important;text-align:center;font-size:20px!important;font-weight:900!important;color:#0f172a!important;background:#fff!important;-moz-appearance:textfield}
+body .film-picker .fp-qty input::-webkit-inner-spin-button,body .film-picker .fp-qty input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+body .film-picker .fp-card-actions .fp-button{width:100%;min-height:52px!important;border-radius:14px!important;font-size:16px!important;font-weight:900!important}
+body .film-picker .fp-button-quick{background:#ff6428!important;border:2px solid #ff6428!important;color:#fff!important}
+body .film-picker .fp-button-quick:hover{background:#ea580c!important}
+body .film-picker .fp-button-selected{background:#dcfce7!important;border:2px solid #16a34a!important;color:#14532d!important}
+body .film-picker .fp-undo{margin-left:8px;padding:2px 8px;border-radius:999px;background:#fff;color:#b91c1c;font-size:12px;font-weight:900;border:1px solid #fecaca}
+body .film-picker .fp-size-form{border:2px solid #7dd3fc!important;background:#f0f9ff!important;border-radius:14px}
+body .film-picker .fp-size-form input{font-size:18px!important;font-weight:900!important;height:46px!important}
+body .film-picker .fp-size-actions .fp-button-primary{min-height:46px!important;background:#16a34a!important;border-color:#16a34a!important;color:#fff!important;font-size:15px!important;font-weight:900!important}
+body .film-picker{position:relative}
+body .film-picker .fp-status{position:absolute;left:50%;bottom:104px;z-index:5;max-width:min(640px,calc(100% - 32px));transform:translate(-50%,16px);opacity:0;pointer-events:none;padding:12px 18px;border-radius:16px;background:#14532d;color:#fff!important;font-size:15px;font-weight:900;line-height:1.35;text-align:center;box-shadow:0 14px 34px rgba(0,0,0,.28);transition:opacity .2s,transform .2s}
+body .film-picker .fp-status.is-visible{opacity:1;transform:translate(-50%,0)}
+body .film-picker .fp-status[data-tone="off"]{background:#7c2d12}
+body .film-picker .fp-footer{padding:14px 18px!important;gap:12px;border-top:2px solid #e2e8f0!important;background:#fff!important}
+body .film-picker .fp-selection-summary{gap:12px!important;min-width:0}
+body .film-picker .fp-count{min-width:58px!important;height:58px!important;border-radius:16px!important;font-size:28px!important;font-weight:900!important;background:#ff6428!important;color:#fff!important;border:0!important;display:grid!important;place-items:center}
+body .film-picker .fp-selection-summary b{font-size:19px!important;color:#0f172a!important;white-space:normal!important}
+body .film-picker .fp-selection-summary small{font-size:13px!important;color:#475569!important}
+body .film-picker [data-action="submit"]{min-height:60px!important;padding:0 26px!important;border-radius:16px!important;background:#ff6428!important;border:0!important;color:#fff!important;font-size:19px!important;font-weight:900!important;box-shadow:0 10px 24px rgba(255,100,40,.32)}
+body .film-picker [data-action="submit"]:disabled{background:#cbd5e1!important;box-shadow:none!important;color:#475569!important}
+body .film-picker .fp-submit-count{margin-left:10px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.25);font-size:15px}
+body .film-picker .fp-cancel{min-height:60px!important;border-radius:16px!important;font-size:15px!important}
+@media (max-width:760px){
+  body .film-picker .fp-footer{flex-direction:column;align-items:stretch}
+  body .film-picker .fp-footer-actions{display:grid!important;grid-template-columns:auto 1fr;gap:8px}
+  body .film-picker [data-action="submit"]{width:100%;font-size:17px!important}
+  body .film-picker .fp-status{bottom:150px;font-size:14px}
+  body .film-picker .fp-qty{grid-template-columns:44px 56px 44px}
+  body .film-picker .fp-art-card{display:block!important}
+  body .film-picker .fp-image{aspect-ratio:2.2!important}
+  body .film-picker .fp-in-film{font-size:12px;padding:5px 10px}
+}
+
+/* 2.17.85 · Subir arte: vincular pedido e voltar para o filme */
+body .upload-order-link{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 12px;padding:12px 14px;border:2px solid #fdba74;border-radius:16px;background:#fff7ed}
+body .upload-order-link>div{flex:1 1 260px;min-width:0}body .upload-order-link b{display:block;font-size:15px;color:#7c2d12}body .upload-order-link small{display:block;font-size:12px;color:#9a3412;line-height:1.4}
+body .upload-order-search{display:flex;gap:8px;flex:1 1 320px;min-width:0}body .upload-order-search input{flex:1;min-width:0;height:46px;border:2px solid #fdba74;border-radius:12px;padding:0 12px;font-size:15px;background:#fff;color:#0f172a}
+body .upload-order-search .btn{min-height:46px;font-weight:900}
+body .upload-back-film{margin-right:8px;background:#e0f2fe!important;color:#075985!important;border:2px solid #7dd3fc!important;font-weight:900}
+body .z19-back-to-film{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:13000;display:flex;align-items:center;gap:12px;max-width:calc(100% - 24px);padding:10px 12px 10px 18px;border-radius:18px;background:#0f172a;color:#fff;box-shadow:0 16px 40px rgba(0,0,0,.35);font-weight:900}
+body .z19-back-to-film .btn.primary{min-height:48px;font-size:16px;background:#ff6428!important;border-color:#ff6428!important;color:#fff!important}
+body .z19-back-to-film .btn.ghost{color:#fff!important;background:transparent!important;border-color:#334155!important}
+@media (max-width:560px){body .z19-back-to-film{flex-wrap:wrap;justify-content:center;bottom:12px}}
