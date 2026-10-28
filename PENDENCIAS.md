@@ -1,5 +1,7 @@
 # Pendências do Personalizações ZERO19
 
+- [x] 28/10 — 019 2.17.83 no ar: prancheta cortada até o pixel e medidas proporcionais. PERGUNTAR ao dono: corrigir no banco as 59 medidas antigas esticadas (altura = largura ÷ proporção da arte); o filme e o posicionamento já usam a medida certa.
+- [~] 28/10 (2) — NovoVenduss: cupom de produção novo (sem checklist, 4 QRs) e 2ª via igual à via do PDV. Falta rebuild no Portainer.
 - [~] 28/10 — NovoVenduss: PDV com reforma de camisa de time (chega no 019 como peça do cliente com aviso REFORMA) e "Já entregue pronto" (não vem para o 019). Ver PENDENCIAS de lá; falta rebuild no Portainer.
 - [~] 27/10 (3) — NovoVenduss: TV · enviar vídeo no painel e 2 Reels do Instagram por volta (ver PENDENCIAS de lá). PENDENTE: rebuild do NovoVenduss.
 - [~] 27/10 (2) — NovoVenduss: PDV · personalização mais simples (ver PENDENCIAS de lá). Nada muda no 019 (o que chega na produção é igual). Dono aprovou 27/10: no GitHub do NovoVenduss (falta reconstruir no Portainer).

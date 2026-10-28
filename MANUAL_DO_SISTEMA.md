@@ -307,6 +307,8 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 28/10/2026 — 019 2.17.84: Delete no filme sem remontar (`applyRemoval` no film-preview.js) e botão Ver filme; teste `scripts/film-delete-browser-qa.mjs`. Etiquetas de roupa no rolo de 107 mm (`edgeMm` em src/lib/zero19GarmentTags.ts).
+- 28/10/2026 — Cupom de produção ZERO19: `buildProductionCouponHtml` (src/lib/productionReceiptPieces.ts) é o mesmo na via do PDV (PaymentFlow) e na 2ª via (src/utils/printPdvOrderCopies.ts).
 - 28/10/2026 — 019 2.17.83: prancheta cortada até o pixel, medidas sempre proporcionais (`trimTransparentSafe` no app.js, `print-art-preparation.js`, `placementDimensions`, `film-picker.js`; teste `scripts/test-trim-proportion.mjs`).
 - 28/10/2026 — PDV: vendedor só nome com cor, Reforma, peça do cliente só descrição, Já entregue pronto.
 - 27/10/2026 — TV: enviar vídeo no painel e 2 Reels do Instagram por volta.
