@@ -19,7 +19,9 @@ export function buildFilmAssetCatalogue({profiles = [], assetMap = new Map(), wo
   const assets = asMap(assetMap), workspaceMap = asMap(workspaces), projectMap = asMap(projects), folderMap = asMap(folders);
   const seen = new Set();
   return profiles.flatMap(profile => {
-    const asset = assets.get(profile.asset_id), widthCm = Number(profile.default_width_cm), heightCm = Number(profile.default_height_cm);
+    const asset = assets.get(profile.asset_id), widthCm = Number(profile.default_width_cm), pixelRatio = Number(asset?.width) / Number(asset?.height), savedHeight = Number(profile.default_height_cm);
+    // 28/10 (dono): medida feita antes de tirar a prancheta nunca estica a arte no filme; vale a largura (o PNG foi preparado por ela).
+    const heightCm = pixelRatio > 0 && Number.isFinite(pixelRatio) && widthCm > 0 && savedHeight > 0 && Math.abs(widthCm / savedHeight / pixelRatio - 1) > .01 ? Math.round(widthCm / pixelRatio * 100) / 100 : savedHeight;
     if (!asset || asset.asset_type !== 'arte' || profile.ready_for_print !== true || !(widthCm > 0 && heightCm > 0) || !Number.isFinite(widthCm + heightCm) || seen.has(asset.id)) return [];
     const path = asset.processed_path || asset.original_path;
     if (!path) return [];

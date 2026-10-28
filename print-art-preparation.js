@@ -1,5 +1,5 @@
 // Prepare from a stable source; never repeatedly enlarge the previous review.
-export async function preparePrintArt(asset,{widthCm,heightCm,owner,actor,bucket,supabase,processImage,uploadFile,onStage=()=>{}}){
+export async function preparePrintArt(asset,{widthCm,heightCm,axis='width',owner,actor,bucket,supabase,processImage,uploadFile,onStage=()=>{}}){
   if(!processImage)throw new Error('Preparação de impressão indisponível. Recarregue o sistema antes de salvar.');
   const previous=asset.metadata?.print_preparation;
   const unchanged=Boolean(previous?.output_path)&&previous.output_path===asset.processed_path;
@@ -8,7 +8,8 @@ export async function preparePrintArt(asset,{widthCm,heightCm,owner,actor,bucket
   if(!(widthCm>0&&heightCm>0)||!source)throw new Error('Confira o arquivo e as medidas da arte.');
   onStage('Lendo o arquivo para impressão…');
   const downloaded=await supabase.storage.from(bucket).download(source);if(downloaded.error)throw downloaded.error;
-  const result=await processImage(downloaded.data,{trim:true,targetWidthCm:widthCm,targetHeightCm:heightCm,onStage});
+  // Escala só pelo lado que a equipe digitou; a outra medida sai do PNG já sem prancheta (28/10: nunca distorcer).
+  const result=await processImage(downloaded.data,{trim:true,targetWidthCm:axis==='height'?0:widthCm,targetHeightCm:axis==='height'?heightCm:0,onStage});
   const path=owner+'/'+asset.workspace_id+'/print-ready/'+asset.id+'/'+crypto.randomUUID()+'.png';
   onStage('Salvando PNG preparado para impressão…');
   if(uploadFile)await uploadFile(path,result.blob,{contentType:'image/png'});

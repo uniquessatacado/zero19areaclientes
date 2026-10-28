@@ -307,6 +307,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 28/10/2026 — 019 2.17.83: prancheta cortada até o pixel, medidas sempre proporcionais (`trimTransparentSafe` no app.js, `print-art-preparation.js`, `placementDimensions`, `film-picker.js`; teste `scripts/test-trim-proportion.mjs`).
 - 28/10/2026 — PDV: vendedor só nome com cor, Reforma, peça do cliente só descrição, Já entregue pronto.
 - 27/10/2026 — TV: enviar vídeo no painel e 2 Reels do Instagram por volta.
 - 27/10/2026 — PDV: personalização mais simples (prazo por botão, Adicionar e pagar).

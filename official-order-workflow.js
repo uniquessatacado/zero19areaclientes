@@ -68,7 +68,8 @@ export function placementDimensions(asset,profile=null,placement=null){
     [meta.requested_width_cm,meta.requested_height_cm],
     [meta.pdv_width_cm,meta.pdv_height_cm]
   ];
-  for(const [w,h] of sources){const width=positive(w),height=positive(h);if(width||height)return {width:width||height*ratio,height:height||width/ratio,ratio};}
+  // Largura e altura que não batem com a proporção da arte (medida feita antes de tirar a prancheta) nunca esticam a arte: vale a largura.
+  for(const [w,h] of sources){const width=positive(w),height=positive(h);if(width||height){if(width&&height&&pixelRatio>0&&Math.abs(width/height/ratio-1)>.01)return {width,height:width/ratio,ratio};return {width:width||height*ratio,height:height||width/ratio,ratio};}}
   return {width:9,height:9/ratio,ratio};
 }
 export function placementOrderProduct(asset,products=[],placement=null){
@@ -306,6 +307,7 @@ export function createOfficialOrderWorkflow(ctx){
     let saveError='';
     const {width:initialWidth,height:initialHeight,ratio}=placementDimensions(asset,profileResult.data,savedPlacement);
     let selectedProduct=placementOrderProduct(asset,products,savedPlacement),model=firstPiece?.garment_model||modelFrom(selectedProduct||{}),color=firstPiece?.color||colorFrom(selectedProduct||{}),size=firstPiece?.size||selectedProduct?.size||'',category=firstPiece?.category||selectedProduct?.category||'',surface=pdvPosition?.surface||'front',position=null,widthCm=initialWidth,heightCm=initialHeight,busy=false,saveText='';
+    let sizeAxis='width';
     const targetModels=()=>groupPieces.length?groupPieces.map(piece=>piece.garment_model==='oversized'?'oversized':'normal'):[model==='oversized'?'oversized':'normal'];
     const surfaceFits=s=>targetModels().every(value=>fits(value,s,widthCm,heightCm));
     const positionFitsAll=p=>targetModels().every(value=>positionFits(value,surface,widthCm,heightCm,p));
@@ -345,13 +347,14 @@ export function createOfficialOrderWorkflow(ctx){
         }
         selectedProduct=products.find(p=>p.ref===button.dataset.product)||null;model=modelFrom(selectedProduct||{});color=colorFrom(selectedProduct||{});size=selectedProduct?.size||'';category=selectedProduct?.category||'';chooseDefault();draw();
       });
-      const w=modal.querySelector('[data-width]'),h=modal.querySelector('[data-height]');w.onchange=()=>{const value=num(w.value);if(value>0){widthCm=value;heightCm=value/ratio;chooseDefault();draw()}};h.onchange=()=>{const value=num(h.value);if(value>0){heightCm=value;widthCm=value*ratio;chooseDefault();draw()}};
+      const w=modal.querySelector('[data-width]'),h=modal.querySelector('[data-height]');w.onchange=()=>{const value=num(w.value);if(value>0){sizeAxis='width';widthCm=value;heightCm=value/ratio;chooseDefault();draw()}};h.onchange=()=>{const value=num(h.value);if(value>0){sizeAxis='height';heightCm=value;widthCm=value*ratio;chooseDefault();draw()}};
       modal.querySelectorAll('[data-surface]').forEach(button=>button.onclick=()=>{surface=button.dataset.surface;chooseDefault();draw()});modal.querySelectorAll('[data-position]').forEach(button=>button.onclick=()=>{position=positions.find(p=>p.id===button.dataset.position)||position;draw()});
       modal.querySelector('[data-save]').onclick=async()=>{
         if(owner()!==openingOwner){ctx.toast('A conta mudou. Abra a arte novamente antes de salvar.','err');close({saved:false});return}
         if(!position||busy)return;busy=true;saveError='';saveText='Preparando mockup…';draw();
         try{
-          asset=await preparePrintArt(asset,{widthCm,heightCm,owner:openingOwner,actor:user(),bucket:ctx.bucket,supabase,processImage:ctx.processPrintImage,uploadFile:ctx.uploadFile,onStage:text=>{saveText=text;const label=modal.querySelector('.placement-save-progress small');if(label)label.textContent=text;}});
+          asset=await preparePrintArt(asset,{widthCm,heightCm,axis:sizeAxis,owner:openingOwner,actor:user(),bucket:ctx.bucket,supabase,processImage:ctx.processPrintImage,uploadFile:ctx.uploadFile,onStage:text=>{saveText=text;const label=modal.querySelector('.placement-save-progress small');if(label)label.textContent=text;}});
+          {const r=Number(asset.width)/Number(asset.height);if(r>0&&Number.isFinite(r)){if(sizeAxis==='height')widthCm=Math.round(heightCm*r*100)/100;else heightCm=Math.round(widthCm/r*100)/100;}}
           const targets=groupPieces.length?groupPieces:[null],results=[];
           for(let index=0;index<targets.length;index++){
             const piece=targets[index];saveText='Camiseta '+(index+1)+'/'+targets.length+' · gerando mockup';draw();

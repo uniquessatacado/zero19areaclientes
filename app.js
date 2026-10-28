@@ -667,7 +667,7 @@ function openUploadModal({presetType='arte',standaloneHalftone=false,readyForPri
       const preview=URL.createObjectURL(f);
       uploadQueue.push({file:f,name:'',type:presetType,folderId:'',readyForPrint:Boolean(readyForPrint),widthCm:'',heightCm:'',aspectRatio:0,standaloneHalftone:Boolean(standaloneHalftone),preview});
       const item=uploadQueue[uploadQueue.length-1];
-      try{const bmp=await createImageBitmap(f);item.aspectRatio=bmp.height>0?bmp.width/bmp.height:0;bmp.close?.()}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
+      try{const bmp=await createImageBitmap(f);let c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d',{willReadFrequently:true}).drawImage(bmp,0,0);bmp.close?.();if(presetType!=='mockup')c=trimTransparentSafe(c);item.aspectRatio=c.height>0?c.width/c.height:0;c.width=c.height=1}catch(error){console.warn('Não foi possível ler a proporção da arte.',error)}
     }
     dz.classList.toggle('has-files',uploadQueue.length>0);
     renderUploadList(m,{lockedType:isMockupMode});
@@ -714,7 +714,7 @@ function renderUploadList(m,{lockedType=false}={}){
 
   $$('[data-size-axis]',list).forEach(el=>el.addEventListener('input',()=>{
     const index=+el.dataset.i,q=uploadQueue[index],axis=el.dataset.sizeAxis,raw=el.value.replace(/[^0-9,.]/g,''),value=Number(raw.replace(',','.'))||0;
-    el.value=raw;q[axis==='width'?'widthCm':'heightCm']=raw;
+    el.value=raw;q[axis==='width'?'widthCm':'heightCm']=raw;if(Number(raw.replace(',','.'))>0)q.sizeAxis=axis;
     const ratio=Number(q.aspectRatio)||0;
     if(value>0&&ratio>0){
       const other=axis==='width'?value/ratio:value*ratio,otherKey=axis==='width'?'heightCm':'widthCm',otherAxis=axis==='width'?'height':'width',formatted=cmText(other);
@@ -817,12 +817,14 @@ async function processImage(file,{trim,targetMax=0,targetWidthCm=0,targetHeightC
 
 function trimTransparentSafe(canvas){
   const ctx=canvas.getContext('2d',{willReadFrequently:true}),w=canvas.width,h=canvas.height,data=ctx.getImageData(0,0,w,h).data;
-  const rowVisible=y=>{for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>=2)return true;return false};
-  const colVisible=x=>{for(let y=0;y<h;y++)if(data[(y*w+x)*4+3]>=2)return true;return false};
+  // 28/10 (dono): remover a prancheta até onde tem pixel. Pó quase invisível (alfa < 8 de 255) não segura a prancheta.
+  const rowVisible=y=>{for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>=8)return true;return false};
+  const colVisible=x=>{for(let y=0;y<h;y++)if(data[(y*w+x)*4+3]>=8)return true;return false};
   let top=0,bottom=h-1,left=0,right=w-1;while(top<h&&!rowVisible(top))top++;while(bottom>=top&&!rowVisible(bottom))bottom--;while(left<w&&!colVisible(left))left++;while(right>=left&&!colVisible(right))right--;
   if(top>bottom||left>right)return canvas;
   // Protege a antialiasação: inclui imediatamente qualquer pixel semi-transparente encostado no limite detectado.
-  while(top>0&&edgeHasAlphaRow(top-1,left,right))top--;while(bottom<h-1&&edgeHasAlphaRow(bottom+1,left,right))bottom++;while(left>0&&edgeHasAlphaCol(left-1,top,bottom))left--;while(right<w-1&&edgeHasAlphaCol(right+1,top,bottom))right++;
+  // Até 2 px de antialiasação encostada na borda; mais que isso é prancheta.
+  for(let i=0;i<2;i++){if(top>0&&edgeHasAlphaRow(top-1,left,right))top--;if(bottom<h-1&&edgeHasAlphaRow(bottom+1,left,right))bottom++;if(left>0&&edgeHasAlphaCol(left-1,top,bottom))left--;if(right<w-1&&edgeHasAlphaCol(right+1,top,bottom))right++;}
   const nw=right-left+1,nh=bottom-top+1;if(nw===w&&nh===h)return canvas;const out=document.createElement('canvas');out.width=nw;out.height=nh;out.getContext('2d',{alpha:true}).drawImage(canvas,left,top,nw,nh,0,0,nw,nh);return out;
   function edgeHasAlphaRow(y,x1,x2){for(let x=x1;x<=x2;x++)if(data[(y*w+x)*4+3]>0)return true;return false}
   function edgeHasAlphaCol(x,y1,y2){for(let y=y1;y<=y2;y++)if(data[(y*w+x)*4+3]>0)return true;return false}
@@ -1287,9 +1289,11 @@ processQueue = async function(m,{mockupMode=false}={}){
 
   for(const q of queue){
     try{
-      const isMockup=q.type==='mockup',doTrim=isMockup?false:trim,widthCm=isMockup?0:Number(String(q.widthCm||'').replace(',','.'))||0,heightCm=isMockup?0:Number(String(q.heightCm||'').replace(',','.'))||0,qualityTarget=0;
+      let isMockup=q.type==='mockup',doTrim=isMockup?false:trim,widthCm=isMockup?0:Number(String(q.widthCm||'').replace(',','.'))||0,heightCm=isMockup?0:Number(String(q.heightCm||'').replace(',','.'))||0,qualityTarget=0;
       stage(`${mockupMode?'Salvando':'Processando'} ${done+1}/${queue.length}: ${q.name}`);
-      const result=await processImage(q.file,{trim:doTrim,targetWidthCm:widthCm,targetHeightCm:heightCm,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
+      const byHeight=q.sizeAxis==='height'&&heightCm>0||!(widthCm>0)&&heightCm>0;
+      const result=await processImage(q.file,{trim:doTrim,targetWidthCm:byHeight?0:widthCm,targetHeightCm:byHeight?heightCm:0,onStage:text=>stage(`${done+1}/${queue.length} · ${text}`)});
+      if(!isMockup&&result.width>0&&result.height>0&&(widthCm>0||heightCm>0)){const r=result.width/result.height;if(byHeight)widthCm=Math.round(heightCm*r*100)/100;else heightCm=Math.round(widthCm/r*100)/100;}
       const assetId=crypto.randomUUID(),base=`${session.user.id}/${uploadWorkspace.id}/${q.folderId||'root'}/${assetId}`,ext=(q.file.name.split('.').pop()||'bin').toLowerCase(),originalPath=`${base}/original.${ext}`,processedPath=`${base}/processed.png`;
       const target=uploadTargets.get(q),officialProject=target?.project||uploadProjects.find(project=>project.workspace_id===uploadWorkspace.id&&String(project.official_order_ref||'').trim())||null;
       const assetRow={id:assetId,owner_id:accountOwnerId(),workspace_id:uploadWorkspace.id,project_id:officialProject?.id||null,folder_id:q.folderId||null,name:q.name.trim(),asset_type:q.type,original_path:originalPath,processed_path:processedPath,mime_type:'image/png',size_bytes:result.blob.size,width:result.width,height:result.height,dpi:300,alpha_trimmed:doTrim,background_removed:false,maximized:Boolean(result.upscaled),created_by:session.user.id,updated_by:session.user.id,metadata:{print_ready_intent:q.type==='arte'&&Boolean(q.readyForPrint||productionModule?.folderInReadyTree?.(q.folderId||null)),source_name:q.file.name,source_size:q.file.size,source_width:result.sourceWidth,source_height:result.sourceHeight,quality_preset:quality,quality_target:result.targetPixels||null,requested_width_cm:widthCm||null,requested_height_cm:heightCm||null,standalone_halftone_pending:Boolean(q.standaloneHalftone),standalone_halftone:Boolean(q.standaloneHalftone),upscaled:result.upscaled,processing_engine:result.engine||'native'}};
