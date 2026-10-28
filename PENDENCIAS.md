@@ -1,5 +1,6 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 28/10 — NovoVenduss: PDV com reforma de camisa de time (chega no 019 como peça do cliente com aviso REFORMA) e "Já entregue pronto" (não vem para o 019). Ver PENDENCIAS de lá; falta rebuild no Portainer.
 - [~] 27/10 (3) — NovoVenduss: TV · enviar vídeo no painel e 2 Reels do Instagram por volta (ver PENDENCIAS de lá). PENDENTE: rebuild do NovoVenduss.
 - [~] 27/10 (2) — NovoVenduss: PDV · personalização mais simples (ver PENDENCIAS de lá). Nada muda no 019 (o que chega na produção é igual). Dono aprovou 27/10: no GitHub do NovoVenduss (falta reconstruir no Portainer).
 - [~] 27/10 — NovoVenduss: TV da loja (ver PENDENCIAS de lá, 27/10). SQL [RODAR_NO_SUPABASE_27-10_tv_mais_vendidos.sql](RODAR_NO_SUPABASE_27-10_tv_mais_vendidos.sql) APLICADO em 27/10 (autorizado pelo dono) e conferido pela API pública. Nada muda no app 019.
