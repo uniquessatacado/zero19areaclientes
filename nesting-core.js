@@ -1,6 +1,16 @@
 const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
 const EPSILON=1e-7;
+import {ovenFeasible} from './film-oven-cuts.js?v=2.17.86';
 const MASK_CELL_LIMIT=32e6;
+// Linha do forno (28/10, dono: "tem que usar a linha quando ativa mas não pode perder espaço no filme"). Com
+// `ovenBandMm` o filme é cortado a cada faixa e o ENCAIXE já respeita as linhas: nenhuma arte fica em cima de uma
+// linha e de cada lado dela fica metade da distância entre artes (o mesmo espaço de sempre, sem buraco). Arte que
+// não cabe numa faixa em nenhuma posição permitida fica liberada (a tela avisa).
+function ovenRule(bandMm,gapMm){const band=Number(bandMm);return band>0?{band,half:Math.max(Number(gapMm)||0,2)/2}:null;}
+function ovenCrosses(rule,yMm,heightMm){if(!rule)return false;const k=Math.floor((yMm+heightMm+rule.half-1e-6)/rule.band);return k>=1&&yMm<k*rule.band+rule.half-1e-6;}
+function ovenNextY(rule,yMm,heightMm){return Math.floor((yMm+heightMm+rule.half-1e-6)/rule.band)*rule.band+rule.half;}
+function ovenExempt(rule,item){if(!rule)return true;const room=rule.band-2*rule.half+1e-6;return !(item.heightMm<=room||['90','free'].includes(item.rotationPolicy||'none')&&item.widthMm<=room);}
+const ovenBlocked=(rule,item,yMm,heightMm)=>Boolean(rule)&&!ovenExempt(rule,item)&&ovenCrosses(rule,yMm,heightMm);
 
 export function cmToPx(cm,dpi=300){return Math.round(Number(cm)/2.54*dpi)}
 export function pxToCm(px,dpi=300){return Number(px)/dpi*2.54}
@@ -121,14 +131,15 @@ function itemOptions(item,settings){
 
 const placementKey=(id,copy)=>JSON.stringify([id,copy]);
 
-function calculationSettings({filmWidthMm,mode='normal',gapMm=3,cellMm=2,maxLengthMm=100000,freeRotation=false,angleStep=30}={}){
+function calculationSettings({filmWidthMm,mode='normal',gapMm=3,cellMm=2,maxLengthMm=100000,freeRotation=false,angleStep=30,ovenBandMm=0}={}){
   const width=Number(filmWidthMm),gap=Number(gapMm),cell=Number(cellMm),maxLength=Number(maxLengthMm);
   if(!Number.isFinite(width)||width<=0)throw new Error('Largura de filme inválida.');
   if(!Number.isFinite(gap)||gap<0)throw new Error('Distância entre artes inválida.');
   if(!Number.isFinite(cell)||cell<.5||!Number.isFinite(maxLength)||maxLength<=0)throw new Error('Limites de cálculo inválidos.');
   if(!['normal','maximum'].includes(mode))throw new Error('Modo de encaixe inválido.');
   if(typeof freeRotation!=='boolean'||![15,30].includes(Number(angleStep)))throw new Error('Use rotação livre ligada ou desligada e busca em passos de 15° ou 30°.');
-  return {width,gap,cell,maxLength,mode,freeRotation,angleStep:Number(angleStep)};
+  const ovenBand=Number(ovenBandMm||0);if(!Number.isFinite(ovenBand)||ovenBand<0)throw new Error('Linha do forno inválida.');
+  return {width,gap,cell,maxLength,mode,freeRotation,angleStep:Number(angleStep),oven:ovenRule(ovenBand,gap)};
 }
 
 function expandItems(items){
@@ -195,6 +206,9 @@ export function validateFilmPlacements(items,placements,options={}){
   });
   const bw=Math.ceil(settings.width/settings.cell),bh=Math.max(1,...resolved.map(result=>result.y+result.option.raw.h)),gapCells=Math.ceil(settings.gap/settings.cell);
   if(bw*bh>64e6)throw new Error('O filme excede o limite seguro de cálculo. Reduza o comprimento ou aumente a célula de cálculo.');
+  // Linha do forno: tem que existir um jeito de cortar em pedaços de até `ovenBandMm` sem passar em cima de arte
+  // (as linhas podem ficar em qualquer altura; arte travada ou maior que o pedaço não conta).
+  if(settings.oven&&!ovenFeasible(settings.oven,resolved.filter(result=>!result.placement.locked&&!ovenExempt(settings.oven,result.item)).map(result=>result.placement)))throw new Error('Há arte em cima da linha do forno. Use Atualizar filme.');
   const board=new Uint8Array(bw*bh);let occupiedCells=0;
   for(const result of resolved){
     if(collides(board,bw,bh,result.option.raw,result.x,result.y))throw new Error(`A arte ${result.item.label||result.item.id} encosta em outra impressão ou invade a distância mínima entre artes.`);
@@ -207,7 +221,7 @@ export function validateFilmPlacements(items,placements,options={}){
 
 function calculateLayout(expanded,settings){
   settings={...settings,maskBudget:{cells:0}};
-  const {width,gap,cell,maxLength,maximum,lockedPlacements=[],freeRotation=false,angleStep=30,searchFreeRotation=freeRotation}=settings;
+  const {width,gap,cell,maxLength,maximum,lockedPlacements=[],freeRotation=false,angleStep=30,searchFreeRotation=freeRotation,oven=null}=settings;
   const bw=Math.ceil(width/cell),bh=Math.ceil(maxLength/cell),gapCells=Math.ceil(gap/cell);
   if(bw*bh>64e6)throw new Error('O filme excede o limite seguro de cálculo. Reduza o comprimento ou aumente a célula de cálculo.');
   const useBoard=maximum||lockedPlacements.length>0,board=useBoard?new Uint8Array(bw*bh):null,placements=[],prepared=new Map(),searchPrepared=new Map(),lockedKeys=new Set();
@@ -235,16 +249,19 @@ function calculateLayout(expanded,settings){
     if(!options){options=itemOptions(item,{...settings,freeRotation:searchFreeRotation});searchPrepared.set(item.originalIndex,options);}
     if(!options.length)throw new Error(`O item ${item.label||item.id} não cabe no filme nas rotações permitidas.`);
     let found=null;
-    const searchAngles=searchFreeRotation&&item.rotationPolicy==='free';
+    const searchAngles=searchFreeRotation&&item.rotationPolicy==='free',blocked=(yMm,heightMm)=>ovenBlocked(oven,item,yMm,heightMm);
     if(useBoard){
-      const lastY=Math.min(bh-1,usedRows+gapCells);let itemChecks=0;
+      // Com a linha do forno a próxima faixa pode começar abaixo do que já está ocupado.
+      const lastY=Math.min(bh-1,usedRows+gapCells+(oven?Math.ceil((oven.band+oven.half)/cell)+gapCells:0));let itemChecks=0;
       for(const option of options)topRow(option.raw);
       outer:for(let y=0;y<=lastY;y++){
         if(options.every(option=>y+option.raw.topRow>=bh||rowFree[y+option.raw.topRow]<option.raw.topCount))continue;
+        if(oven&&options.every(option=>blocked(y*cell,option.heightMm)))continue;
         for(let x=0;x<bw;x++)for(const option of options){
           if(rowFree[y+option.raw.topRow]<option.raw.topCount)continue;
           if(++itemChecks>2e6||++positionChecks>4e7)throw new Error('A busca de contornos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(x*cell+option.widthMm>width+EPSILON||y*cell+option.heightMm>maxLength+EPSILON)continue;
+          if(oven&&blocked(y*cell,option.heightMm))continue;
           if(searchAngles&&++angleChecks>4e7)throw new Error('A busca de ângulos atingiu o limite de segurança; mantido o melhor encaixe já validado.');
           if(!collides(board,bw,bh,option.raw,x,y)){
             const candidate={x,y,...option};
@@ -259,10 +276,12 @@ function calculateLayout(expanded,settings){
         if(found)break;
       }
     }else{
-      const fitting=()=>options.filter(candidate=>shelfX*cell+candidate.widthMm<=width+EPSILON).sort((a,b)=>searchAngles?(Math.max(shelfH,a.raw.h)-Math.max(shelfH,b.raw.h)||a.raw.w-b.raw.w):0);
+      const fitting=()=>options.filter(candidate=>shelfX*cell+candidate.widthMm<=width+EPSILON&&!(oven&&!ovenExempt(oven,item)&&candidate.heightMm>oven.band-2*oven.half+EPSILON)).sort((a,b)=>searchAngles?(Math.max(shelfH,a.raw.h)-Math.max(shelfH,b.raw.h)||a.raw.w-b.raw.w):0);
       let option=fitting()[0];
       if(!option){shelfY+=shelfH+gapCells;shelfX=0;shelfH=0;option=fitting()[0];}
-      if(shelfY*cell+option.heightMm<=maxLength+EPSILON){found={x:shelfX,y:shelfY,...option};shelfX+=option.raw.w+gapCells;shelfH=Math.max(shelfH,option.raw.h);}
+      // Linha do forno: peça que cruzaria a linha abre outra fileira; se ainda cruza, começa na faixa seguinte.
+      if(option&&blocked(shelfY*cell,option.heightMm)){if(shelfX>0){shelfY+=shelfH+gapCells;shelfX=0;shelfH=0;option=fitting()[0];}if(option&&blocked(shelfY*cell,option.heightMm))shelfY=Math.ceil(ovenNextY(oven,shelfY*cell,option.heightMm)/cell-EPSILON);}
+      if(option&&shelfY*cell+option.heightMm<=maxLength+EPSILON){found={x:shelfX,y:shelfY,...option};shelfX+=option.raw.w+gapCells;shelfH=Math.max(shelfH,option.raw.h);}
     }
     if(!found)throw new Error(`O item ${item.label||item.id} não cabe no comprimento seguro do filme.`);
     if(useBoard){stampWithGap(board,bw,bh,found.raw,found.x,found.y,gapCells);refreshRows(found.y-gapCells,found.y+found.raw.h+gapCells+1);}
@@ -326,7 +345,7 @@ function rectangleCandidates(expanded,settings,locked){
   const better=(score,best)=>{if(!best)return true;for(let index=0;index<score.length;index++){if(score[index]!==best[index])return score[index]<best[index];}return false;};
   search:for(const {order,strategy,orientation} of [...orientationChoices.keys()].flatMap(orientation=>uniqueOrders.flatMap(order=>['bottom','short-side'].map(strategy=>({order,strategy,orientation}))))){
     const choicesFor=orientationChoices.get(orientation);
-    let free=[{x:0,y:0,w:bw+clearance,h:bh+clearance}],placements=locked.map(entry=>({...entry.placement})),lengthMm=placements.reduce((length,p)=>Math.max(length,p.yMm+p.heightMm),0);
+    let free=settings.oven?ovenBandRects(expanded,settings,bw,bh,clearance):[{x:0,y:0,w:bw+clearance,h:bh+clearance}],placements=locked.map(entry=>({...entry.placement})),lengthMm=placements.reduce((length,p)=>Math.max(length,p.yMm+p.heightMm),0);
     try{
       for(const entry of locked)free=reserve(free,{x:entry.x,y:entry.y,w:entry.option.raw.w+clearance,h:entry.option.raw.h+clearance});
       for(const item of order){
@@ -348,6 +367,17 @@ function rectangleCandidates(expanded,settings,locked){
     }catch(error){if(error.message==='rectangle-search-budget'){limited=true;break search;}throw error;}
   }
   return {results,limited};
+}
+
+// Linha do forno no MaxRects: cada faixa entre duas linhas é um espaço livre separado, então nenhuma arte cruza a
+// linha e as menores completam o fim de cada faixa. Só as faixas que o filme pode precisar (pela área das artes).
+function ovenBandRects(expanded,{oven,cell,gap,width,maxLength},bw,bh,clearance){
+  const area=expanded.reduce((sum,item)=>sum+(item.widthMm+gap)*(item.heightMm+gap),0),need=Math.min(maxLength,area/width*2+oven.band*2),rects=[];
+  for(let k=0;k*oven.band<need;k++){
+    const y=Math.ceil((k?k*oven.band+oven.half:0)/cell-EPSILON),end=Math.min(bh,Math.floor(((k+1)*oven.band-oven.half)/cell+EPSILON));
+    if(end>y)rects.push({x:0,y,w:bw+clearance,h:end-y+clearance});
+  }
+  return rects;
 }
 
 function resolveLockedPlacements(expanded,settings){
@@ -434,6 +464,9 @@ export function snapFilmPlacement(items,placements,moving,options={}){
   if(bw*bh>64e6)throw new Error('Filme grande demais para ajuste interativo.');
   const board=new Uint8Array(bw*bh),seen=new Set([key]);
   for(let i=0;i<placements.length;i++){if(i===index)continue;const other=resolvePlacement(placements[i],lookup,prepared,{...settings,maximum});if(seen.has(other.key))throw new Error('Há cópias duplicadas no filme.');seen.add(other.key);if(other.placement.yMm+other.placement.heightMm>length+EPSILON||collides(board,bw,bh,other.option.raw,other.x,other.y))throw new Error('Outra arte está fora do filme ou sobreposta. Recalcule o encaixe.');stampWithGap(board,bw,bh,other.option.raw,other.x,other.y,gapCells)}
+  // Arrastar com a linha do forno ligada: a arte não pode parar em cima das linhas que estão na tela.
+  const ovenCuts=settings.oven&&Array.isArray(options.ovenCutsMm)&&!ovenExempt(settings.oven,resolved.item)?options.ovenCutsMm.map(Number).filter(Number.isFinite):[];
+  const ovenOnCut=(yMm,heightMm)=>ovenCuts.some(line=>yMm<line+settings.oven.half-1e-6&&yMm+heightMm>line-settings.oven.half+1e-6);
   const maxX=Math.floor((settings.width-resolved.placement.widthMm+EPSILON)/settings.cell),maxY=Math.floor((length-resolved.placement.heightMm+EPSILON)/settings.cell),wantedX=clamp(Math.round(Number(proposal.xMm)/settings.cell),0,maxX),wantedY=clamp(Math.round(Number(proposal.yMm)/settings.cell),0,maxY);
   if(maxX<0||maxY<0||!Number.isFinite(wantedX+wantedY))throw new Error('Esta arte não cabe no filme atual.');
   let best=null,distance=Infinity,checked=0;
@@ -444,7 +477,7 @@ export function snapFilmPlacement(items,placements,moving,options={}){
     for(let dx=0;dx<=maxX&&delta*delta+dx*dx<=distance;dx++)for(const x of dx?[wantedX-dx,wantedX+dx]:[wantedX]){
       if(x<0||x>maxX)continue;const d=delta*delta+dx*dx;if(d>=distance)continue;
       if(++checked>2e6)throw new Error('Ajuste muito extenso. Reotimize o filme antes de mover esta arte.');
-      if(!collides(board,bw,bh,resolved.option.raw,x,y)){best={x,y};distance=d}
+      if(!collides(board,bw,bh,resolved.option.raw,x,y)&&!ovenOnCut(y*settings.cell,resolved.placement.heightMm)){best={x,y};distance=d}
     }
   }
   if(!best)throw new Error('Não há espaço livre próximo dentro do filme. Reotimize as artes.');

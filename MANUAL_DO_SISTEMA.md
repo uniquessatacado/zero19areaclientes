@@ -172,6 +172,7 @@ Armadilha do terminal (zsh): palavra que começa com `=` vira nome de comando (`
 **019 Personalizações**
 
 - `npm run build` roda as conferências de cada camada (para se algo esperado sumiu).
+- No Mac, rode o build com `caffeinate -i` na frente (se o Mac dormir no meio, os testes estouram o tempo limite e o build falha com ETIMEDOUT sem erro no código).
 - No Mac, rode o build com `TMPDIR=$PWD/tmp/buildtmp npm run build` (crie a pasta antes; `tmp/` não vai para o Git nem para o site): o build copia tudo para a pasta temporária do sistema (`/private/var/...` no Mac) e o `test-film-job-list.mjs` falha porque procura a palavra "private" na mensagem de erro. Na Vercel (Linux) não acontece.
 - Filme na tela (Chrome headless, PC e celular, fotos numa pasta temporária): `scripts/film-delete-browser-qa.mjs` (Delete), `scripts/film-picker-browser-qa.mjs` (Arte de empresa), `scripts/film-oven-browser-qa.mjs` (linha do forno). Rode depois do build (usam o `dist/`).
 - Testes em `scripts/test-*.mjs` e `scripts/verify-*.mjs`; tela: `scripts/app-ui-snapshot.mjs` (app inteiro com banco simulado) e `scripts/ui-snapshot.mjs`.
@@ -308,6 +309,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 29/10/2026 — 019 2.17.86: linha do forno no encaixe (`ovenBandMm` em nesting-core.js e nesting-batch-core.js: faixas fixas no encaixe, validador aceita linhas em qualquer altura via `ovenFeasible`; `applyOvenCuts` em film-oven-cuts.js sobe as faixas e acha as linhas). Build no Mac com `caffeinate -i` (o Mac dormindo faz os testes estourarem o tempo).
 - 28/10/2026 — 019 2.17.85: linha do forno (`film-oven-cuts.js`: `applyOvenCuts` depois do encaixe, `usedFilmWidth`; camada `scripts/build-film-oven-v85.mjs`), quantidade guardada por arte no seletor (`typedQuantities` em film-picker.js), subir arte com pasta pronta/pedido/voltar ao filme (`defaultReadyFolderId`, `pendingUploadCarry` no app.js). Testes de tela `scripts/film-oven-browser-qa.mjs` e `scripts/film-picker-browser-qa.mjs`.
 - 28/10/2026 — 019 2.17.84: Delete no filme sem remontar (`applyRemoval` no film-preview.js) e botão Ver filme; teste `scripts/film-delete-browser-qa.mjs`. Etiquetas de roupa no rolo de 107 mm (`edgeMm` em src/lib/zero19GarmentTags.ts).
 - 28/10/2026 — Cupom de produção ZERO19: `buildProductionCouponHtml` (src/lib/productionReceiptPieces.ts) é o mesmo na via do PDV (PaymentFlow) e na 2ª via (src/utils/printPdvOrderCopies.ts).

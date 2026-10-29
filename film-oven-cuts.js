@@ -1,40 +1,68 @@
 // Linha do forno (28/10, dono: "deixe uma linha invisível no filme de no máximo 38 cm para ficar fácil de cortar o
-// filme para pôr no forno de 40 cm… sem atravessar arte, para cortar fácil e não ter de manobrar as artes e errar
-// no corte"). Depois do encaixe, a cada faixa de até `bandMm` acha uma linha livre (nenhuma arte cruzando). Se a
-// arte cruza o limite, ela e tudo que está abaixo descem juntos (nada se sobrepõe; as medidas não mudam).
-// A linha só aparece na tela: o arquivo de impressão não muda.
+// filme para pôr no forno de 40 cm… sem atravessar arte"; depois: "a linha está fazendo sobrar muito espaço no filme…
+// não pode perder espaço"). Quem respeita a linha é o ENCAIXE (ovenBandMm no nesting-core.js e no
+// nesting-batch-core.js): cada faixa de `bandMm` é preenchida sem arte em cima da linha. Depois, aqui, cada faixa sobe
+// até encostar na de cima (só a distância normal entre artes), então a sobra do fim de cada faixa não vira filme
+// perdido: os pedaços ficam com ATÉ `bandMm`. As linhas são achadas onde não há arte e só aparecem na tela.
 const EPS = .01;
 export const crossesLine = (placement, y) => placement.yMm < y - EPS && placement.yMm + placement.heightMm > y + EPS;
 export const lineIsFree = (placements, y) => !placements.some(placement => crossesLine(placement, y));
+const halfGap = gapMm => Math.max(Number(gapMm) || 0, 2) / 2;
 
-export function applyOvenCuts(layout, {bandMm = 380, gapMm} = {}) {
-  if (!layout?.placements?.length || !(bandMm > 0)) return layout;
-  const gap = Math.max(0, Number(gapMm ?? layout.gapMm ?? 3) || 0), half = Math.min(gap / 2, 2);
-  let placements = layout.placements.map(placement => ({...placement})), start = 0, shifted = 0, guard = 0;
-  const cuts = [], tooTall = [];
-  const bottom = () => Math.max(...placements.map(p => p.yMm + p.heightMm));
-  while (bottom() - start > bandMm + EPS && guard++ < 1000) {
-    const limit = start + bandMm;
-    const candidates = [limit, ...placements.map(p => p.yMm + p.heightMm + half).filter(y => y > start + 1 && y <= limit)];
-    const free = candidates.filter(y => lineIsFree(placements, y)).sort((a, b) => b - a)[0];
-    const crossing = placements.filter(p => crossesLine(p, limit));
-    const tall = crossing.filter(p => p.heightMm > bandMm - gap);
-    if (tall.length) {
-      // Arte maior que a faixa do forno: não dá para não cortar; a linha vai logo depois dela.
-      tooTall.push(...tall.map(p => p.id));
-      const after = Math.max(...crossing.map(p => p.yMm + p.heightMm)) + half;
-      const next = [after, ...placements.map(p => p.yMm + p.heightMm + half).filter(y => y >= after)].sort((a, b) => a - b).find(y => lineIsFree(placements, y)) ?? after;
-      cuts.push(Math.round(next * 100) / 100); start = next; continue;
-    }
-    const delta = crossing.length ? limit + half - Math.min(...crossing.map(p => p.yMm)) : 0;
-    // Linha livre até 3 cm antes do limite: usa ela e não mexe em nenhuma arte.
-    if (free !== undefined && limit - free <= Math.max(delta, 30) + EPS) { cuts.push(Math.round(free * 100) / 100); start = free; continue; }
-    placements = placements.map(p => p.yMm + p.heightMm > limit + EPS ? {...p, yMm: Math.round((p.yMm + delta) * 1000) / 1000} : p);
-    shifted += delta; cuts.push(Math.round(limit * 100) / 100); start = limit;
+// Linhas de corte com pedaços de até `band`: a cada passo, a linha livre mais longe possível (com `half` de folga
+// de cada lado). `blocked` = trechos sem linha livre (arte maior que o pedaço ou arte arrastada para cima da linha).
+export function ovenCutLines(placements, {band, half}) {
+  const spans = placements.map(p => [p.yMm, p.yMm + p.heightMm]).sort((a, b) => a[0] - b[0]);
+  if (!spans.length) return {cuts: [], blocked: 0};
+  const reach = []; let deepest = -Infinity;
+  for (const [, bottom] of spans) reach.push(deepest = Math.max(deepest, bottom));
+  const free = y => { let lo = 0, hi = spans.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (spans[mid][0] < y + half - 1e-6) lo = mid + 1; else hi = mid; } return lo === 0 || reach[lo - 1] <= y - half + 1e-6; };
+  // Um trecho livre vai de (fim de uma arte + folga) até (começo da próxima − folga): a linha mais longe possível é o
+  // limite do pedaço ou o fim de um trecho livre.
+  const length = deepest, lines = [...new Set(spans.flatMap(([top, bottom]) => [top - half, bottom + half]))].sort((a, b) => a - b), cuts = [];
+  let start = 0, blocked = 0;
+  while (length - start > band + 1e-6) {
+    let next = free(start + band) ? start + band : -1;
+    if (next < 0) for (const y of lines) { if (y <= start + 1e-6) continue; if (y > start + band + 1e-6) break; if (free(y)) next = y; }
+    if (next < 0) { next = start + band; blocked++; }
+    cuts.push(Math.round(next * 100) / 100); start = next;
   }
-  const lengthMm = Math.max(Number(layout.lengthMm || 0) + shifted, bottom());
-  const efficiency = Number.isFinite(layout.efficiency) && lengthMm > 0 ? layout.efficiency * Number(layout.lengthMm || lengthMm) / lengthMm : layout.efficiency;
-  return {...layout, placements, lengthMm, efficiency, ovenBandMm: bandMm, ovenCutsMm: cuts, ovenTooTall: [...new Set(tooTall)]};
+  return {cuts, blocked};
+}
+export const ovenFeasible = (rule, placements) => !rule || ovenCutLines(placements, rule).blocked === 0;
+
+// Sobe cada faixa do encaixe até a de cima (sem mudar nada dentro da faixa, nem a posição lateral). Só quando o
+// encaixe veio por faixas fixas: nenhuma arte cruza as linhas a cada `band` e nenhuma é maior que a faixa.
+function compactBands(layout, {band, half, cell}) {
+  const placements = layout.placements, clear = 2 * half;
+  if (placements.some(p => p.locked || p.heightMm > band - clear + 1e-6)) return null;
+  const index = p => Math.floor((p.yMm + 1e-6) / band);
+  if (placements.some(p => Math.floor((p.yMm + p.heightMm - 1e-6) / band) !== index(p))) return null;
+  const groups = new Map();
+  for (const p of placements) { const k = index(p); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(p); }
+  const moved = new Map(); let bottom = null;
+  for (const k of [...groups.keys()].sort((a, b) => a - b)) {
+    const group = groups.get(k), top = Math.min(...group.map(p => p.yMm));
+    const target = bottom == null ? top : Math.max(0, Math.ceil((bottom + clear - 1e-6) / cell) * cell);
+    const delta = Math.min(0, target - top);
+    for (const p of group) moved.set(p, delta ? {...p, yMm: Math.round((p.yMm + delta) * 1000) / 1000} : p);
+    bottom = Math.max(...group.map(p => p.yMm + delta + p.heightMm));
+  }
+  const next = placements.map(p => moved.get(p));
+  const lengthMm = Math.max(...next.map(p => p.yMm + p.heightMm));
+  const efficiency = Number.isFinite(layout.efficiency) && lengthMm > 0 ? Math.min(100, layout.efficiency * layout.lengthMm / lengthMm) : layout.efficiency;
+  return {...layout, placements: next, lengthMm, efficiency, waste: Number.isFinite(efficiency) ? 100 - efficiency : layout.waste};
+}
+
+export function applyOvenCuts(layout, {bandMm = 380, gapMm, compact = true} = {}) {
+  if (!layout?.placements?.length || !(bandMm > 0)) return layout;
+  const half = halfGap(gapMm ?? layout.gapMm ?? 3), cell = Number(layout.cellMm) || 2;
+  const packed = (compact && compactBands(layout, {band: bandMm, half, cell})) || layout;
+  const {cuts} = ovenCutLines(packed.placements, {band: bandMm, half});
+  const crossing = packed.placements.filter(p => cuts.some(y => crossesLine(p, y)));
+  // Arte maior que o pedaço não tem como não ser cortada (avisada); qualquer outra em cima da linha pede Atualizar filme.
+  const tooTall = crossing.filter(p => p.heightMm > bandMm - 2 * half + EPS);
+  return {...packed, ovenBandMm: bandMm, ovenCutsMm: cuts, ovenTooTall: [...new Set(tooTall.map(p => p.id))], ovenCrossed: crossing.length - tooTall.length};
 }
 
 // Largura que as artes ocupam no filme (cm e pixels a 300 DPI).
