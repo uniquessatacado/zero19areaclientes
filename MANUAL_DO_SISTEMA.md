@@ -311,6 +311,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 01/11/2026 — Regras de frete: cada módulo salva só as suas partes (`MODULES` em `Zero19FreightRulesPage.tsx`); `draft` guarda o que não foi salvo. Frete do PDV calcula sem cliente por `quick-freight` (nada salvo) e salva ao entrar na venda (`PdvFreightQuoteDialog.tsx`). Na tela, um cálculo sem cliente é a cotação sem `id`.
 - 01/11/2026 — Kit 1 de cada e oferta da outra estampa no carrinho, sem SQL. Pedido vindo do endereço (`?kit=`) precisa ser consumido uma vez só, senão fechar a janela a abre de novo.
 - 01/11/2026 — Camiseta Tá ruim né? (só frente) e promoção misturando estampas. Mudança no banco que o site antigo não entende: criar uma leitura nova (`political_kits_site`) e deixar a antiga filtrada, para o rebuild no Portainer não precisar de ordem combinada. Rótulo e foto do pedido podem ser corrigidos na trava `checkout_kit_items` sem publicar a função.
 - 31/10/2026 — Site: botão Comprar pelo WhatsApp em toda página e etapa de compra. Estúdio e janelas também abrem no PDV e no painel: botão de cliente precisa da trava de caminho (`onPublicSite`).
