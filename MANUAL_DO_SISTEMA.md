@@ -311,6 +311,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 02/11/2026 — Publicar funções: `zero19-freight` e `calculate-shipping` têm `verify_jwt` false, então vão com `--no-verify-jwt` (a `zero19-freight` recebe o retorno do Melhor Envio; sem a opção, a conexão quebra). Conferir com `supabase functions list -o json`. `zero19-functions-live-check.mjs` só olha 4 funções por padrão: passe as outras pelo nome. Serviço do Melhor Envio só aparece se for pedido em `services`; Azul Cargo só cota. Validar o carrinho sem criar nada: pedido sem `products` é recusado e lista o que falta.
 - 01/11/2026 — Regras de frete: cada módulo salva só as suas partes (`MODULES` em `Zero19FreightRulesPage.tsx`); `draft` guarda o que não foi salvo. Frete do PDV calcula sem cliente por `quick-freight` (nada salvo) e salva ao entrar na venda (`PdvFreightQuoteDialog.tsx`). Na tela, um cálculo sem cliente é a cotação sem `id`.
 - 01/11/2026 — Kit 1 de cada e oferta da outra estampa no carrinho, sem SQL. Pedido vindo do endereço (`?kit=`) precisa ser consumido uma vez só, senão fechar a janela a abre de novo.
 - 01/11/2026 — Camiseta Tá ruim né? (só frente) e promoção misturando estampas. Mudança no banco que o site antigo não entende: criar uma leitura nova (`political_kits_site`) e deixar a antiga filtrada, para o rebuild no Portainer não precisar de ordem combinada. Rótulo e foto do pedido podem ser corrigidos na trava `checkout_kit_items` sem publicar a função.
