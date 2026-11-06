@@ -43,6 +43,7 @@ Onde guardar cada coisa:
 |---|---|---|---|---|---|
 | **NovoVenduss** | Painel das lojas, PDV, loja online, Estampa Política, estúdio, TV/totem, página do QR da produção, etiquetas, frete | `uniquessatacado/novovendus` | `/Users/clovispereiradasilva/novo venduss` | React 18 + Vite + TypeScript + Tailwind + shadcn/ui | Servidor próprio (Docker + Traefik). Domínios: venduss.com, www.venduss.com, zero19link.venduss.com, lojazero19.com, www.lojazero19.com |
 | **019 Personalizações** | Artes, fila de produção, filme DTF (PNG/TIFF), prazos e custos da produção | `uniquessatacado/zero19areaclientes` | `/Users/clovispereiradasilva/019personalizacao` | JavaScript puro (módulos ES), HTML/CSS estáticos, build por scripts Node | Vercel: https://019-personalizacoes.vercel.app |
+| **Vetorizador DTF** (protótipo, Etapa 1 de 06/11) | Motor de vetorização com degradês SVG sem faixas + bancada de teste; ainda sem interface | só local (sem remoto) | `/Users/clovispereiradasilva/zero19-vetorizador` | JavaScript (módulos ES), roda no Chrome; testes em Node | não publicado (README do projeto tem o estado) |
 | **Banco e funções** | Dados de tudo (todas as lojas + 019), funções do servidor | migrações nos dois repositórios; funções no NovoVenduss | `supabase/` | Supabase (Postgres 17), projeto `kedggjyerexnzmipaick` (sa-east-1) | Supabase gerenciado |
 
 Identificadores que mais aparecem:
@@ -320,6 +321,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 06/11/2026 — Vetorizador DTF: protótipo local da Etapa 1 (seção 3). Lição: comparar só contra a entrada engana em print JPEG (o motor que limpa os blocos "erra" contra o JPEG); a bancada mede também contra a arte limpa quando ela existe.
 - 06/11/2026 — 019 2.17.91: subir arte por posição do pedido, pasta automática, sem chave de pronta, Pronto/Pronto e entregue nos Próximos pedidos (seção 8). Lição: o teste de tela do envio precisa de um pedido com várias camisas por posição (o erro do 50704 não aparecia com uma camisa só).
 - 05/11/2026 — Data de entrega com senha (loja), fila de produção no banco (019 2.17.90 e "Próximo urgente" do QR), Ver próximos pedidos, Jogar no filme e QR de subir arte sem mockup (seções 5, 7 e 8). Lições: o `promised_at` do site é a data do cliente, não o dia de postar; `offset 0` nas camadas do SQL da fila (0,5 s → 0,03 s); a ordem nova da Arte de empresa fez o teste `film-app-browser-qa` acusar as miniaturas das artes privadas baixando o PNG inteiro (as do teste eram "novas"; na loja as privadas são antigas) — o teste usa datas reais agora e a melhoria ficou como pendência.
 - 05/11/2026 — Avaliação no Google em toda venda da ZERO19 (seção 8). Testes: `node scripts/zero19-google-review-unit.mjs` e o `zero19-production-coupon-browser-qa.mjs`, que agora também fotografa o cupom do cliente com o quadro e a faixa do envio e reprova texto que vaza do quadro (o "PERSONALIZADA" grande passava da borda).
