@@ -26,7 +26,7 @@ function png(w,h,[r,g,b]){
   const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(w,0);ihdr.writeUInt32BE(h,4);ihdr[8]=8;ihdr[9]=6;
   return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',zlib.deflateSync(raw)),chunk('IEND',Buffer.alloc(0))]);
 }
-const artPng=png(1200,960,[37,99,235]),uploadFile=path.join(out,'arte-do-cliente.png');await fs.writeFile(uploadFile,png(1500,1200,[225,29,72]));
+const artPng=png(1200,960,[37,99,235]),uploadFile=path.join(out,'arte-do-cliente.png'),uploadBack=path.join(out,'arte-costas.png');await fs.writeFile(uploadFile,png(1500,1200,[225,29,72]));await fs.writeFile(uploadBack,png(1200,1500,[22,163,74]));
 
 const OWNER='5b0f6a52-6a0e-4a8e-9d3c-1f2a3b4c5d6e',USER=OWNER;
 const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
@@ -51,6 +51,12 @@ for(const o of orders){
     data.z19p_asset_print_profiles.push({id:uuid(700+o.n),owner_id:OWNER,asset_id:uuid(600+o.n),ready_for_print:true,default_width_cm:25,default_height_cm:20,aspect_ratio:1.25,halftone:false,allow_internal_nesting:true,rotation_policy:'free'});}
   data.z19p_zero19_work_items.push({id:wi,owner_id:OWNER,workspace_id:ws,project_id:pr,tenant_id:'t',order_id:ord,personalization_sale_id:sale,kind:o.stage==='awaiting_font'?'NAME_NUMBER':'ART',stage:o.stage,quantity:2,text_value:'Estampa frente',garment_name:'Camiseta',garment_size:'M',requires_art:true,asset_id:o.asset?uuid(600+o.n):null,promised_at:iso(o.promised),metadata:{details:[{production:{width_cm:25,height_cm:20,position_label:'Frente · meio do peito'}}]},created_at:iso(o.created)});
 }
+// 2.17.91: pedido como o 50704 — 2 posições (peito 9 cm e costas 30 cm), 2 camisas diferentes em cada = 4 aplicações.
+const multi={n:6,number:50006,client:'Fabio Duas Posicoes',origin:'PDV',pickup:true,created:now-day,promised:now+2*day};
+{const ws=uuid(106),pr=uuid(206),ord=uuid(306);multi.ws=ws;multi.project=pr;multi.order=ord;orders.push({...multi,stage:'awaiting_art'});
+  data.z19p_workspaces.push({id:ws,owner_id:OWNER,client_name:multi.client,company_name:multi.client,phone:'19999990006',workspace_type:'client',created_at:iso(multi.created),updated_at:iso(multi.created)});
+  data.z19p_projects.push({id:pr,owner_id:OWNER,workspace_id:ws,title:'Pedido 50006',sequence_no:1,official_order_ref:ord,official_order_source:'zero19_pdv',official_order_status:'open',official_order_payload:{display_id:50006},promised_at:iso(multi.promised),source_order_created_at:iso(multi.created),created_at:iso(multi.created),updated_at:iso(multi.created)});
+  [['Peito esquerdo',9,3,'Dry fit P'],['Peito esquerdo',9,4,'Poliamida G'],['Costas · em cima',30,3,'Dry fit P'],['Costas · em cima',30,4,'Poliamida G']].forEach(([label,width,qty,garment],k)=>data.z19p_zero19_work_items.push({id:uuid(560+k),owner_id:OWNER,workspace_id:ws,project_id:pr,tenant_id:'t',order_id:ord,personalization_sale_id:uuid(460+k),kind:'NEW_ART',stage:'awaiting_art',quantity:qty,text_value:label,garment_name:garment,requires_art:true,asset_id:null,promised_at:iso(multi.promised),metadata:{details:[{production:{width_cm:width,height_cm:width,position_label:label}}]},created_at:iso(multi.created)}));}
 // Arte de empresa: duas artes da biblioteca, a mais nova tem de vir primeiro.
 const LIB=uuid(150);data.z19p_workspaces.push({id:LIB,owner_id:OWNER,company_name:'Biblioteca ZERO19',workspace_type:'library',created_at:iso(now),updated_at:iso(now)});
 for(const [n,name,age] of [[1,'Zebra antiga',30],[2,'Arte nova de hoje',0.1]]){data.z19p_assets.push({id:uuid(800+n),owner_id:OWNER,workspace_id:LIB,project_id:null,folder_id:null,name,asset_type:'arte',processed_path:`lib/a${n}/processed.png`,original_path:`lib/a${n}/original.png`,width:1200,height:960,metadata:{},created_at:iso(now-age*day)});data.z19p_asset_print_profiles.push({id:uuid(850+n),owner_id:OWNER,asset_id:uuid(800+n),ready_for_print:true,default_width_cm:10,default_height_cm:8,aspect_ratio:1.25,halftone:false,allow_internal_nesting:true,rotation_policy:'free'});}
@@ -97,7 +103,9 @@ async function rpc(name,args={}){await new Promise(r=>setTimeout(r,25));window.q
  if(name==='zero19_production_order_queue')return {data:queue,error:null};
  if(name==='z19p_zero19_order_picker'){const query=String(args.p_query||'');const rows=orders.filter(o=>!query||String(o.number).includes(query)||o.client.toLowerCase().includes(query.toLowerCase())).map(o=>({order_id:o.order,display_id:o.number,customer_name:o.client,whatsapp:'(19) 99999-000'+o.n,personalization_count:1,integrated_stage:o.stage,created_at:new Date(o.created).toISOString()}));return {data:{rows,total:rows.length},error:null};}
  if(name==='z19p_sync_zero19_order'){const o=orders.find(x=>x.order===args.p_order_id);return {data:o?{project_id:o.project,workspace_id:o.ws}:null,error:null};}
- if(name==='z19p_zero19_mark_art_ready'){const item=data.z19p_zero19_work_items.find(w=>w.project_id===args.p_project_id&&w.personalization_sale_id===args.p_personalization_sale_id);if(!item)return {data:null,error:{message:'Item não encontrado'}};item.asset_id=args.p_asset_id;item.stage='ready_production';window.qa.marked=args;return {data:{stage:'ready_production'},error:null};}
+ if(name==='z19p_zero19_force_stage'){window.qa.forced=(window.qa.forced||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if(w.project_id===args.p_project_id)w.stage=args.p_stage;return {data:{stage:args.p_stage},error:null};}
+ if(name==='z19p_zero19_mark_delivered'){window.qa.delivered=(window.qa.delivered||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if(w.project_id===args.p_project_id)w.stage='delivered';return {data:{stage:'delivered'},error:null};}
+ if(name==='z19p_zero19_mark_art_ready'){window.qa.markedAll=(window.qa.markedAll||[]).concat([args]);const item=data.z19p_zero19_work_items.find(w=>w.project_id===args.p_project_id&&w.personalization_sale_id===args.p_personalization_sale_id);if(!item)return {data:null,error:{message:'Item não encontrado'}};item.asset_id=args.p_asset_id;item.stage='ready_production';window.qa.marked=args;return {data:{stage:'ready_production'},error:null};}
  if(name==='z19p_pending_film_items')return {data:[],error:null};
  return {data:/flow|snapshot/.test(name)?{}:name.includes('progress')?{}:null,error:null};}
 export function createClient(){return {
@@ -150,7 +158,7 @@ try{
   const cards=await evaluate(`[...document.querySelectorAll('[data-production-open-grid] .z19-zero19-card')].map(c=>({name:c.querySelector('h3')?.textContent,pos:c.querySelector('.z19q-pos')?.textContent||'',origin:c.querySelector('.z19q-origin')?.textContent||'',due:c.querySelector('.z19q-due')?.textContent||'',missing:c.querySelector('.z19q-missing')?.textContent||''}))`);
   report.push('cartões: '+cards.map(c=>c.pos+' '+c.name+' ['+c.origin+']').join(' | '));
   assert.deepEqual(cards.slice(0,4).map(c=>c.name),['Ana PDV','Bruno Site','Carla Site','Davi PDV'],'ordem da fila do banco');
-  assert.equal(cards[4]?.name,'Eva Pronta','pronto para retirada depois da fila');
+  assert.equal(cards.at(-1)?.name,'Eva Pronta','pronto para retirada depois da fila');assert.equal(cards[4]?.name,'Fabio Duas Posicoes','sem posição na fila: depois dos numerados');
   assert.match(cards[0].pos,/Nº 1/);assert.equal(cards[0].origin,'PDV · LOJA');assert.equal(cards[1].origin,'SITE');
   assert.match(cards[0].due,/Atrasado/i,'retirada vencida aparece atrasada');assert.match(cards[1].due,/Enviar até.*Hoje.*18h.*SEDEX.*cliente espera/i,'envio: enviar até + frete + cliente espera');
   assert.match(cards[2].due,/Atrasado · enviar já/i);assert.match(cards[0].missing,/Falta subir arte/);assert.match(cards[1].missing,/falta jogar no filme/);assert.match(cards[2].missing,/Falta escolher fonte/);
@@ -196,14 +204,15 @@ try{
   await send('Page.navigate',{url:origin+'/index.html#/zero19-fila?pedido=50001'});
   await wait('document.querySelector(".upload-modal #fileInput")','janela de subir arte aberta direto no pedido',40000);
   const linkText=await evaluate(`document.querySelector('.upload-order-link')?.textContent||''`);
-  assert.match(linkText,/sem posicionar no mockup/,'aviso do envio sem mockup');
+  await wait(`/Vinculada ao pedido #50001/.test(document.querySelector('.upload-order-link')?.textContent||'')`,'posições do pedido carregadas',20000);
+  assert.match(await evaluate(`document.querySelector('.upload-order-link').textContent`),/sem mockup/,'aviso do envio sem mockup');
   const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector:'.upload-modal #fileInput'});
   await send('DOM.setFileInputFiles',{nodeId,files:[uploadFile]});
   await wait('document.querySelector("#uploadList input[data-k=name]")','arquivo na lista',20000);
   await delay(600);
-  const row=await evaluate(`(()=>{const list=document.querySelector('#uploadList');const inputs=[...list.querySelectorAll('input')].map(i=>({k:i.dataset.k||i.dataset.sizeAxis||i.name||i.type,v:i.value}));const select=[...list.querySelectorAll('select')].find(s=>[...s.options].some(o=>/Artes prontas/.test(o.textContent)));return {inputs,folder:select?select.value:'',folderText:select?select.selectedOptions[0]?.textContent:''}})()`);
+  const row=await evaluate(`(()=>{const list=document.querySelector('#uploadList');const inputs=[...list.querySelectorAll('input')].map(i=>({k:i.dataset.k||i.dataset.sizeAxis||i.name||i.type,v:i.value}));const folder=list.querySelector('.upload-folder-auto button');return {inputs,folder:folder?'auto':'',folderText:folder?.textContent||'',position:list.querySelector('.upload-position button[aria-pressed=true]')?.textContent||'',ready:!!list.querySelector('[data-ready]')}})()`);
   report.push('linha do envio: '+JSON.stringify(row));
-  assert(row.inputs.some(i=>i.v==='25'),'largura do pedido (25 cm) já preenchida');assert(row.folder&&/Artes prontas/.test(row.folderText),'pasta Artes prontas escolhida sozinha');
+  assert(row.inputs.some(i=>i.v==='25'),'largura do pedido (25 cm) já preenchida');assert(row.folder&&/Artes prontas/.test(row.folderText),'pasta Artes prontas escolhida sozinha');assert(!row.ready,'sem a chave de pronta para impressão');assert.match(row.position,/Frente · meio do peito/,'uma posição só: escolhida sozinha');assert(row.inputs.some(i=>i.k==='name'&&/Pedido #50001 · Frente/.test(i.v)),'nome automático pela posição');
   await evaluate(`(()=>{const i=document.querySelector('#uploadList input[data-k=name]');i.value='Arte da Ana';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
   await delay(200);await shot('6-subir-arte-qr');
   await wait('!document.querySelector("#processUpload").disabled','botão Processar liberado',10000);
@@ -220,7 +229,68 @@ try{
   await wait(`[...document.querySelectorAll('#filmItems article')].some(a=>/Ana PDV/.test(a.textContent))`,'arte da Ana no filme',40000);
   report.push('Jogar no filme agora: arte da Ana entrou no filme ligada ao pedido');
   await shot('8-filme-com-a-arte');
+
+  // 5) Pedido com 2 posições e 4 camisas (como o 50704): pela página do cliente, vincula sozinho e pergunta onde vai cada arte.
+  await send('Page.navigate',{url:origin+'/index.html#/ambiente/'+multi.ws});
+  await wait('document.querySelector("#uploadBtn")','página do cliente',30000);
+  await evaluate('document.querySelector("#uploadBtn").click()');
+  await wait(`/Vinculada ao pedido #50006/.test(document.querySelector('.upload-order-link')?.textContent||'')`,'pedido vinculado sozinho',20000);
+  const linked=await evaluate(`document.querySelector('.upload-order-link').textContent`);report.push('vínculo: '+linked.replace(/\s+/g,' '));
+  assert.match(linked,/Peito esquerdo \(7 camisas\)/);assert.match(linked,/Costas · em cima \(7 camisas\)/);assert.match(linked,/Não é deste pedido/);
+  {const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector:'.upload-modal #fileInput'});await send('DOM.setFileInputFiles',{nodeId,files:[uploadFile,uploadBack]});}
+  await wait('document.querySelectorAll("#uploadList .upload-position").length===2','pergunta onde vai cada arte',20000);await delay(500);
+  assert(await evaluate('document.querySelector("#processUpload").disabled'),'sem escolher a posição não salva');
+  await shot('9-duas-posicoes-escolher');
+  await evaluate(`document.querySelectorAll('#uploadList .upload-row')[0].querySelector('[data-position][data-key^="Peito"]').click()`);await delay(150);
+  await evaluate(`document.querySelectorAll('#uploadList .upload-row')[1].querySelector('[data-position][data-key^="Costas"]').click()`);await delay(300);
+  const rows2=await evaluate(`[...document.querySelectorAll('#uploadList .upload-row')].map(r=>({name:r.querySelector('input[data-k=name]').value,width:r.querySelector('input[data-size-axis=width]').value}))`);
+  report.push('duas artes: '+JSON.stringify(rows2));
+  assert.deepEqual(rows2.map(r=>r.name),['Pedido #50006 · Peito esquerdo','Pedido #50006 · Costas · em cima']);assert.deepEqual(rows2.map(r=>r.width),['9','30']);
+  await noSideScroll('duas posições');await shot('10-duas-posicoes-escolhidas');
+  await wait('!document.querySelector("#processUpload").disabled','salvar liberado',5000);
+  await evaluate('document.querySelector("#processUpload").click()');
+  await wait(`/#50006/.test(document.querySelector('.z19-upload-done')?.textContent||'')`,'barra das duas artes',60000);
+  const bar2=await evaluate(`document.querySelector('.z19-upload-done').textContent`);report.push('barra: '+bar2.replace(/\s+/g,' '));
+  assert.match(bar2,/Peito esquerdo · 7 camisas · Costas · em cima · 7 camisas/);assert(!/Posicionar no mockup/.test(bar2),'arte de várias camisas: sem mockup');
+  const markedAll=await evaluate(`window.qa.markedAll.filter(a=>a.p_project_id===${JSON.stringify(multi.project)})`);
+  assert.equal(markedAll.length,4,'arte ligada às 4 camisas (2 por posição)');assert.equal(new Set(markedAll.map(a=>a.p_asset_id)).size,2,'uma arte por posição');
+  await shot('11-duas-artes-salvas');
+  await evaluate(`document.querySelector('.z19-upload-done [data-quick-film]').click()`);
+  await wait(`[...document.querySelectorAll('#filmItems article')].filter(a=>/Fabio Duas Posicoes/.test(a.textContent)).length===4`,'as 4 camisas no filme',40000);
+  report.push('Jogar no filme: 4 itens do pedido 50006 no filme');
+
+  // 6) Próximos pedidos: Pronto · não entregue e Pronto e entregue.
+  await evaluate('document.querySelector("#viewNextOrders").click()');
+  await wait('[...document.querySelectorAll(".z19q-next-row")].some(r=>/Davi PDV/.test(r.textContent))','próximos pedidos com Davi',20000);
+  const clickRow=(name,attr)=>evaluate(`(()=>{const r=[...document.querySelectorAll('.z19q-next-row')].find(r=>r.textContent.includes(${JSON.stringify(name)}));r.querySelector('['+${JSON.stringify(attr)}+']').click();return true})()`);
+  await clickRow('Davi PDV','data-next-ready');
+  await wait('[...document.querySelectorAll(".modal")].some(m=>/Pedido #50004 está pronto\?/.test(m.textContent))','confirmação Pronto',10000);await shot('12-confirmar-pronto');
+  await clickText('Sim, está pronto');
+  await wait('![...document.querySelectorAll(".z19q-next-row")].some(r=>/Davi PDV/.test(r.textContent))&&document.querySelectorAll(".z19q-next-row").length>0','Davi saiu da fila',20000);
+  await clickRow('Carla Site','data-next-delivered');
+  await wait('[...document.querySelectorAll(".modal")].some(m=>/pronto e já entregue/.test(m.textContent))','confirmação Pronto e entregue',10000);
+  await clickText('Sim, pronto e entregue');
+  await wait('![...document.querySelectorAll(".z19q-next-row")].some(r=>/Carla Site/.test(r.textContent))','Carla saiu da fila',20000);
+  const done=await evaluate('({forced:window.qa.forced.map(a=>a.p_stage),delivered:window.qa.delivered.length})');report.push('pronto: '+JSON.stringify(done));
+  assert.deepEqual(done,{forced:['ready_pickup','ready_pickup'],delivered:1});
+  await noSideScroll('próximos pedidos com Pronto');await shot('13-proximos-depois-do-pronto');
+
+  // 7) Montar filme → Subir arte na biblioteca: pasta automática, sem a chave de pronta, e Jogar no filme ao terminar.
+  await evaluate('document.querySelector("[data-next-close]")?.click()');await delay(300);
+  await evaluate('document.querySelector("#quickUploadFilmAsset").click()');
+  await wait('document.querySelector(".upload-modal #fileInput")','janela de subir na biblioteca',30000);
+  {const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector:'.upload-modal #fileInput'});await send('DOM.setFileInputFiles',{nodeId,files:[uploadBack]});}
+  await wait('document.querySelector("#uploadList input[data-k=name]")','arquivo na lista da biblioteca',20000);await delay(500);
+  const libRow=await evaluate(`(()=>{const l=document.querySelector('#uploadList');return {folder:l.querySelector('.upload-folder-auto button')?.textContent||'',ready:!!l.querySelector('[data-ready]'),position:!!l.querySelector('.upload-position')}})()`);
+  report.push('biblioteca: '+JSON.stringify(libRow));assert.match(libRow.folder,/Artes prontas/,'biblioteca: pasta automática');assert(!libRow.ready&&!libRow.position,'biblioteca: sem chave e sem posição');
+  await evaluate(`(()=>{const set=(sel,v)=>{const i=document.querySelector(sel);i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}))};set('#uploadList input[data-k=name]','Logo da biblioteca');set('#uploadList input[data-size-axis=width]','12')})()`);
+  await wait('!document.querySelector("#processUpload").disabled','salvar na biblioteca',5000);await shot('14-biblioteca-subir');
+  await evaluate('document.querySelector("#processUpload").click()');
+  await wait('document.querySelector(".z19-back-to-film [data-film-add]")','Jogar no filme depois de subir na biblioteca',60000);await shot('15-biblioteca-jogar-no-filme');
+  await evaluate('document.querySelector(".z19-back-to-film [data-film-add]").click()');
+  await wait(`[...document.querySelectorAll('#filmItems article')].some(a=>/Logo da biblioteca/.test(a.textContent))`,'arte da biblioteca no filme',40000);
+  report.push('Subir arte na biblioteca → Jogar no filme: arte no filme');
   const tela=errors.filter(e=>!/ResizeObserver/.test(e));if(tela.length)console.log('ERROS DE TELA:',[...new Set(tela)].slice(0,8).join(' | '));assert(!tela.length,'erro de tela');
   console.log(report.join('\n'));
-  console.log('PASS fila de produção, Ver próximos pedidos, QR Subir arte sem mockup + Jogar no filme e Arte de empresa nova primeiro. Fotos: '+out);
+  console.log('PASS fila de produção, Ver próximos pedidos (com Pronto e Pronto e entregue), QR Subir arte sem mockup, arte por posição em todas as camisas (pedido de 2 posições), pasta automática, Jogar no filme e Arte de empresa nova primeiro. Fotos: '+out);
 }finally{socket?.close();child.kill();server.close()}
