@@ -1,0 +1,58 @@
+/* Tela Vetorizar arte (019). Claro, cartões brancos, botão principal laranja ZERO19, alvos grandes, sem rolagem lateral. */
+.vz-page{max-width:1280px;margin:0 auto;padding:16px;color:#0f172a}
+.vz-hero{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin:8px 0 16px}
+.vz-hero h1{margin:4px 0;font-size:clamp(26px,4vw,38px);line-height:1.05;color:#0f172a}
+.vz-hero p{margin:0;max-width:640px;color:#475569;font-weight:600}
+.vz-hero .eyebrow{color:#c2410c;font-weight:900;letter-spacing:.08em;font-size:12px}
+.vz-card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;box-shadow:0 10px 30px rgba(15,23,42,.08);padding:16px;min-width:0}
+.vz-upload{display:grid;justify-items:center;gap:10px;text-align:center;padding:48px 16px;border:3px dashed #cbd5e1}
+.vz-upload.drag{border-color:#ff6428;background:#fff7ed}
+.vz-upload h2{margin:0;font-size:24px;color:#0f172a}.vz-upload p{margin:0;color:#475569;font-weight:600;max-width:520px}
+.vz-upload small{color:#64748b}.vz-drop-icon{font-size:44px;line-height:1;color:#ff6428}
+.vz-layout{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start}
+@media(max-width:960px){.vz-layout{grid-template-columns:minmax(0,1fr)}}
+.vz-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
+.vz-seg{display:inline-flex;flex-wrap:wrap;border:2px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#f8fafc}
+.vz-seg button{min-height:40px;border:0;background:transparent;color:#0f172a;font-weight:800;padding:6px 12px;cursor:pointer}
+.vz-seg button[aria-pressed="true"]{background:#0f172a;color:#fff}
+.vz-brush{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;color:#334155}
+.vz-brush input{width:110px}.vz-zoom{display:inline-flex;gap:4px;margin-left:auto}
+.vz-viewer{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+.vz-viewer.is-two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media(max-width:640px){.vz-viewer.is-two{grid-template-columns:minmax(0,1fr)}}
+.vz-viewer figure{margin:0;min-width:0}
+.vz-viewer canvas{display:block;width:100%;border-radius:14px;border:1px solid #e2e8f0;touch-action:none;cursor:grab;background:#fff}
+.vz-viewer figcaption{font-size:12px;font-weight:700;color:#64748b;margin-top:4px}
+.vz-split{width:100%;margin-top:8px;accent-color:#ff6428}
+.vz-hint{margin:8px 0 0;font-size:12px;color:#64748b;font-weight:600}
+.vz-side{display:grid;gap:12px}
+.vz-file{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}.vz-file b{overflow-wrap:anywhere}.vz-file span{color:#64748b;font-size:13px;font-weight:700}.vz-file .btn{margin-left:auto}
+.vz-check{display:flex;gap:10px;align-items:flex-start;border:2px solid #e2e8f0;border-radius:14px;padding:10px;cursor:pointer}
+.vz-check input{width:22px;height:22px;margin-top:2px;accent-color:#ff6428;flex:0 0 auto}
+.vz-check b{display:block}.vz-check small{display:block;color:#475569;font-weight:600}
+.vz-check.small{padding:8px}
+.vz-warn{margin:0;border-radius:12px;background:#fffbeb;border:1px solid #fde68a;color:#78350f;padding:8px 10px;font-size:13px;font-weight:700}
+.vz-error{margin:0;border-radius:12px;background:#fef2f2;border:2px solid #fca5a5;color:#7f1d1d;padding:8px 10px;font-weight:800}
+.vz-measure h2{margin:0 0 6px;font-size:16px}
+.vz-inputs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:end;gap:8px}
+.vz-inputs>span{padding-bottom:12px;font-weight:900;color:#64748b}
+.vz-inputs label,.vz-dpi,.vz-name{display:grid;gap:4px;font-size:12px;font-weight:900;color:#334155;text-transform:uppercase;letter-spacing:.03em}
+.vz-inputs input,.vz-dpi select,.vz-name input{min-height:48px;border:2px solid #cbd5e1;border-radius:12px;padding:6px 10px;font-size:20px;font-weight:900;color:#0f172a;background:#fff;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+.vz-dpi select,.vz-name input{font-size:16px}
+.vz-inputs input[aria-invalid="true"]{border-color:#ef4444}
+.vz-measure>small{display:block;margin:6px 0 10px;color:#64748b;font-weight:600}
+.vz-summary{margin:0;border-radius:14px;background:#0f172a;color:#fff;padding:10px 12px;font-weight:800;font-size:14px}
+.vz-go{min-height:56px;font-size:18px;width:100%}
+.vz-progress{border:2px solid #fed7aa;background:#fff7ed;border-radius:14px;padding:10px 12px;color:#7c2d12}
+.vz-progress ol{margin:8px 0;padding-left:20px;display:grid;gap:4px;font-weight:700;color:#9a3412}
+.vz-progress li.done{color:#15803d}.vz-progress li.done::marker{content:"✓ "}
+.vz-progress li.now{color:#7c2d12;font-weight:900}.vz-progress li.now::marker{content:"⟳ "}
+.vz-result{display:grid;gap:10px;border-top:2px solid #e2e8f0;padding-top:12px}
+.vz-kind{margin:0;border-radius:14px;padding:10px 12px}.vz-kind b{display:block;font-size:16px}.vz-kind small{display:block;font-weight:600}
+.vz-kind.ok{background:#f0fdf4;border:2px solid #86efac;color:#14532d}.vz-kind.warn{background:#fffbeb;border:2px solid #fcd34d;color:#78350f}
+.vz-review{display:flex;flex-wrap:wrap;gap:6px}.vz-stats,.vz-files{margin:0;font-size:12px;font-weight:700;color:#64748b;overflow-wrap:anywhere}
+.vz-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.vz-actions .btn{min-height:48px;white-space:normal}
+.vz-raster{border:1px dashed #cbd5e1;border-radius:12px;padding:8px 10px}.vz-raster summary{cursor:pointer;font-weight:800;color:#334155}.vz-raster p{font-size:13px;color:#475569}
+.vz-page .btn.primary{background:#ff6428;border-color:#ff6428;color:#fff}
+.vz-page .btn:disabled{opacity:.5;cursor:not-allowed}
