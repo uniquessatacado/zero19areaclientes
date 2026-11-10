@@ -119,8 +119,8 @@ export function createVectorizerPage(ctx) {
       const render = await renderSvg(out.svg, work.width, work.height);
       // Pontos para conferir: só áreas que se veem (pelo menos 0,02% da arte e 400 px), da maior para a menor.
       const minArea = Math.max(400, work.width * work.height * 0.0002), review = (out.summary.needsReview || []).filter(r => r.area >= minArea).sort((a, b) => b.area - a.area);
-      state.result = { svg: out.svg, summary: out.summary, review, engine: out.engine, work, render, sizes: s, ms: Math.round(performance.now() - started), workScale: scale };
-      state.view = 'lado'; state.zoom = 0;
+      state.result = { svg: out.svg, summary: out.summary, review, engine: out.engine, work, render, sizes: s, ms: Math.round(performance.now() - started), workScale: scale, labels: out.labels, opaque: out.opaque, edits: [] };
+      state.view = 'lado'; state.zoom = 0; state.pick = null; colorEdit.reset();
     } catch (error) {
       // O erro fica escrito na tela (o aviso some sozinho): o dono vê o que aconteceu e tenta de novo.
       if (!/cancel/i.test(error?.message || '')) { state.error = 'Não foi possível vetorizar: ' + (error?.message || error); toast(state.error, 'err'); }
@@ -168,7 +168,7 @@ export function createVectorizerPage(ctx) {
       for (const [path, blob, type] of files) { await uploadFile(path, blob, { contentType: type }); uploaded.push(path); }
       const s = state.result.sizes, summary = state.result.summary;
       const asset = { id: assetId, owner_id: owner, workspace_id: workspace.id, project_id: null, folder_id: folder.id, name, asset_type: 'arte', original_path: files[0][0], processed_path: files[1][0], mime_type: 'image/png', size_bytes: out.bytes.length, width: out.info.width, height: out.info.height, dpi: state.dpi, alpha_trimmed: true, background_removed: state.mode === 'fundo-uniforme', maximized: false, created_by: user, updated_by: user,
-        metadata: { print_ready_intent: true, source_name: state.file?.name || null, requested_width_cm: s.widthCm, requested_height_cm: s.heightCm, vectorized: { engine: state.result.engine, svg_path: files[2][0], reference: s.reference, regions: summary.regions, linear: summary.linear, radial: summary.radial, shaded: summary.zoned || 0, needs_review: state.result.review.length, work_scale: state.result.workScale } } };
+        metadata: { print_ready_intent: true, source_name: state.file?.name || null, requested_width_cm: s.widthCm, requested_height_cm: s.heightCm, vectorized: { engine: state.result.engine, svg_path: files[2][0], reference: s.reference, regions: summary.regions, linear: summary.linear, radial: summary.radial, shaded: summary.zoned || 0, color_edits: state.result.edits.length, needs_review: state.result.review.length, work_scale: state.result.workScale } } };
       const inserted = await supabase.from('z19p_assets').insert(asset); if (inserted.error) throw inserted.error;
       const profile = await supabase.from('z19p_asset_print_profiles').upsert({ asset_id: assetId, owner_id: owner, project_id: null, default_width_cm: s.widthCm, default_height_cm: s.heightCm, aspect_ratio: s.widthCm / s.heightCm, halftone: false, allow_internal_nesting: true, rotation_policy: 'free', ready_for_print: true, created_by: user, updated_by: user, updated_at: new Date().toISOString() }, { onConflict: 'asset_id' });
       if (profile.error) { await supabase.from('z19p_assets').delete().eq('id', assetId).eq('owner_id', owner); throw profile.error; }
@@ -186,7 +186,7 @@ export function createVectorizerPage(ctx) {
   function render() {
     css(); pasteOff?.();
     // Arte já salva = trabalho terminado: ao voltar para a tela, começa uma nova. Sem salvar, a arte continua aqui (não perde).
-    if (state.saved && !state.busy) state = blank();
+    if (state.saved && !state.busy) { state = blank(); colorEdit.reset(); }
     state.from = new URLSearchParams(location.hash.split('?')[1] || '').get('from') || '';
     app.innerHTML = shell('<main class="container vz-page"><section class="vz-hero"><div><div class="eyebrow">DTF · SVG VETORIAL E PNG 300 DPI</div><h1>Vetorizar arte</h1><p>Envie a arte, confira o fundo, informe a medida e gere o vetor. Degradês saem como degradês, sem virar faixas.</p></div><div class="vz-hero-actions">' + (state.from === 'filme' ? '<button class="btn" type="button" data-vz-film>← Voltar para o filme</button>' : '') + '</div></section><div id="vzRoot"></div></main>', { back: true });
     bindCommon();
@@ -213,12 +213,12 @@ export function createVectorizerPage(ctx) {
           <div class="vz-seg vz-bg" role="group" aria-label="Fundo da visualização">${[['xadrez', 'Xadrez'], ['preto', 'Preto'], ['branco', 'Branco']].map(([k, t]) => `<button type="button" data-vz-bg="${k}" aria-pressed="${state.bg === k}">${t}</button>`).join('')}</div>
           <div class="vz-zoom"><button type="button" class="btn small" data-vz-zoom="-" aria-label="Diminuir">−</button><button type="button" class="btn small" data-vz-zoom="fit">Ajustar</button><button type="button" class="btn small" data-vz-zoom="+" aria-label="Aumentar">+</button></div>
         </div>
-        <div class="vz-viewer ${state.result && state.view === 'lado' ? 'is-two' : ''}" data-vz-viewer>
+        <div class="vz-viewer ${state.result && state.view === 'lado' ? 'is-two' : ''}${state.result && state.view !== 'original' ? ' is-result' : ''}${state.pick?.dropper ? ' is-dropper' : ''}" data-vz-viewer>
           <figure><canvas data-vz-canvas="a"></canvas><figcaption>${state.result ? (state.view === 'original' ? 'Original completo (enviado)' : state.view === 'sobrepor' ? 'Esquerda: preparada · direita: vetor (arraste a linha)' : 'Preparada') : 'Preparada · a linha tracejada é a área medida'}</figcaption></figure>
           ${state.result && state.view === 'lado' ? '<figure><canvas data-vz-canvas="b"></canvas><figcaption>Vetor (SVG desenhado)</figcaption></figure>' : ''}
         </div>
         ${state.result && state.view === 'sobrepor' ? `<input class="vz-split" type="range" min="0" max="1000" value="${Math.round(state.split * 1000)}" data-vz-split aria-label="Posição da sobreposição">` : ''}
-        <p class="vz-hint">${state.result ? 'Roda do mouse ou pinça: zoom (as duas imagens juntas). Arraste para mover.' : state.tool ? 'Pinte na imagem para ' + (state.tool === 'apagar' ? 'apagar (fica transparente).' : 'restaurar o original.') : 'Roda do mouse ou pinça: zoom. Arraste para mover.'}</p>
+        <p class="vz-hint">${state.result ? (state.pick?.dropper ? 'Toque na arte para pegar a cor daquele ponto.' : 'Toque numa parte para trocar a cor dela. Roda do mouse ou pinça: zoom (as duas imagens juntas). Arraste para mover.') : state.tool ? 'Pinte na imagem para ' + (state.tool === 'apagar' ? 'apagar (fica transparente).' : 'restaurar o original.') : 'Roda do mouse ou pinça: zoom. Arraste para mover.'}</p>
       </section>
       <aside class="vz-card vz-side">
         <div class="vz-file"><b>${esc(state.file?.name || 'Print colado')}</b><span>${state.original.width} × ${state.original.height} px</span><button type="button" class="btn small" data-vz-new>Outra imagem</button></div>
@@ -247,7 +247,8 @@ export function createVectorizerPage(ctx) {
       : ['ok', 'Vetor pronto', 'Nenhuma área ficou com diferença alta em relação à arte preparada. Confira as letras e os detalhes no zoom.'];
     return `<section class="vz-result"><p class="vz-kind ${kind[0]}"><b>${kind[1]}</b><small>${kind[2]}</small></p>
       ${review.length && !heavy ? `<div class="vz-review">${review.slice(0, 12).map((r, i) => `<button type="button" class="btn small" data-vz-review="${i}">Área ${i + 1} · ${r.model === 'solid' ? 'cor lisa' : 'degradê'}</button>`).join('')}</div>` : ''}
-      <p class="vz-stats">${m.regions.toLocaleString('pt-BR')} partes · ${m.linear + m.radial} degradês (${m.linear} lineares, ${m.radial} radiais)${m.zoned ? ` · ${m.zoned} com sombreado esfumado` : ''} · ${Math.round(ms / 100) / 10} s${ws < 1 ? ` · calculado em ${state.result.work.width} × ${state.result.work.height} px` : ''} · SVG ${(m.inspect.bytes / 1048576).toFixed(1)} MB, sem imagem dentro</p>
+      <p class="vz-stats">${m.regions.toLocaleString('pt-BR')} partes · ${m.linear + m.radial} degradês (${m.linear} lineares, ${m.radial} radiais)${m.zoned ? ` · ${m.zoned} com sombreado esfumado` : ''} · ${Math.round(ms / 100) / 10} s${ws < 1 ? ` · calculado em ${state.result.work.width} × ${state.result.work.height} px` : ''} · SVG ${(state.result.svg.length / 1048576).toFixed(1)} MB, sem imagem dentro</p>
+      ${paintHTML()}
       <label class="vz-name">Nome da arte<input id="vzName" value="${esc(state.saved?.name || state.name)}" maxlength="120"></label>
       <div class="vz-actions">
         <button type="button" class="btn" data-vz-svg>Baixar SVG (vetor)</button>
@@ -305,21 +306,184 @@ export function createVectorizerPage(ctx) {
       input.setAttribute('aria-invalid', String(Boolean(input.value.trim()) && !value));
     }));
     root.querySelectorAll('[data-vz-size]').forEach(input => input.addEventListener('change', () => draw()));
+    colorEdit.bind(root);
     bindViewer(root);
   }
+
+  // ------------------------------------------------------------------ trocar a cor de uma parte (06/11, dono: "às vezes fica
+  // manchado; permita clicar num elemento e trocar a cor dele para uma cor sólida ou degradê começando de uma cor e terminando em
+  // outra, e o degradê faz sozinho"). Toque numa parte do vetor; "Juntar parecidas" pega a mancha inteira (partes vizinhas de cor
+  // parecida). Prévia na hora; Aplicar redesenha o SVG no processo separado (as partes de uma troca usam o MESMO degradê, então
+  // ficam contínuas). O degradê automático segue o claro/escuro da arte original na seleção.
+  const colorEdit = (() => {
+    const self = { version: 0, outline: null, busy: false, preview: null, stats: null };
+    const hex = c => '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+    const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+    const lum = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const lab = (r, g, b) => { const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }, R = f(r), G = f(g), B = f(b), t = v => v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116, X = t((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047), Y = t(0.2126 * R + 0.7152 * G + 0.0722 * B), Z = t((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883); return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)]; };
+    self.reset = () => { self.preview = null; self.outline = null; self.stats = null; self.version++; };
+    self.shown = () => self.preview || state.result.render;
+    function stats() { // caixa, área e cor média de cada parte (uma passada pela arte)
+      if (self.stats?.result === state.result) return self.stats;
+      const { labels, work, opaque } = state.result, W = work.width, count = opaque.length, box = new Int32Array(count * 4).fill(-1), area = new Float64Array(count), sum = new Float64Array(count * 3);
+      for (let p = 0; p < labels.length; p++) {
+        const r = labels[p]; if (r < 0) continue; const x = p % W, y = (p - x) / W, o = r * 4;
+        if (box[o] < 0) { box[o] = x; box[o + 1] = y; box[o + 2] = x; box[o + 3] = y; } else { if (x < box[o]) box[o] = x; if (x > box[o + 2]) box[o + 2] = x; box[o + 3] = y; }
+        area[r]++; sum[r * 3] += work.data[p * 4]; sum[r * 3 + 1] += work.data[p * 4 + 1]; sum[r * 3 + 2] += work.data[p * 4 + 2];
+      }
+      return self.stats = { result: state.result, box, area, sum, count };
+    }
+    function info(ids) { // seleção: caixa, área, amostras dos pixels ORIGINAIS (x, y, r, g, b, luz)
+      const st = stats(), { labels, work } = state.result, W = work.width, sel = new Uint8Array(st.count);
+      let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1, area = 0;
+      for (const id of ids) { sel[id] = 1; const o = id * 4; x0 = Math.min(x0, st.box[o]); y0 = Math.min(y0, st.box[o + 1]); x1 = Math.max(x1, st.box[o + 2]); y1 = Math.max(y1, st.box[o + 3]); area += st.area[id]; }
+      const step = Math.max(1, Math.floor(Math.sqrt(area / 60000))), samples = [];
+      for (let y = y0; y <= y1; y += step) for (let x = x0; x <= x1; x += step) { const p = y * W + x; if (!sel[labels[p]]) continue; const r = work.data[p * 4], g = work.data[p * 4 + 1], b = work.data[p * 4 + 2]; samples.push([x + 0.5, y + 0.5, r, g, b, lum(r, g, b)]); }
+      return { sel, x0, y0, x1, y1, area, samples };
+    }
+    function defaults(inf) {
+      const s = inf.samples, n = Math.max(1, s.length), mean = [0, 1, 2].map(c => s.reduce((a, v) => a + v[2 + c], 0) / n);
+      const byLum = [...s].sort((a, b) => a[5] - b[5]), k = Math.max(1, Math.round(n * 0.15)), avg = list => [0, 1, 2].map(c => list.reduce((a, v) => a + v[2 + c], 0) / Math.max(1, list.length));
+      const dark = avg(byLum.slice(0, k)), light = avg(byLum.slice(-k));
+      // Direção automática: plano da luz (claro/escuro) da arte original na seleção; o degradê vai do lado escuro ao claro.
+      let mx = 0, my = 0, ml = 0; for (const v of s) { mx += v[0]; my += v[1]; ml += v[5]; } mx /= n; my /= n; ml /= n;
+      let sxx = 0, sxy = 0, syy = 0, sxl = 0, syl = 0; for (const v of s) { const dx = v[0] - mx, dy = v[1] - my, dl = v[5] - ml; sxx += dx * dx; sxy += dx * dy; syy += dy * dy; sxl += dx * dl; syl += dy * dl; }
+      const det = sxx * syy - sxy * sxy; let gx = det ? (syy * sxl - sxy * syl) / det : 0, gy = det ? (sxx * syl - sxy * sxl) / det : 1; const len = Math.hypot(gx, gy) || 1; gx /= len; gy /= len; if (!det || len < 1e-6) { gx = 0; gy = 1; }
+      const t = s.map(v => (v[0] - mx) * gx + (v[1] - my) * gy).sort((a, b) => a - b), t0 = t[Math.floor(t.length * 0.02)] ?? 0, t1 = t[Math.floor(t.length * 0.98)] ?? 1;
+      const auto = { x1: mx + gx * t0, y1: my + gy * t0, x2: mx + gx * t1, y2: my + gy * t1 };
+      // Redondo: centro no brilho (parte mais clara), raio até quase o ponto mais longe da seleção.
+      const top = byLum.slice(-k); let cx = 0, cy = 0; for (const v of top) { cx += v[0]; cy += v[1]; } cx /= top.length || 1; cy /= top.length || 1;
+      const dist = s.map(v => Math.hypot(v[0] - cx, v[1] - cy)).sort((a, b) => a - b), r = Math.max(4, dist[Math.floor(dist.length * 0.98)] || 4);
+      return { mean, dark, light, auto, radial: { cx, cy, r } };
+    }
+    function geometry(pick) {
+      const { x0, y0, x1, y1 } = pick.info, cx = (x0 + x1 + 1) / 2, cy = (y0 + y1 + 1) / 2;
+      return { auto: pick.def.auto, down: { x1: cx, y1: y0, x2: cx, y2: y1 + 1 }, right: { x1: x0, y1: cy, x2: x1 + 1, y2: cy }, diag: { x1: x0, y1: y0, x2: x1 + 1, y2: y1 + 1 }, diag2: { x1: x0, y1: y1 + 1, x2: x1 + 1, y2: y0 } }[pick.dir] || pick.def.auto;
+    }
+    function fillOf(pick) {
+      if (pick.mode === 'solid') return { type: 'solid', color: rgb(pick.color) };
+      if (pick.mode === 'radial') return { type: 'radial', ...pick.def.radial, from: rgb(pick.center), to: rgb(pick.edge) };
+      return { type: 'linear', ...geometry(pick), from: rgb(pick.from), to: rgb(pick.to) };
+    }
+    function colorAt(fill, x, y) {
+      if (fill.type === 'solid') return fill.color;
+      let t;
+      if (fill.type === 'linear') { const dx = fill.x2 - fill.x1, dy = fill.y2 - fill.y1; t = ((x - fill.x1) * dx + (y - fill.y1) * dy) / Math.max(1e-9, dx * dx + dy * dy); }
+      else t = Math.hypot(x - fill.cx, y - fill.cy) / fill.r;
+      t = Math.max(0, Math.min(1, t)); return [0, 1, 2].map(c => fill.from[c] + (fill.to[c] - fill.from[c]) * t);
+    }
+    function repaint() { // prévia: só os pixels da seleção mudam (rápido); a transparência de cada pixel fica
+      const pick = state.pick, base = state.result.render;
+      if (!pick) { self.preview = null; self.version++; return; }
+      if (!self.preview) self.preview = { width: base.width, height: base.height, data: new Uint8ClampedArray(base.data) };
+      const { labels, work } = state.result, W = work.width, { sel, x0, y0, x1, y1 } = pick.info, fill = fillOf(pick), d = self.preview.data;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const p = y * W + x; if (!sel[labels[p]]) continue; const c = colorAt(fill, x + 0.5, y + 0.5); d[p * 4] = c[0]; d[p * 4 + 1] = c[1]; d[p * 4 + 2] = c[2]; }
+      self.version++;
+    }
+    function outline() { // contorno laranja da seleção, com espessura que se vê no zoom atual (arte grande vista inteira também)
+      const pick = state.pick; if (!pick) { self.outline = null; return; }
+      const t = Math.max(1, Math.min(24, Math.ceil(2.5 / Math.min(1, state.zoom || 1)))), m = t + 1;
+      const { labels, work } = state.result, W = work.width, H = work.height, { sel, x0, y0, x1, y1 } = pick.info, w = x1 - x0 + 1 + 2 * m, h = y1 - y0 + 1 + 2 * m, img = new ImageData(w, h);
+      const inside = (x, y) => x >= 0 && y >= 0 && x < W && y < H && sel[labels[y * W + x]] === 1;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        if (!inside(x, y) || (inside(x - 1, y) && inside(x + 1, y) && inside(x, y - 1) && inside(x, y + 1))) continue;
+        for (let dy = -t; dy <= t; dy++) for (let dx = -t; dx <= t; dx++) { if (inside(x + dx, y + dy)) continue; const o = ((y + dy - y0 + m) * w + (x + dx - x0 + m)) * 4; img.data[o] = 255; img.data[o + 1] = 100; img.data[o + 2] = 40; img.data[o + 3] = 255; }
+      }
+      const canvas = new OffscreenCanvas(w, h); canvas.getContext('2d').putImageData(img, 0, 0); self.outline = { canvas, x0: x0 - m, y0: y0 - m, zoom: state.zoom || 1 };
+    }
+    let rezoom = 0;
+    self.checkZoom = () => { // zoom mudou bastante: refaz a espessura do contorno (sem travar o arrastar)
+      if (!self.outline || !state.pick || Math.abs(Math.log((state.zoom || 1) / self.outline.zoom)) < 0.6) return;
+      clearTimeout(rezoom); rezoom = setTimeout(() => { outline(); paintViewer(); }, 150);
+    };
+    function select(ids, keepColors = false) {
+      const inf = info(ids), def = defaults(inf), old = state.pick;
+      state.pick = { ids, info: inf, def, mode: old?.mode || 'solid', dir: old?.dir || 'auto', add: old?.add || false, tol: old?.tol || 0, dropper: '', touched: keepColors && old?.touched,
+        color: keepColors && old?.touched ? old.color : hex(def.mean), from: keepColors && old?.touched ? old.from : hex(def.dark), to: keepColors && old?.touched ? old.to : hex(def.light), center: keepColors && old?.touched ? old.center : hex(def.light), edge: keepColors && old?.touched ? old.edge : hex(def.dark) };
+      self.preview = null; outline(); repaint(); draw();
+    }
+    self.tap = (x, y) => {
+      const { labels, work } = state.result; if (x < 0 || y < 0 || x >= work.width || y >= work.height) return;
+      const pick = state.pick;
+      if (pick?.dropper) { const p = (y * work.width + x) * 4; pick[pick.dropper] = hex([work.data[p], work.data[p + 1], work.data[p + 2]]); pick.dropper = ''; pick.touched = true; repaint(); draw(); return; }
+      const id = labels[y * work.width + x];
+      if (id < 0) return toast('Aí é fundo transparente: toque numa parte da arte.', 'err');
+      if (pick?.add) { const ids = pick.ids.includes(id) ? pick.ids.filter(v => v !== id) : [...pick.ids, id]; if (!ids.length) { state.pick = null; self.reset(); draw(); return; } return select(ids, true); }
+      select([id]);
+    };
+    function similar() { // junta as partes vizinhas de cor parecida com a seleção (cada toque aumenta a tolerância)
+      const pick = state.pick, st = stats(), { labels, work } = state.result, W = work.width, H = work.height, tol = Math.min(40, (pick.tol || 4) + 6);
+      let ids = new Set(pick.ids); const meanOf = list => { let a = 0; const m = [0, 0, 0]; for (const id of list) { a += st.area[id]; for (let c = 0; c < 3; c++) m[c] += st.sum[id * 3 + c]; } return lab(...m.map(v => v / Math.max(1, a))); };
+      const target = meanOf(ids);
+      for (let round = 0; round < 60; round++) {
+        const sel = new Uint8Array(st.count); let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1; for (const id of ids) { sel[id] = 1; const o = id * 4; x0 = Math.min(x0, st.box[o]); y0 = Math.min(y0, st.box[o + 1]); x1 = Math.max(x1, st.box[o + 2]); y1 = Math.max(y1, st.box[o + 3]); }
+        const near = new Set();
+        for (let y = Math.max(0, y0 - 1); y <= Math.min(H - 1, y1 + 1); y++) for (let x = Math.max(0, x0 - 1); x <= Math.min(W - 1, x1 + 1); x++) { const r = labels[y * W + x]; if (r < 0 || sel[r]) continue; if ((x > 0 && sel[labels[y * W + x - 1]]) || (x < W - 1 && sel[labels[y * W + x + 1]]) || (y > 0 && sel[labels[(y - 1) * W + x]]) || (y < H - 1 && sel[labels[(y + 1) * W + x]])) near.add(r); }
+        let added = 0; for (const r of near) { const c = lab(...[0, 1, 2].map(k => st.sum[r * 3 + k] / Math.max(1, st.area[r]))); if (Math.hypot(c[0] - target[0], c[1] - target[1], c[2] - target[2]) <= tol) { ids.add(r); added++; } }
+        if (!added) break;
+      }
+      select([...ids], true); state.pick.tol = tol; draw();
+    }
+    async function recolorWith(edits, message) {
+      self.busy = true; draw();
+      try {
+        const out = await run({ type: 'recolor', edits });
+        const render = await renderSvg(out.svg, state.result.work.width, state.result.work.height);
+        Object.assign(state.result, { svg: out.svg, render, edits }); state.pick = null; state.saved = null; self.reset();
+        toast(message, 'ok');
+      } catch (error) { toast('Não foi possível trocar a cor: ' + (error?.message || error), 'err'); }
+      self.busy = false; draw();
+    }
+    self.html = () => {
+      const r = state.result, pick = state.pick, edits = r.edits.length, total = r.work.width * r.work.height;
+      const history = edits ? `<div class="vz-paint-history"><span>${edits} troca(s) de cor aplicada(s)</span><button type="button" class="btn small" data-vz-undo-color ${self.busy ? 'disabled' : ''}>Desfazer a última</button><button type="button" class="btn small" data-vz-reset-color ${self.busy ? 'disabled' : ''}>Voltar ao original</button></div>` : '';
+      if (!pick) return `<section class="vz-paint"><h3>Trocar a cor de uma parte</h3><p>Ficou alguma mancha? <b>Toque na parte</b> no vetor (imagem da direita) e troque por cor sólida ou degradê.</p>${history}</section>`;
+      const color = (key, label) => `<label class="vz-color"><span>${label}</span><input type="color" value="${pick[key]}" data-vz-color="${key}"><button type="button" class="btn small${pick.dropper === key ? ' is-on' : ''}" data-vz-dropper="${key}" title="Pegar a cor da arte original">${pick.dropper === key ? 'Toque na arte…' : '💧 Pegar da arte'}</button></label>`;
+      const dirs = [['auto', 'Automático'], ['down', '↓'], ['right', '→'], ['diag', '↘'], ['diag2', '↗']];
+      const body = pick.mode === 'solid' ? color('color', 'Cor')
+        : pick.mode === 'radial' ? `${color('center', 'Cor do centro')}${color('edge', 'Cor da borda')}<button type="button" class="btn small" data-vz-swap>⇄ Inverter cores</button>`
+        : `${color('from', 'Cor do início')}${color('to', 'Cor do fim')}<div class="vz-dirs" role="group" aria-label="Direção">${dirs.map(([k, t]) => `<button type="button" class="btn small" data-vz-dir="${k}" aria-pressed="${pick.dir === k}">${t}</button>`).join('')}</div><button type="button" class="btn small" data-vz-swap>⇄ Inverter cores</button><small>Automático: segue o claro e o escuro da arte original nessa parte.</small>`;
+      return `<section class="vz-paint is-open"><h3>Trocar a cor de uma parte</h3>
+        <p class="vz-paint-sel"><b>${pick.ids.length} parte(s) selecionada(s)</b> · ${(pick.info.area / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% da arte${pick.tol ? ` · parecidas até ${pick.tol}` : ''}</p>
+        <div class="vz-paint-row"><button type="button" class="btn small" data-vz-similar>✚ Juntar parecidas</button><button type="button" class="btn small" data-vz-add aria-pressed="${pick.add}">${pick.add ? '✓ Tocando junta mais' : '✚ Tocar para juntar mais'}</button><button type="button" class="btn small" data-vz-unpick>Limpar</button></div>
+        <div class="vz-seg" role="group" aria-label="Tipo de cor">${[['solid', 'Cor sólida'], ['linear', 'Degradê'], ['radial', 'Redondo']].map(([k, t]) => `<button type="button" data-vz-mode="${k}" aria-pressed="${pick.mode === k}">${t}</button>`).join('')}</div>
+        <div class="vz-paint-body">${body}</div>
+        <div class="vz-paint-actions"><button type="button" class="btn primary" data-vz-apply ${self.busy ? 'disabled' : ''}>${self.busy ? 'Aplicando…' : 'Aplicar'}</button><button type="button" class="btn" data-vz-unpick ${self.busy ? 'disabled' : ''}>Cancelar</button></div>
+        ${history}</section>`;
+    };
+    self.bind = root => {
+      const on = (sel, fn) => root.querySelectorAll(sel).forEach(el => el.addEventListener('click', () => fn(el)));
+      const pick = () => state.pick;
+      on('[data-vz-mode]', el => { pick().mode = el.dataset.vzMode; pick().dropper = ''; repaint(); draw(); });
+      on('[data-vz-dir]', el => { pick().dir = el.dataset.vzDir; repaint(); draw(); });
+      on('[data-vz-swap]', () => { const p = pick(); if (p.mode === 'radial') [p.center, p.edge] = [p.edge, p.center]; else [p.from, p.to] = [p.to, p.from]; p.touched = true; repaint(); draw(); });
+      on('[data-vz-dropper]', el => { const p = pick(); p.dropper = p.dropper === el.dataset.vzDropper ? '' : el.dataset.vzDropper; draw(); });
+      on('[data-vz-add]', () => { pick().add = !pick().add; draw(); });
+      on('[data-vz-similar]', () => similar());
+      on('[data-vz-unpick]', () => { state.pick = null; self.reset(); draw(); });
+      on('[data-vz-apply]', () => { const p = pick(); void recolorWith([...state.result.edits, { ids: [...p.ids], fill: fillOf(p) }], p.mode === 'solid' ? 'Cor trocada. O SVG e o PNG já saem com a cor nova.' : 'Degradê aplicado. O SVG e o PNG já saem com ele.'); });
+      on('[data-vz-undo-color]', () => void recolorWith(state.result.edits.slice(0, -1), 'Última troca desfeita.'));
+      on('[data-vz-reset-color]', () => void recolorWith([], 'Cores de volta ao original.'));
+      let frame = 0;
+      root.querySelectorAll('[data-vz-color]').forEach(input => input.addEventListener('input', () => { const p = pick(); p[input.dataset.vzColor] = input.value; p.touched = true; cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { repaint(); paintViewer(); }); }));
+    };
+    return self;
+  })();
+  const paintHTML = () => colorEdit.html();
 
   // ------------------------------------------------------------------ visualizador (zoom e posição iguais nas duas imagens)
   let sources = { a: null, b: null, key: '' };
   function viewerSources() {
-    const key = [state.view, state.result ? 'r' : 'p', state.full?.data?.byteLength, state.box && Object.values(state.box).join(','), state.undo.length].join('|');
+    const key = [state.view, state.result ? 'r' : 'p', state.full?.data?.byteLength, state.box && Object.values(state.box).join(','), state.undo.length, colorEdit.version].join('|');
     if (sources.key === key && sources.a) return sources;
     sources = { key, a: null, b: null, w: 0, h: 0 };
     if (state.result) {
       const work = state.result.work;
       sources.w = work.width; sources.h = work.height;
       if (state.view === 'original') { sources.a = imageToCanvas(state.original); sources.w = state.original.width; sources.h = state.original.height; }
-      else if (state.view === 'resultado') sources.a = imageToCanvas(state.result.render);
-      else { sources.a = imageToCanvas(work); sources.b = imageToCanvas(state.result.render); }
+      else if (state.view === 'resultado') sources.a = imageToCanvas(colorEdit.shown());
+      else if (state.view === 'sobrepor') { sources.a = imageToCanvas(work); sources.b = imageToCanvas(colorEdit.shown()); }
+      else { sources.a = imageToCanvas(work); sources.b = imageToCanvas(colorEdit.shown()); }
     } else if (state.full) { sources.a = imageToCanvas(state.full); sources.w = state.full.width; sources.h = state.full.height; }
     return sources;
   }
@@ -336,9 +500,10 @@ export function createVectorizerPage(ctx) {
       g.setTransform(state.zoom, 0, 0, state.zoom, state.panX, state.panY);
       if (state.result && state.view === 'sobrepor') {
         g.drawImage(src.a, 0, 0); const cut = state.split * canvas.width; g.setTransform(1, 0, 0, 1, 0, 0); g.save(); g.beginPath(); g.rect(cut, 0, canvas.width - cut, canvas.height); g.clip();
-        background(g, canvas.width, canvas.height); g.setTransform(state.zoom, 0, 0, state.zoom, state.panX, state.panY); g.drawImage(imageToCanvas(state.result.render), 0, 0); g.restore();
+        background(g, canvas.width, canvas.height); g.setTransform(state.zoom, 0, 0, state.zoom, state.panX, state.panY); g.drawImage(src.b || imageToCanvas(colorEdit.shown()), 0, 0); g.restore();
         g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#ff6428'; g.fillRect(cut - 1, 0, 2, canvas.height);
       } else g.drawImage(index === 0 ? src.a : src.b, 0, 0);
+      if (state.result && state.view !== 'original' && colorEdit.outline) { colorEdit.checkZoom(); g.setTransform(state.zoom, 0, 0, state.zoom, state.panX, state.panY); g.imageSmoothingEnabled = false; g.drawImage(colorEdit.outline.canvas, colorEdit.outline.x0, colorEdit.outline.y0); }
       if (!state.result && state.box) { g.setTransform(1, 0, 0, 1, 0, 0); g.setLineDash([6, 5]); g.strokeStyle = '#ff6428'; g.lineWidth = 2; g.strokeRect(state.panX + state.box.x0 * state.zoom, state.panY + state.box.y0 * state.zoom, state.box.width * state.zoom, state.box.height * state.zoom); g.setLineDash([]); }
     });
   }
@@ -360,25 +525,28 @@ export function createVectorizerPage(ctx) {
   }
   function bindViewer(root) {
     const viewer = root.querySelector('[data-vz-viewer]'); if (!viewer) return;
-    const pointers = new Map(); let last = null, stroke = null, pinch = null;
+    const pointers = new Map(); let last = null, stroke = null, pinch = null, down = null;
     const local = (canvas, event) => { const rect = canvas.getBoundingClientRect(), k = canvas.width / rect.width; return { x: (event.clientX - rect.left) * k, y: (event.clientY - rect.top) * k }; };
     const imagePoint = p => ({ x: (p.x - state.panX) / state.zoom, y: (p.y - state.panY) / state.zoom });
     viewer.addEventListener('wheel', event => { event.preventDefault(); const canvas = event.target.closest('canvas') || viewer.querySelector('canvas'), p = local(canvas, event); zoomBy(Math.exp(-event.deltaY * 0.0015), p.x, p.y); }, { passive: false });
     viewer.addEventListener('pointerdown', event => {
       const canvas = event.target.closest('canvas'); if (!canvas) return; canvas.setPointerCapture(event.pointerId);
-      pointers.set(event.pointerId, local(canvas, event));
+      pointers.set(event.pointerId, local(canvas, event)); down = { x: event.clientX, y: event.clientY, moved: false };
       if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: state.zoom }; stroke = null; return; }
       if (state.tool && !state.result && state.full) { stroke = { tiles: new Map(), canvas }; const p = imagePoint(local(canvas, event)); paint(p.x, p.y, stroke); paintViewer(); }
       else last = local(canvas, event);
     });
     viewer.addEventListener('pointermove', event => {
       const canvas = event.target.closest('canvas'); if (!canvas || !pointers.has(event.pointerId)) return;
-      const p = local(canvas, event); pointers.set(event.pointerId, p);
+      const p = local(canvas, event); pointers.set(event.pointerId, p); if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) down.moved = true;
       if (pinch && pointers.size === 2) { const [a, b] = [...pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y); zoomBy(pinch.zoom * d / pinch.d / state.zoom, (a.x + b.x) / 2, (a.y + b.y) / 2); return; }
       if (stroke) { const q = imagePoint(p); paint(q.x, q.y, stroke); paintViewer(); return; }
       if (last) { state.panX += p.x - last.x; state.panY += p.y - last.y; last = p; paintViewer(); }
     });
-    const end = event => { pointers.delete(event.pointerId); if (pointers.size < 2) pinch = null; if (stroke && !pointers.size) { if (stroke.tiles.size) state.undo.push(stroke); stroke = null; afterMaskChange(); } last = null; };
+    const end = event => {
+      const canvas = event.target.closest?.('canvas');
+      if (event.type === 'pointerup' && down && !down.moved && !pinch && pointers.size === 1 && canvas && state.result && state.view !== 'original' && !colorEdit.busy) { const q = imagePoint(local(canvas, event)); colorEdit.tap(Math.floor(q.x), Math.floor(q.y)); }
+      down = null; pointers.delete(event.pointerId); if (pointers.size < 2) pinch = null; if (stroke && !pointers.size) { if (stroke.tiles.size) state.undo.push(stroke); stroke = null; afterMaskChange(); } last = null; };
     viewer.addEventListener('pointerup', end); viewer.addEventListener('pointercancel', end);
   }
 

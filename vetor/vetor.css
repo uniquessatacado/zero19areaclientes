@@ -56,3 +56,18 @@
 .vz-raster{border:1px dashed #cbd5e1;border-radius:12px;padding:8px 10px}.vz-raster summary{cursor:pointer;font-weight:800;color:#334155}.vz-raster p{font-size:13px;color:#475569}
 .vz-page .btn.primary{background:#ff6428;border-color:#ff6428;color:#fff}
 .vz-page .btn:disabled{opacity:.5;cursor:not-allowed}
+.vz-viewer.is-result canvas{cursor:crosshair}.vz-viewer.is-dropper canvas{cursor:copy}
+.vz-paint{display:grid;gap:8px;border:2px solid #e2e8f0;border-radius:14px;padding:10px 12px;background:#f8fafc}
+.vz-paint.is-open{border-color:#ff6428;background:#fff7ed}
+.vz-paint h3{margin:0;font-size:15px;color:#0f172a}.vz-paint p{margin:0;font-size:13px;color:#334155;font-weight:600}
+.vz-paint small{color:#64748b;font-weight:600;font-size:12px}
+.vz-paint-row,.vz-dirs,.vz-paint-actions,.vz-paint-history{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.vz-paint-body{display:grid;gap:8px}
+.vz-paint .vz-seg button{min-height:38px}
+.vz-color{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-weight:800;font-size:13px;color:#334155}
+.vz-color span{min-width:104px}
+.vz-color input[type=color]{width:60px;height:42px;border:2px solid #cbd5e1;border-radius:10px;padding:2px;background:#fff;cursor:pointer}
+.vz-dirs .btn[aria-pressed="true"],.vz-paint-row .btn[aria-pressed="true"]{background:#0f172a;border-color:#0f172a;color:#fff}
+.vz-page .btn.is-on{background:#ff6428;border-color:#ff6428;color:#fff}
+.vz-paint-actions .btn{min-height:46px;flex:1 1 140px}
+.vz-paint-history{border-top:1px dashed #cbd5e1;padding-top:8px}.vz-paint-history span{font-weight:800;font-size:13px;color:#14532d;flex:1 1 100%}

@@ -169,6 +169,45 @@ try{
   const pngFile=await takeDownload('/_300dpi\\.png$/'),pngBytes=Buffer.from(pngFile.base64,'base64'),info=pngInfo(pngBytes);
   await fs.writeFile(path.join(out,pngFile.name),pngBytes);report.push('PNG: '+pngFile.name+' '+JSON.stringify(info));
   assert.equal(pngFile.name,'logo_degrade_28cm_300dpi.png');assert.deepEqual([info.width,info.height,info.dpi,info.colorType],[3307,1654,300,6]);
+  // 6b) Trocar a cor de uma parte: tocar no círculo vermelho do vetor → cor sólida verde → Aplicar → o SVG baixado tem a cor nova;
+  // tocar na faixa → Degradê (cores escolhidas) → Aplicar → SVG com o degradê; Desfazer a última volta o degradê original.
+  await evaluate('window.qaDownloads.length=0');
+  const tapAt=async(u,v)=>{const pt=await evaluate(`(()=>{const c=document.querySelectorAll('[data-vz-canvas]')[1]||document.querySelector('[data-vz-canvas]'),r=c.getBoundingClientRect();return {x:r.left+r.width*${u},y:r.top+r.height*${v}}})()`);
+    for(const type of ['mousePressed','mouseReleased'])await send('Input.dispatchMouseEvent',{type,x:pt.x,y:pt.y,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1,pointerType:'mouse'});};
+  await evaluate(`document.querySelector('[data-vz-view="resultado"]').click()`);await delay(300);
+  // No modo Resultado a arte (800 × 400) aparece centrada e ajustada no quadro: o círculo fica a ~81% da largura da arte.
+  const circle=await evaluate(`(()=>{const c=document.querySelector('[data-vz-canvas]'),r=c.getBoundingClientRect(),k=c.width/r.width;return {w:r.width,h:r.height,k}})()`);
+  const zoomInfo=await evaluate(`(()=>{const c=document.querySelector('[data-vz-canvas]');return {cw:c.width,ch:c.height}})()`);
+  const fit=Math.min(zoomInfo.cw/800,zoomInfo.ch/400)*0.96,offX=(zoomInfo.cw-800*fit)/2,offY=(zoomInfo.ch-400*fit)/2;
+  const toUV=(x,y)=>[(offX+x*fit)/zoomInfo.cw,(offY+y*fit)/zoomInfo.ch];
+  await tapAt(...toUV(650,200));
+  await wait(`document.querySelector('.vz-paint.is-open')`,'painel de troca de cor depois de tocar no círculo',10000);
+  const sel=await evaluate(`document.querySelector('.vz-paint-sel').textContent`);report.push('toque no círculo: '+sel);assert.match(sel,/1 parte/);
+  await shot('3b-parte-selecionada');
+  await evaluate(`(()=>{const i=document.querySelector('[data-vz-color="color"]');i.value='#00ff00';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);await delay(200);
+  await evaluate(`document.querySelector('[data-vz-apply]').click()`);
+  await wait(`!document.querySelector('.vz-paint.is-open')&&document.querySelector('.vz-paint-history')`,'cor aplicada',60000);
+  await evaluate(`document.querySelector('[data-vz-svg]').click()`);
+  let edited=Buffer.from((await takeDownload('/\\.svg$/')).base64,'base64').toString('utf8');await evaluate('window.qaDownloads.length=0');
+  assert(/fill="#00ff00"/.test(edited),'SVG com a cor sólida nova');report.push('cor sólida: SVG com #00ff00');
+  await tapAt(...toUV(120,200));
+  await wait(`document.querySelector('.vz-paint.is-open')`,'painel depois de tocar na faixa',10000);
+  await evaluate(`document.querySelector('[data-vz-mode="linear"]').click()`);await delay(150);
+  const auto=await evaluate(`[document.querySelector('[data-vz-color="from"]').value,document.querySelector('[data-vz-color="to"]').value]`);report.push('degradê automático (escuro → claro da original): '+auto.join(' → '));
+  await evaluate(`(()=>{for(const [k,v] of [['from','#ff0000'],['to','#0000ff']]){const i=document.querySelector('[data-vz-color="'+k+'"]');i.value=v;i.dispatchEvent(new Event('input',{bubbles:true}))}})()`);await delay(200);
+  await shot('3c-previa-degrade');
+  await evaluate(`document.querySelector('[data-vz-apply]').click()`);
+  await wait(`!document.querySelector('.vz-paint.is-open')&&/2 troca/.test(document.querySelector('.vz-paint-history')?.textContent||'')`,'degradê aplicado',60000);
+  await evaluate(`document.querySelector('[data-vz-svg]').click()`);
+  edited=Buffer.from((await takeDownload('/\\.svg$/')).base64,'base64').toString('utf8');await evaluate('window.qaDownloads.length=0');
+  assert(/stop-color="#ff0000"/.test(edited)&&/stop-color="#0000ff"/.test(edited),'SVG com o degradê escolhido');assert(!/<image\b/.test(edited),'SVG editado continua sem imagem');report.push('degradê: SVG com #ff0000 → #0000ff');
+  await shot('3d-degrade-aplicado');
+  await evaluate(`document.querySelector('[data-vz-undo-color]').click()`);
+  await wait(`/1 troca/.test(document.querySelector('.vz-paint-history')?.textContent||'')`,'desfazer a última troca',60000);
+  await evaluate(`document.querySelector('[data-vz-svg]').click()`);
+  edited=Buffer.from((await takeDownload('/\\.svg$/')).base64,'base64').toString('utf8');await evaluate('window.qaDownloads.length=0');
+  assert(/fill="#00ff00"/.test(edited)&&!/stop-color="#ff0000"/.test(edited),'desfazer tira só o degradê');report.push('desfazer: volta o degradê original, a cor verde fica');
+  await evaluate(`document.querySelector('[data-vz-view="lado"]').click()`);await delay(200);
   // 7) Salvar e jogar no filme: pasta Artes prontas, arte, perfil de impressão e 3 arquivos; a arte entra no filme.
   await evaluate(`document.querySelector('#vzName').value='Logo degradê vetor'`);
   await evaluate(`document.querySelector('[data-vz-film-save]').click()`);
@@ -217,6 +256,22 @@ try{
     const real=await evaluate(`({kind:document.querySelector('.vz-kind')?.textContent||'',stats:document.querySelector('.vz-stats')?.textContent||'',err:document.querySelector('.toast')?.textContent||''})`);
     report.push('arte real: '+Math.round((Date.now()-started)/1000)+' s · '+JSON.stringify(real));assert(real.stats,'arte real sem resultado: '+real.err);
     await shot('7-arte-real');
+    // Troca de cor na arte real: tocar num ponto (VETOR_QA_TAP=u,v da arte, padrão o macacão), juntar parecidas 2×, degradê automático.
+    const [W2,H2]=(real.stats.match(/calculado em (\d+) × (\d+) px/)||[]).slice(1).map(Number);
+    if(W2&&H2){
+      await evaluate(`document.querySelector('[data-vz-view="resultado"]').click()`);await delay(400);
+      const dims=await evaluate(`(()=>{const c=document.querySelector('[data-vz-canvas]'),r=c.getBoundingClientRect();return {cw:c.width,ch:c.height,left:r.left,top:r.top,k:r.width/c.width}})()`);
+      const f2=Math.min(dims.cw/W2,dims.ch/H2)*0.96,ox=(dims.cw-W2*f2)/2,oy=(dims.ch-H2*f2)/2,[tu,tv]=(process.env.VETOR_QA_TAP||'0.66,0.5').split(',').map(Number);
+      const px=dims.left+(ox+tu*W2*f2)*dims.k,py=dims.top+(oy+tv*H2*f2)*dims.k;
+      for(const type of ['mousePressed','mouseReleased'])await send('Input.dispatchMouseEvent',{type,x:px,y:py,button:'left',buttons:type==='mousePressed'?1:0,clickCount:1,pointerType:'mouse'});
+      await wait(`document.querySelector('.vz-paint.is-open')`,'parte da arte real selecionada',20000);
+      for(let k=0;k<2;k++){await evaluate(`document.querySelector('[data-vz-similar]').click()`);await delay(300);}
+      await evaluate(`document.querySelector('[data-vz-mode="linear"]').click()`);await delay(300);
+      const picked=await evaluate(`document.querySelector('.vz-paint-sel').textContent`);await shot('8-arte-real-selecao');
+      const t1=Date.now();await evaluate(`document.querySelector('[data-vz-apply]').click()`);
+      await wait(`!document.querySelector('.vz-paint.is-open')&&document.querySelector('.vz-paint-history')`,'degradê aplicado na arte real',300000);
+      report.push('arte real · troca de cor: '+picked+' → aplicado em '+Math.round((Date.now()-t1)/1000)+' s');await shot('9-arte-real-degrade');
+    }
   }
   const tela=errors.filter(e=>!/ResizeObserver/.test(e));if(tela.length)console.log('ERROS DE TELA:',[...new Set(tela)].slice(0,8).join(' | '));assert(!tela.length,'erro de tela');
   if(consoleErrors.length)report.push('console: '+[...new Set(consoleErrors)].slice(0,4).join(' | '));
