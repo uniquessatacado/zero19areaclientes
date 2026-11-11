@@ -219,6 +219,8 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   | Mandar rastreio | `mandar-rastreio-zero19` |
   | Etiquetas de roupa (preço, código de barras, QR, tamanho; modelos em `system_config` chave `zero19_garment_tags`; regras em `src/lib/zero19GarmentTags.ts`; teste `scripts/zero19-garment-tags-browser-qa.mjs`) | `etiquetas-roupa-zero19` |
   | Pedidos duplicados | `pedidos-duplicados-zero19` |
+  | Contagem de estoque (fora do painel, login da loja; somar/tirar/alterar para; `src/lib/zero19StockCount.ts`, funções `zero19_stock_count_*`) | `/zero19/contagem` |
+  | Etiquetas de peça pendentes (`zero19_piece_labels_*`, mesma etiqueta de Meus Produtos) | `/zero19/etiquetas-pecas` |
   | Padrões de personalização (padrões do PDV, 3 principais, tabela de preço por largura; `system_config` `zero19_personalization_presets`) | `padroes-personalizacao-zero19` |
   | Regras de frete | `regras-frete-zero19` |
   | Produtos ZERO19 | `produtos-zero19` |
