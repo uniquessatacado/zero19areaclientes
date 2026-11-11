@@ -219,6 +219,8 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
   | Mandar rastreio | `mandar-rastreio-zero19` |
   | Etiquetas de roupa (preço, código de barras, QR, tamanho; modelos em `system_config` chave `zero19_garment_tags`; regras em `src/lib/zero19GarmentTags.ts`; teste `scripts/zero19-garment-tags-browser-qa.mjs`) | `etiquetas-roupa-zero19` |
   | Pedidos duplicados | `pedidos-duplicados-zero19` |
+  | Orçamento sem login (montar, gerar, texto/WhatsApp/PDF/link; `src/pages/public/Zero19QuotePage.tsx`, conta e texto em `src/lib/zero19Quote.ts`, desenho do PDF/link em `src/components/quote/QuoteDocument.tsx`, PDF em `src/lib/quotePdf.ts`, funções `zero19_quote_*`; link do cliente `/zero19/orcamento/ver/<código>`) | `/zero19/orcamento` |
+  | Configurações do orçamento (textos, validade, senha curta) | `orcamento-config-zero19` |
   | Contagem de estoque (fora do painel, login da loja; somar/tirar/alterar para; `src/lib/zero19StockCount.ts`, funções `zero19_stock_count_*`) | `/zero19/contagem` |
   | Etiquetas de peça pendentes (`zero19_piece_labels_*`, mesma etiqueta de Meus Produtos) | `/zero19/etiquetas-pecas` |
   | Padrões de personalização (padrões do PDV, 3 principais, tabela de preço por largura; `system_config` `zero19_personalization_presets`) | `padroes-personalizacao-zero19` |
@@ -331,6 +333,7 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### Histórico do manual
 
+- 12/11/2026 — Contagem de estoque, etiquetas de peça e orçamento (seção 8). Lições: o projeto usa **pnpm 9/10** (pnpm-lock v9; o Docker roda `npm install`); `pnpm add` com o pnpm 12 global reescreveu o lockfile inteiro e trocou @types/react para 19 (quebrou o tsc): não adicionar dependência sem necessidade — o PDF do orçamento é escrito pelo próprio sistema (`jpegPagesToPdf`); se precisar adicionar, use `npx pnpm@10 add` e confira o diff do lockfile. Para voltar o node_modules ao lockfile: `CI=true npx pnpm@10 install --frozen-lockfile`.
 - 11/11/2026 — SuperFrete (seção 8) e etiqueta do Melhor Envio com um serviço só. Lições: com UM serviço na cotação, Melhor Envio (e SuperFrete) devolvem um objeto, não uma lista; mensagem de erro de etiqueta nunca inventa motivo; no zsh, flag guardada em variável vira uma palavra só (passe `--import-map arquivo` direto no comando).
 - 10/11/2026 (2) — PDV · Personalizar com padrões, tabela de preço por largura, "Onde está a arte" em janelinha e prazo em 3 botões; página "Padrões de personalização" (seção 8). Lição: no teste de tela, o `Toaster` (sonner) também é um `<section>`, então procurar "a 1ª section" pega o aviso; e `innerText` vem em CAIXA ALTA quando o CSS usa `uppercase` (comparar com `textContent`).
 - 10/11/2026 — Consulta de estoque (/zero19/estoque e totem), início novo do totem, WhatsApp (Evolution) pelo QR com status real e trava por loja nas funções, troca de cor no vetorizador (019 2.17.93) (seções 7 e 8). Lições: (1) filtro de página feito no navegador depois de paginar esconde resultado (Bellis 07/11: filtrar no banco); (2) `ilike` diferencia acento ("po" ≠ "PÓ"): usar expressão com as vogais acentuadas; (3) função do Supabase que usa a chave do servidor precisa conferir quem chama; (4) "sem resposta" do servidor não é "desconectado".
