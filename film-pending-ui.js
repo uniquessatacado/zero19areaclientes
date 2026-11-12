@@ -119,6 +119,23 @@ export async function pendingThumbUrl(supabase, source) {
   return data.signedUrl;
 }
 
+function searchIndexFor(customer, extra = []) {
+  const phone = digitsOf(customer?.phone);
+  return {text: pendingFold([customer?.name, customer?.order && 'pedido ' + customer.order, ...extra].filter(Boolean).join(' | ')), phones: phone ? [...new Set([phone, stripCountry(phone)])] : [], order: digitsOf(customer?.order)};
+}
+
+/** Desfaz o "Arte já impressa": por pedido, as personalizações (sale ids) e as posições (placements) que tinham saído da fila. */
+export async function undoPendingPrinted(picked, undo) {
+  const byProject = new Map();
+  for (const entry of picked) {
+    const row = entry.row || {}, project = row.project_id || row.project?.id || row.summary?.project?.id || row.placement?.project_id || null;
+    if (!project) continue;if (!byProject.has(project)) byProject.set(project, {sales: new Set(), placements: new Set()});
+    const bucket = byProject.get(project);
+    if (entry.kind === 'placed') { if (row.placement?.id) bucket.placements.add(row.placement.id); } else if (row.personalization_sale_id) bucket.sales.add(row.personalization_sale_id);
+  }
+  for (const [project, {sales, placements}] of byProject) await undo(project, [...sales], [...placements]);
+}
+
 function canMarkPrinted(group, entries) { return group.indexes.some(index => entries[index].kind !== 'generic' && !entries[index].completed); }
 
 /** Tira o pedido da fila como se o filme tivesse sido gerado (mesma função do banco da exportação): etapa "em produção". */
@@ -152,8 +169,18 @@ const CSS = `
 .fpu .fpu-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;font-weight:800;color:#475569}
 .fpu .fpu-summary b{padding:3px 9px;border-radius:999px;background:#fff;border:1px solid #e2e8f0;color:#0f172a}
 .fpu .film-pending-list{gap:8px!important;padding:8px 2px 12px;align-content:start;grid-template-columns:minmax(0,1fr)}
-.fpu .fpu-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:10px;padding:10px 12px;border-radius:14px;background:#0f172a;color:#fff}
-.fpu .fpu-group:first-child{margin-top:0}
+.fpu .fpu-order{display:grid;gap:8px;padding:0 0 10px;border:3px solid #0f172a;border-radius:18px;background:#f1f5f9;overflow:hidden}
+.fpu .fpu-order.fpu-only-missing{border-color:#f59e0b}
+.fpu .fpu-order.fpu-finished{border-color:#16a34a;opacity:.85}
+.fpu .fpu-order>.film-pending-row,.fpu .fpu-order>.film-pending-application,.fpu .fpu-order>.fpu-missing{margin:0 10px}
+.fpu .fpu-order .film-pending-copy>b{display:none}
+.fpu .fpu-group{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 12px;background:#0f172a;color:#fff}
+.fpu .fpu-only-missing>.fpu-group{background:#78350f}
+.fpu .fpu-missing{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:2px dashed #f59e0b;border-radius:14px;background:#fffbeb;color:#78350f}
+.fpu .fpu-missing b{font-size:15px;font-weight:900}.fpu .fpu-missing ul{margin:4px 0 0;padding-left:18px;font-size:14px;font-weight:800}
+.fpu .fpu-missing button{min-height:46px;padding:8px 16px;border:0;border-radius:12px;background:#f59e0b;color:#111;font-size:15px;font-weight:900;cursor:pointer}
+.fpu .fpu-group .fpu-finish{background:#e0f2fe;color:#0c4a6e}
+.fpu .fpu-group .fpu-undo{background:#fde68a;color:#78350f}
 .fpu .fpu-group strong{font-size:16px;font-weight:900;line-height:1.2;overflow-wrap:anywhere}
 .fpu .fpu-group .fpu-chip{padding:3px 9px;border-radius:999px;background:#ff6428;color:#111;font-size:13px;font-weight:900;white-space:nowrap}
 .fpu .fpu-group .fpu-phone{padding:3px 9px;border-radius:999px;background:#1e293b;color:#bbf7d0;font-size:13px;font-weight:800;white-space:nowrap}
@@ -199,8 +226,8 @@ function ensureStyle(doc) {
  * Melhora a janela já montada. entries = a mesma lista da janela (índices de data-entry/data-preview).
  * fullUrl(entry) = o link de sempre (usado se a miniatura falhar).
  */
-export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, isCurrent = () => true, updateCount, markPrinted, onPrinted, onError, focusSearch = false, doc = document} = {}) {
-  if (!modal || !entries?.length) return null;
+export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, isCurrent = () => true, updateCount, markPrinted, undoPrinted, finishOrder, onUploadArt, pendingArt = [], onPrinted, onError, focusSearch = false, doc = document} = {}) {
+  if (!modal || !entries || !entries.length && !pendingArt?.length) return null;
   ensureStyle(doc);
   const dialog = modal.querySelector('.film-pending-modal'), list = modal.querySelector('.film-pending-list');
   if (!dialog || !list) return null;
@@ -233,37 +260,95 @@ export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, i
         if (box) { if (box.checked) setBox(index, false);box.checked = false;box.disabled = true; }
         if (row) { row.classList.add('fpu-printed-row');const tag = doc.createElement('strong');tag.className = 'fpu-printed-tag';tag.textContent = '✓ Impresso · saiu da fila (em produção)';row.querySelector('.film-pending-copy')?.appendChild(tag); }
       }
-      if (button) button.textContent = '✓ Impresso · saiu da fila';
+      group.printed = list;
+      if (button) { button.textContent = '✓ Impresso · saiu da fila';if (undoPrinted) { const undo = doc.createElement('button');undo.type = 'button';undo.className = 'fpu-undo';undo.textContent = '↶ Desfazer';undo.onclick = event => { event.preventDefault();event.stopPropagation();void undoGroup(group, undo, button); };button.after(undo); } }
       syncGroups();onPrinted?.(group);
     } catch (error) {
-      if (button) { button.disabled = false;button.textContent = '✓ Já impresso · tirar da fila'; }
+      if (button) { button.disabled = false;button.textContent = '✓ Arte já impressa · tirar da fila'; }
       onError?.(error);
     }
   };
-  const syncGroups = () => { for (const group of groups) { if (!group.selectButton) continue;const list = selectable(group), all = list.length > 0 && list.every(index => boxOf(index).checked);
+  // Desfazer o "Arte já impressa" (dono 12/11: "marquei errado, tem como desfazer?").
+  const undoGroup = async (group, undo, printedButton) => {
+    const list = group.printed || [];if (!list.length) return;
+    undo.disabled = true;undo.textContent = 'Desfazendo…';
+    try {
+      await undoPendingPrinted(list.map(index => entries[index]), undoPrinted);
+      for (const index of list) {
+        const entry = entries[index], row = rowOf(index), box = boxOf(index);entry.completed = false;
+        if (box) box.disabled = Boolean(entry.alreadyInFilm);
+        if (row) { row.classList.remove('fpu-printed-row');row.querySelector('.fpu-printed-tag')?.remove(); }
+      }
+      group.printed = null;undo.remove();if (printedButton) { printedButton.disabled = false;printedButton.textContent = '✓ Arte já impressa · tirar da fila'; }
+      syncGroups();onPrinted?.(group, {undone: true});
+    } catch (error) { undo.disabled = false;undo.textContent = '↶ Desfazer';onError?.(error); }
+  };
+  // Pronto e entregue (dono 12/11): conclui o pedido inteiro e marca entregue (o mesmo dos Próximos pedidos).
+  const finishGroup = async (group, button) => {
+    if (!finishOrder) return;
+    const name = group.customer.name + (group.customer.order ? ' · Pedido #' + group.customer.order : '');
+    if (!confirm('Pedido ' + name + ' PRONTO E ENTREGUE?\n\nConclui todas as personalizações do pedido e marca como entregue: sai da fila e vai para Entregues (dá para reabrir no 019).')) return;
+    button.disabled = true;button.textContent = 'Concluindo…';
+    try {
+      await finishOrder(group.key, true);
+      for (const index of group.indexes) {
+        const entry = entries[index], row = rowOf(index), box = boxOf(index);entry.completed = true;
+        if (box) { if (box.checked) setBox(index, false);box.disabled = true; }
+        row?.classList.add('fpu-printed-row');
+      }
+      group.section?.classList.add('fpu-finished');group.section?.querySelector('.fpu-missing')?.remove();
+      button.textContent = '✓ Pronto e entregue';group.head.querySelectorAll('button').forEach(node => { node.disabled = true; });
+      syncGroups();onPrinted?.(group, {finished: true});
+    } catch (error) { button.disabled = false;button.textContent = '✓ Pronto e entregue';onError?.(error); }
+  };
+  const syncGroups = () => { for (const group of groups) { if (!group.selectButton || !group.indexes.length) continue;const list = selectable(group), all = list.length > 0 && list.every(index => boxOf(index).checked);
     group.selectButton.disabled = !list.length;group.selectButton.textContent = !list.length ? 'Já no filme' : all ? 'Desmarcar' : (list.length === 1 ? 'Selecionar' : 'Selecionar as ' + list.length);
     const add = group.head.querySelector('[data-fpu-add]');if (add) add.disabled = !list.length; } };
 
-  // Grupos por pedido (ordem visual com CSS order; o DOM e os índices não mudam).
+  // Um bloco por pedido (dono 12/11: "a faixa em cima do pedido parece uma coisa e a arte outra; mescle os módulos do mesmo pedido"):
+  // cabeçalho + artes dentro da mesma moldura. Os cartões mudam de lugar no DOM, mas data-entry/data-preview continuam os mesmos.
   const groups = groupPendingEntries(entries);
-  let order = 0;
+  // Pedidos que ainda esperam arte (dono 12/11: "pedidos como o da Adriana estão sem arte: mostre no Aguardando produção mas deixe
+  // pendente de subir arte, com botão para subir arte por lá mesmo"): entram no bloco do mesmo pedido ou num bloco próprio.
+  for (const row of pendingArt || []) {
+    const key = String(row?.projectId || '');if (!key || !row.groups?.length) continue;
+    let group = groups.find(item => item.key === key);
+    const customer = {name: row.workspace?.client_name || row.workspace?.company_name || 'Cliente', phone: row.workspace?.phone || '', order: String(row.orderNo || '')};
+    if (!group) { group = {key, indexes: [], customer};groups.push(group); }
+    group.missing = row.groups;group.missingIndex = searchIndexFor(customer, row.groups.map(item => item.label));
+  }
   for (const group of groups) {
-    const head = doc.createElement('div');head.className = 'fpu-group';head.style.order = String(order++);
+    const section = doc.createElement('section');section.className = 'fpu-order' + (group.indexes.length ? '' : ' fpu-only-missing');
+    const head = doc.createElement('div');head.className = 'fpu-group';
     const {name, phone, order: number} = group.customer, total = group.indexes.length;
     head.innerHTML = '<strong></strong>' + (number ? '<span class="fpu-chip"></span>' : '') + (phone ? '<span class="fpu-phone"></span>' : '') + '<span class="fpu-count"></span>';
     head.querySelector('strong').textContent = name;
     if (number) head.querySelector('.fpu-chip').textContent = 'Pedido #' + number;
     if (phone) head.querySelector('.fpu-phone').textContent = '☎ ' + formatPendingPhone(phone);
-    head.querySelector('.fpu-count').textContent = total + (total === 1 ? ' arte' : ' artes');
+    const waiting = group.missing?.length || 0;
+    head.querySelector('.fpu-count').textContent = [total ? total + (total === 1 ? ' arte pronta' : ' artes prontas') : '', waiting ? waiting + (waiting === 1 ? ' posição sem arte' : ' posições sem arte') : ''].filter(Boolean).join(' · ');
     const actions = doc.createElement('div');actions.className = 'fpu-actions';
-    actions.innerHTML = '<button type="button" data-fpu-select></button><button type="button" data-fpu-add class="fpu-add">＋ Pôr no filme</button>'
-      + (canMarkPrinted(group, entries) ? '<button type="button" data-fpu-printed class="fpu-printed">✓ Já impresso · tirar da fila</button>' : '');
+    const zero19 = group.missing || group.indexes.some(index => entries[index].kind !== 'generic');
+    actions.innerHTML = (total ? '<button type="button" data-fpu-select></button><button type="button" data-fpu-add class="fpu-add">＋ Pôr no filme</button>' : '')
+      + (total && canMarkPrinted(group, entries) ? '<button type="button" data-fpu-printed class="fpu-printed">✓ Arte já impressa · tirar da fila</button>' : '')
+      + (finishOrder && zero19 ? '<button type="button" data-fpu-finish class="fpu-finish">✓ Pronto e entregue</button>' : '');
     head.appendChild(actions);group.selectButton = actions.querySelector('[data-fpu-select]');
-    actions.querySelector('[data-fpu-select]').onclick = event => { event.preventDefault();event.stopPropagation();toggleGroup(group); };
-    actions.querySelector('[data-fpu-add]').onclick = event => { event.preventDefault();event.stopPropagation();addGroup(group); };
+    actions.querySelector('[data-fpu-select]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();toggleGroup(group); });
+    actions.querySelector('[data-fpu-add]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();addGroup(group); });
     actions.querySelector('[data-fpu-printed]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();void printedGroup(group); });
-    list.appendChild(head);group.head = head;
-    for (const index of group.indexes) { const item = itemOf(index);if (item) item.style.order = String(order++); }
+    actions.querySelector('[data-fpu-finish]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();void finishGroup(group, event.currentTarget); });
+    section.appendChild(head);group.head = head;group.section = section;
+    for (const index of group.indexes) { const item = itemOf(index);if (item) section.appendChild(item); }
+    if (waiting) {
+      const cm = value => String(Math.round(Number(value) * 10) / 10).replace('.', ',');
+      const block = doc.createElement('div');block.className = 'fpu-missing';
+      block.innerHTML = '<div><b>⚠ Falta subir arte</b><ul></ul></div>' + (onUploadArt ? '<button type="button" data-fpu-upload>⇧ Subir arte</button>' : '');
+      const ul = block.querySelector('ul');
+      for (const item of group.missing) { const li = doc.createElement('li');li.textContent = [item.label, item.widthCm > 0 ? cm(item.widthCm) + ' cm de largura' : item.heightCm > 0 ? cm(item.heightCm) + ' cm de altura' : '', item.qty + (item.qty === 1 ? ' camisa' : ' camisas')].filter(Boolean).join(' · ');ul.appendChild(li); }
+      block.querySelector('[data-fpu-upload]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();onUploadArt(group.customer.order, group); });
+      section.appendChild(block);
+    }
+    list.appendChild(section);
   }
 
   // Busca.
@@ -294,14 +379,15 @@ export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, i
         const ok = pendingMatches(entries[index].searchIndex, query);
         row.style.display = ok ? '' : 'none';if (ok) { any = true;shown++; }
       }
-      group.head.style.display = any ? '' : 'none';if (any) shownGroups.add(group.key);
+      if (!any && group.missing && pendingMatches(group.missingIndex, query)) any = true;
+      group.section.style.display = any ? '' : 'none';if (any) shownGroups.add(group.key);
     }
     const totalGroups = groups.length;
     summary.innerHTML = '';
     const pill = text => { const node = doc.createElement('b');node.textContent = text;summary.appendChild(node); };
     if (query) { pill(shown + ' de ' + entries.length + ' artes');pill(shownGroups.size + (shownGroups.size === 1 ? ' pedido encontrado' : ' pedidos encontrados')); }
-    else { pill(entries.length + (entries.length === 1 ? ' arte' : ' artes'));pill(totalGroups + (totalGroups === 1 ? ' pedido' : ' pedidos')); }
-    empty.hidden = shown > 0;empty.textContent = 'Nada encontrado para "' + query + '". Confira o nome, o número do pedido ou o WhatsApp.';
+    else { pill(entries.length + (entries.length === 1 ? ' arte pronta' : ' artes prontas'));pill(totalGroups + (totalGroups === 1 ? ' pedido' : ' pedidos'));const waiting = groups.filter(group => group.missing?.length).length;if (waiting) pill(waiting + (waiting === 1 ? ' pedido sem arte' : ' pedidos sem arte')); }
+    empty.hidden = shownGroups.size > 0;empty.textContent = 'Nada encontrado para "' + query + '". Confira o nome, o número do pedido ou o WhatsApp.';
     if (query) relabel(); else updateCount?.();
     syncGroups();
     observeThumbs();

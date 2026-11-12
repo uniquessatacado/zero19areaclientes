@@ -76,7 +76,7 @@ const uid=()=>crypto.randomUUID();
 function builder(table){const filters=[];let single=false,maybe=false,head=false,from=0,to=null,write=null;
  const rows=()=>(data[table]=data[table]||[]).filter(r=>filters.every(f=>match(r,f)));
  const run=()=>{let result;
-  if(write?.op==='insert'){const list=(Array.isArray(write.value)?write.value:[write.value]).map(v=>({id:v.id||uid(),created_at:new Date().toISOString(),...v}));data[table].push(...list);window.qa.writes.push(table+':insert');result=list;}
+  if(write?.op==='insert'){const list=(Array.isArray(write.value)?write.value:[write.value]).map(v=>({id:v.id||uid(),created_at:new Date().toISOString(),...v}));data[table].push(...list);window.qa.writes.push(table+':insert');if(table==='z19p_assets')window.qa.assets=(window.qa.assets||[]).concat(list);result=list;}
   else if(write?.op==='upsert'){const keyName=(write.options?.onConflict||'id').split(',')[0];const list=(Array.isArray(write.value)?write.value:[write.value]).map(v=>{const i=data[table].findIndex(r=>r[keyName]===v[keyName]);const row={...(i>=0?data[table][i]:{id:uid()}),...v};if(i>=0)data[table][i]=row;else data[table].push(row);return row});window.qa.writes.push(table+':upsert');result=list;}
   else if(write?.op==='update'){const list=rows();for(const r of list)Object.assign(r,write.value);window.qa.writes.push(table+':update');result=list;}
   else if(write?.op==='delete'){const list=rows();data[table]=data[table].filter(r=>!list.includes(r));result=list;}
@@ -107,6 +107,7 @@ async function rpc(name,args={}){await new Promise(r=>setTimeout(r,25));window.q
  if(name==='z19p_zero19_mark_delivered'){window.qa.delivered=(window.qa.delivered||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if(w.project_id===args.p_project_id)w.stage='delivered';return {data:{stage:'delivered'},error:null};}
  if(name==='z19p_zero19_mark_art_ready'){window.qa.markedAll=(window.qa.markedAll||[]).concat([args]);const item=data.z19p_zero19_work_items.find(w=>w.project_id===args.p_project_id&&w.personalization_sale_id===args.p_personalization_sale_id);if(!item)return {data:null,error:{message:'Item não encontrado'}};item.asset_id=args.p_asset_id;item.stage='ready_production';window.qa.marked=args;return {data:{stage:'ready_production'},error:null};}
  if(name==='z19p_pending_film_items')return {data:[],error:null};
+ if(name==='z19p_zero19_undo_printed'){window.qa.undone=(window.qa.undone||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if((args.p_sale_ids||[]).includes(w.personalization_sale_id))w.stage='ready_production';return {data:{items:(args.p_sale_ids||[]).length,placements:0},error:null};}
  if(name==='z19p_mark_selected_order_production'){window.qa.printed=(window.qa.printed||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if((args.p_sale_ids||[]).includes(w.personalization_sale_id))w.stage='production';return {data:{projects:1,placements:0,personalizations:(args.p_sale_ids||[]).length},error:null};}
  return {data:/flow|snapshot/.test(name)?{}:name.includes('progress')?{}:null,error:null};}
 export function createClient(){return {
@@ -211,7 +212,12 @@ try{
   await type('ninguém assim');assert.equal((await visibleRows()).length,0);assert(await evaluate('!document.querySelector(".fpu-empty").hidden'),'aviso de nada encontrado');
   await type('bruno');
   assert(await evaluate(`[...document.querySelectorAll('.film-pending-row')].filter(r=>/Bruno/.test(r.textContent)).every(r=>r.querySelector('[data-pending-produced]'))`),'"Já está pronta" na arte subida sem posição (pedido do Natan)');
+  assert(await evaluate(`[...document.querySelectorAll('.fpu-order')].some(sec=>/Bruno Site/.test(sec.querySelector('.fpu-group')?.textContent||'')&&sec.querySelector('.film-pending-row'))`),'cabeçalho e artes do pedido no mesmo bloco');
   await noSideScroll('aguardando com busca');await shot('5b-aguardando-busca');
+  await type('Ana');
+  const missing=await evaluate(`[...document.querySelectorAll('.fpu-order')].filter(sec=>sec.offsetParent).map(sec=>({head:sec.querySelector('.fpu-group')?.textContent.replace(/\\s+/g,' '),missing:sec.querySelector('.fpu-missing')?.textContent.replace(/\\s+/g,' ')||'',upload:!!sec.querySelector('[data-fpu-upload]')}))`);
+  report.push('pedido sem arte: '+JSON.stringify(missing));assert(missing.some(m=>/Ana PDV/.test(m.head)&&/Falta subir arte/.test(m.missing)&&m.upload),'pedido sem arte aparece com Subir arte');
+  await shot('5d-aguardando-sem-arte');
   await type('');
   assert(await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>/Adicionar selecionados ao filme/.test(b.textContent)&&!b.disabled);if(!b)return false;b.click();return true})()`),'adicionar do Aguardando produção');
   await wait(`[...document.querySelectorAll('#filmItems article')].some(a=>/Bruno Site/.test(a.textContent))`,'arte sem posição no filme',30000);
@@ -227,6 +233,10 @@ try{
   await wait(`!!document.querySelector('.fpu-printed-tag')`,'cartão marcado como impresso',10000);
   report.push('Já impresso: '+printedName+' → '+JSON.stringify(await evaluate('window.qa.printed[0]')));
   await shot('5c-buscar-pedido-impresso');
+  assert(await evaluate(`(()=>{const b=document.querySelector('.fpu-undo');if(!b)return false;b.click();return true})()`),'botão Desfazer depois do Já impresso');
+  await wait('(window.qa.undone||[]).length>0','Desfazer chama a função do banco',10000);
+  await wait(`!document.querySelector('.fpu-printed-tag')&&!!document.querySelector('[data-fpu-printed]')&&!document.querySelector('[data-fpu-printed]').disabled`,'cartão volta para a fila',10000);
+  report.push('Desfazer: '+JSON.stringify(await evaluate('window.qa.undone[0]')));
   await evaluate(`document.querySelectorAll('.film-pending-modal .close').forEach(b=>b.click())`);await delay(300);
 
   // 4) QR "Subir arte" do cupom: abre o pedido direto, medida do pedido, pasta pronta, sem mockup e Jogar no filme.
@@ -319,6 +329,41 @@ try{
   await evaluate('document.querySelector(".z19-back-to-film [data-film-add]").click()');
   await wait(`[...document.querySelectorAll('#filmItems article')].some(a=>/Logo da biblioteca/.test(a.textContent))`,'arte da biblioteca no filme',40000);
   report.push('Subir arte na biblioteca → Jogar no filme: arte no filme');
+
+  // 8) 2.17.95: cada arte identifica o seu pedido (busca) e a posição do PDV; a 2ª arte usa o atalho do pedido da 1ª.
+  const markedBefore=(await evaluate('(window.qa.markedAll||[]).length'))||0;
+  await evaluate('document.querySelector("#quickUploadFilmAsset").click()');
+  await wait('document.querySelector(".upload-modal #fileInput")','janela de subir arte (por arte)',30000);
+  {const {root}=await send('DOM.getDocument');const {nodeId}=await send('DOM.querySelector',{nodeId:root.nodeId,selector:'.upload-modal #fileInput'});await send('DOM.setFileInputFiles',{nodeId,files:[uploadFile,uploadBack]});}
+  await wait('document.querySelectorAll("#uploadList [data-art-order]").length===2','botão Identificar pedido em cada arte',20000);await delay(400);
+  await shot('16-envio-identificar');
+  await evaluate('document.querySelector("#uploadList [data-art-order=\'0\']").click()');
+  await wait('document.querySelector("[data-uao-q]")','janela De qual pedido é esta arte',10000);
+  await evaluate(`(()=>{const i=document.querySelector('[data-uao-q]');i.value='50006';i.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  await wait('document.querySelector("[data-uao-row]")','pedido encontrado pela busca',10000);await shot('17-identificar-busca');
+  await evaluate('document.querySelector("[data-uao-row]").click()');
+  await wait('document.querySelectorAll("[data-uao-pos]").length>=2','posições do PDV do pedido',15000);await shot('18-identificar-posicao');
+  const posLabels=await evaluate(`[...document.querySelectorAll('[data-uao-pos] b')].map(b=>b.textContent)`);report.push('posições: '+posLabels.join(' | '));assert(posLabels.some(t=>/Peito/i.test(t))&&posLabels.some(t=>/Costas/i.test(t)),'posições do PDV');
+  await evaluate(`[...document.querySelectorAll('[data-uao-pos]')].find(b=>/Peito/i.test(b.textContent)).click()`);
+  await wait(`/Pedido #50006/.test(document.querySelector('#uploadList .upload-row')?.textContent||'')`,'1ª arte ligada ao pedido 50006',10000);
+  await evaluate('document.querySelector("#uploadList [data-art-order=\'1\']").click()');
+  await wait('document.querySelector("[data-uao-short]")','atalho do pedido da outra arte',10000);
+  const shortcut=await evaluate('document.querySelector("[data-uao-short]").textContent');report.push('atalho: '+shortcut);assert.match(shortcut,/50006/);
+  await shot('19-identificar-atalho');
+  await evaluate('document.querySelector("[data-uao-short]").click()');
+  await wait('document.querySelectorAll("[data-uao-pos]").length>=2','posições pelo atalho',10000);
+  assert(await evaluate(`[...document.querySelectorAll('[data-uao-pos]')].some(b=>/Peito/i.test(b.textContent)&&/Outra arte deste envio/.test(b.textContent))`),'posição já usada pela outra arte marcada');
+  await evaluate(`[...document.querySelectorAll('[data-uao-pos]')].find(b=>/Costas/i.test(b.textContent)).click()`);
+  await wait(`[...document.querySelectorAll('#uploadList .upload-row')].every(r=>/Pedido #50006/.test(r.textContent))`,'2ª arte ligada',10000);
+  const names=await evaluate(`[...document.querySelectorAll('#uploadList input[data-k=name]')].map(i=>i.value)`);report.push('nomes: '+names.join(' | '));assert(names[0].includes('Peito')&&names[1].includes('Costas'),'nome pela posição de cada arte');
+  await noSideScroll('envio com pedido em cada arte');await shot('20-envio-identificado');
+  await wait('!document.querySelector("#processUpload").disabled','salvar envio identificado',5000);
+  await evaluate('document.querySelector("#processUpload").click()');
+  await wait('document.querySelector(".z19-upload-done")','artes salvas nos pedidos',60000);
+  const markedNow=await evaluate('(window.qa.markedAll||[]).slice('+markedBefore+')');report.push('ligadas: '+markedNow.length+' camisas');assert(markedNow.length===4&&markedNow.every(m=>m.p_project_id===multi.project),'cada arte ligada às camisas da sua posição no pedido 50006');
+  const savedWs=await evaluate(`(window.qa.assets||[]).slice(-2).map(a=>a.workspace_id)`);report.push('cliente das artes: '+savedWs.join(','));
+  assert(savedWs.length===2&&savedWs.every(id=>id===multi.ws),'arte salva no cliente do pedido (não na biblioteca)');
+  report.push('envio por arte: 2 artes, 2 posições, pedido 50006');
   const tela=errors.filter(e=>!/ResizeObserver/.test(e));if(tela.length)console.log('ERROS DE TELA:',[...new Set(tela)].slice(0,8).join(' | '));assert(!tela.length,'erro de tela');
   console.log(report.join('\n'));
   console.log('PASS fila de produção, Ver próximos pedidos (com Pronto e Pronto e entregue), QR Subir arte sem mockup, arte por posição em todas as camisas (pedido de 2 posições), pasta automática, Jogar no filme e Arte de empresa nova primeiro. Fotos: '+out);

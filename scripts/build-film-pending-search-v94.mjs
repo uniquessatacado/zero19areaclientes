@@ -23,11 +23,17 @@ patch('production-v217.js',[
    "(entry.image?pendingThumbHtml(entry.image,h)"],
   ["const openUnifiedPendingPicker=async({keep,preselectProject}={})=>{",
    "const openUnifiedPendingPicker=async({keep,preselectProject,focusSearch}={})=>{"],
+  // Pedidos que ainda esperam arte também abrem a janela (com "Subir arte"), mesmo sem nenhuma arte pronta.
+  ["      if(!entries.length)return ctx.toast('Nada aguardando produção agora.','ok');",
+   "      let pendingArtOrders=[];try{pendingArtOrders=await ctx.zero19Orders?.pendingArtUploadRows?.()||[];}catch(error){console.warn('pedidos sem arte',error);}\n      if(!pageCurrent())return;\n      if(!entries.length&&!pendingArtOrders.length)return ctx.toast('Nada aguardando produção agora.','ok');"],
   ["      document.body.appendChild(modal);updateCount();",
    "      document.body.appendChild(modal);updateCount();\n"
    +"      try{enhancePendingPicker({modal,entries,supabase,isPrivatePath:path=>Boolean(ctx.assetUrls?.isPrivatePath?.(path)),isCurrent:pageCurrent,updateCount,focusSearch,\n"
-   +"        markPrinted:picked=>markPendingPrinted(supabase,picked),\n"
-   +"        onPrinted:()=>{ctx.toast('Pedido marcado como impresso: saiu de Aguardando produção e está em produção.','ok');void refreshOrders().catch(()=>{});},\n"
+   +"        markPrinted:picked=>markPendingPrinted(supabase,picked),pendingArt:pendingArtOrders,\n"
+   +"        undoPrinted:ctx.zero19Orders?.undoPrinted?(project,sales,placements)=>ctx.zero19Orders.undoPrinted(project,sales,placements):null,\n"
+   +"        finishOrder:ctx.zero19Orders?.finishOrderQuick?(project,delivered)=>ctx.zero19Orders.finishOrderQuick(project,delivered):null,\n"
+   +"        onUploadArt:ctx.zero19Orders?.openGlobalUpload?(orderNo)=>{modal.remove();void ctx.zero19Orders.openGlobalUpload(String(orderNo||''),{quick:true,fromFilm:true});}:null,\n"
+   +"        onPrinted:(group,info)=>{ctx.toast(info?.undone?'Desfeito: as artes voltaram para Aguardando produção.':info?.finished?'Pedido pronto e entregue: saiu da fila.':'Arte marcada como impressa: saiu de Aguardando produção e está em produção.','ok');void refreshOrders().catch(()=>{});},\n"
    +"        onError:error=>ctx.toast(error?.message||'Não foi possível tirar da fila. Nada foi alterado.','err')});}catch(error){console.warn('janela aguardando produção',error);}"],
   ["<button class=\"btn film-action film-action-pending\" id=\"addOfficialPending\">◷ Aguardando produção</button>",
    "<button class=\"btn film-action film-action-pending\" id=\"addOfficialPending\">◷ Aguardando produção</button><button class=\"btn film-action film-action-pending\" id=\"findFilmOrder\">🔎 Buscar pedido</button>"],
