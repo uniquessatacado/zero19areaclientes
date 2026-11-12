@@ -1437,7 +1437,7 @@ export function createProductionModule(ctx){
     g.save();try{
       g.translate(x,y);g.scale(w/layout.widthCm,height/layout.heightCm);
       await drawPreparedLetteringLine(g,layout.nameLine,layout.families,(layout.widthCm-layout.nameLine.widthCm)/2,0,colorFor(item,'name'),item.vectorColorOverrides);
-      await drawPreparedLetteringLine(g,layout.numberLine,layout.families,(layout.widthCm-layout.numberLine.widthCm)/2,layout.numberYcm,colorFor(item,'number'),item.vectorColorOverrides);
+      await drawPreparedLetteringLine(g,layout.numberLine,layout.families,(layout.widthCm-layout.numberLine.widthCm)/2,layout.numberYcm,colorFor(item,'name'),item.vectorColorOverrides); // 12/11 (dono): número sem vetor sai pela fonte na MESMA cor do nome; número em vetor mantém as cores dele.
     }finally{g.restore()}
   }
   // 13/10 (dono: gerou PNG de 40 m e as estampas continuaram em Aguardando produção).
