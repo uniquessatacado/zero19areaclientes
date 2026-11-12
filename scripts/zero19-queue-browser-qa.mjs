@@ -214,6 +214,16 @@ try{
   assert(await evaluate(`[...document.querySelectorAll('.film-pending-row')].filter(r=>/Bruno/.test(r.textContent)).every(r=>r.querySelector('[data-pending-produced]'))`),'"Já está pronta" na arte subida sem posição (pedido do Natan)');
   assert(await evaluate(`[...document.querySelectorAll('.fpu-order')].some(sec=>/Bruno Site/.test(sec.querySelector('.fpu-group')?.textContent||'')&&sec.querySelector('.film-pending-row'))`),'cabeçalho e artes do pedido no mesmo bloco');
   await noSideScroll('aguardando com busca');await shot('5b-aguardando-busca');
+  // Janela baixa (como com 60+ pedidos): nenhum bloco pode ser espremido até sobrar só a faixa do cabeçalho.
+  await type('');
+  const waitBar=await evaluate(`document.querySelector('.fpu-waiting-bar')?.textContent||''`);report.push('seção sem arte: '+waitBar);assert.match(waitBar,/esperando arte/,'pedidos sem arte numa seção própria');
+  assert(await evaluate('document.querySelector(".fpu-waiting").hidden'),'seção sem arte começa fechada quando há arte pronta');
+  await evaluate('document.querySelector(".fpu-waiting-bar").click()');await delay(150);
+  await evaluate(`document.querySelector('.film-pending-modal').style.maxHeight='380px'`);await delay(200);
+  const squeezed=await evaluate(`[...document.querySelectorAll('.fpu-order')].filter(sec=>sec.offsetParent).map(sec=>({h:sec.getBoundingClientRect().height,need:sec.scrollHeight,inner:[...sec.children].reduce((sum,child)=>sum+child.getBoundingClientRect().height,0)})).filter(r=>r.h+2<r.inner)`);
+  report.push('blocos espremidos: '+squeezed.length);assert.equal(squeezed.length,0,'bloco espremido: '+JSON.stringify(squeezed));
+  await shot('5e-aguardando-janela-baixa');
+  await evaluate(`document.querySelector('.film-pending-modal').style.maxHeight=''`);await evaluate('document.querySelector(".fpu-waiting-bar").click()');
   await type('Ana');
   const missing=await evaluate(`[...document.querySelectorAll('.fpu-order')].filter(sec=>sec.offsetParent).map(sec=>({head:sec.querySelector('.fpu-group')?.textContent.replace(/\\s+/g,' '),missing:sec.querySelector('.fpu-missing')?.textContent.replace(/\\s+/g,' ')||'',upload:!!sec.querySelector('[data-fpu-upload]')}))`);
   report.push('pedido sem arte: '+JSON.stringify(missing));assert(missing.some(m=>/Ana PDV/.test(m.head)&&/Falta subir arte/.test(m.missing)&&m.upload),'pedido sem arte aparece com Subir arte');

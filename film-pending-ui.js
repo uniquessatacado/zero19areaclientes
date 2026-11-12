@@ -169,7 +169,13 @@ const CSS = `
 .fpu .fpu-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;font-weight:800;color:#475569}
 .fpu .fpu-summary b{padding:3px 9px;border-radius:999px;background:#fff;border:1px solid #e2e8f0;color:#0f172a}
 .fpu .film-pending-list{gap:8px!important;padding:8px 2px 12px;align-content:start;grid-template-columns:minmax(0,1fr)}
-.fpu .fpu-order{display:grid;gap:8px;padding:0 0 10px;border:3px solid #0f172a;border-radius:18px;background:#f1f5f9;overflow:hidden}
+.fpu .film-pending-list{grid-auto-rows:max-content}
+.fpu .film-pending-list>*,.fpu .fpu-waiting>*{min-height:max-content}
+.fpu .fpu-order{display:grid;grid-auto-rows:max-content;gap:8px;padding:0 0 10px;border:3px solid #0f172a;border-radius:18px;background:#f1f5f9}
+.fpu .fpu-order>.fpu-group{border-radius:15px 15px 0 0}
+.fpu .fpu-waiting{display:grid;grid-auto-rows:max-content;gap:8px}.fpu .fpu-waiting[hidden]{display:none!important}
+.fpu .fpu-waiting-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:52px;margin-top:6px;padding:10px 14px;border:3px solid #f59e0b;border-radius:16px;background:#fffbeb;color:#78350f;font:inherit;font-size:15px;font-weight:900;text-align:left;cursor:pointer}
+.fpu .fpu-waiting-bar span{flex:0 0 auto;padding:6px 12px;border-radius:10px;background:#f59e0b;color:#111;font-size:13px}
 .fpu .fpu-order.fpu-only-missing{border-color:#f59e0b}
 .fpu .fpu-order.fpu-finished{border-color:#16a34a;opacity:.85}
 .fpu .fpu-order>.film-pending-row,.fpu .fpu-order>.film-pending-application,.fpu .fpu-order>.fpu-missing{margin:0 10px}
@@ -317,6 +323,17 @@ export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, i
     if (!group) { group = {key, indexes: [], customer};groups.push(group); }
     group.missing = row.groups;group.missingIndex = searchIndexFor(customer, row.groups.map(item => item.label));
   }
+  // Pedidos que só esperam arte ficam juntos numa seção que abre com um toque (ou sozinha na busca): com 60+ pedidos a lista
+  // ficava só com as faixas dos cabeçalhos.
+  const waitingBar = doc.createElement('button');waitingBar.type = 'button';waitingBar.className = 'fpu-waiting-bar';waitingBar.hidden = true;
+  const waitingWrap = doc.createElement('div');waitingWrap.className = 'fpu-waiting';waitingWrap.hidden = true;
+  let waitingCount = 0, waitingOpen = !entries.length;
+  const paintWaiting = (shownWaiting = waitingCount) => {
+    const searching = Boolean(input?.value.trim()), open = waitingOpen || searching && shownWaiting > 0;
+    waitingWrap.hidden = !open;waitingBar.hidden = !waitingCount || searching && !shownWaiting;
+    waitingBar.innerHTML = '';const label = doc.createElement('b');label.textContent = '⚠ ' + (searching ? shownWaiting + ' de ' : '') + waitingCount + (waitingCount === 1 ? ' pedido esperando arte' : ' pedidos esperando arte') + ' · subir a arte';
+    const action = doc.createElement('span');action.textContent = open ? 'Esconder' : 'Mostrar';waitingBar.append(label, action);
+  };
   for (const group of groups) {
     const section = doc.createElement('section');section.className = 'fpu-order' + (group.indexes.length ? '' : ' fpu-only-missing');
     const head = doc.createElement('div');head.className = 'fpu-group';
@@ -348,7 +365,11 @@ export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, i
       block.querySelector('[data-fpu-upload]')?.addEventListener('click', event => { event.preventDefault();event.stopPropagation();onUploadArt(group.customer.order, group); });
       section.appendChild(block);
     }
-    list.appendChild(section);
+    if (group.indexes.length) list.appendChild(section);else { waitingWrap.appendChild(section);waitingCount++; }
+  }
+  if (waitingCount) {
+    waitingBar.hidden = false;list.appendChild(waitingBar);list.appendChild(waitingWrap);
+    waitingBar.onclick = event => { event.preventDefault();waitingOpen = !waitingOpen;paintWaiting(); };
   }
 
   // Busca.
@@ -382,6 +403,7 @@ export function enhancePendingPicker({modal, entries, supabase, isPrivatePath, i
       if (!any && group.missing && pendingMatches(group.missingIndex, query)) any = true;
       group.section.style.display = any ? '' : 'none';if (any) shownGroups.add(group.key);
     }
+    paintWaiting(groups.filter(group => !group.indexes.length && group.section.style.display !== 'none').length);
     const totalGroups = groups.length;
     summary.innerHTML = '';
     const pill = text => { const node = doc.createElement('b');node.textContent = text;summary.appendChild(node); };
