@@ -107,6 +107,7 @@ async function rpc(name,args={}){await new Promise(r=>setTimeout(r,25));window.q
  if(name==='z19p_zero19_mark_delivered'){window.qa.delivered=(window.qa.delivered||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if(w.project_id===args.p_project_id)w.stage='delivered';return {data:{stage:'delivered'},error:null};}
  if(name==='z19p_zero19_mark_art_ready'){window.qa.markedAll=(window.qa.markedAll||[]).concat([args]);const item=data.z19p_zero19_work_items.find(w=>w.project_id===args.p_project_id&&w.personalization_sale_id===args.p_personalization_sale_id);if(!item)return {data:null,error:{message:'Item não encontrado'}};item.asset_id=args.p_asset_id;item.stage='ready_production';window.qa.marked=args;return {data:{stage:'ready_production'},error:null};}
  if(name==='z19p_pending_film_items')return {data:[],error:null};
+ if(name==='z19p_mark_selected_order_production'){window.qa.printed=(window.qa.printed||[]).concat([args]);for(const w of data.z19p_zero19_work_items)if((args.p_sale_ids||[]).includes(w.personalization_sale_id))w.stage='production';return {data:{projects:1,placements:0,personalizations:(args.p_sale_ids||[]).length},error:null};}
  return {data:/flow|snapshot/.test(name)?{}:name.includes('progress')?{}:null,error:null};}
 export function createClient(){return {
  auth:{getSession:async()=>({data:{session},error:null}),getUser:async()=>({data:{user:session.user},error:null}),onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}}),signOut:async()=>({error:null}),refreshSession:async()=>({data:{session},error:null})},
@@ -196,9 +197,37 @@ try{
   const checked=await evaluate(`[...document.querySelectorAll('.film-pending-row')].filter(r=>r.querySelector('input:checked')).map(r=>r.textContent.replace(/\\s+/g,' ').slice(0,90))`);
   report.push('Aguardando produção marcado: '+checked.join(' | '));assert(checked.length===1&&/Bruno Site/.test(checked[0]),'só o pedido escolhido marcado');
   await shot('5-aguardando-marcado');
+  // 2.17.94 (12/11): busca (nome, WhatsApp, pedido), grupos por pedido, miniatura leve e "Já está pronta" na arte subida sem posição.
+  const type=async text=>{await evaluate(`(()=>{const i=document.querySelector('[data-fpu-search]');i.value=${JSON.stringify(text)};i.dispatchEvent(new Event('input',{bubbles:true}))})()`);await delay(150);};
+  const visibleRows=()=>evaluate(`[...document.querySelectorAll('.film-pending-row')].filter(r=>r.offsetParent).map(r=>r.textContent.replace(/\\s+/g,' ').slice(0,60))`);
+  assert(await evaluate('!!document.querySelector("[data-fpu-search]")'),'barra de busca na janela');
+  const heads=await evaluate(`[...document.querySelectorAll('.fpu-group')].map(g=>g.textContent.replace(/\\s+/g,' '))`);report.push('grupos: '+heads.join(' | '));assert(heads.length>=1&&heads.some(h=>/Bruno Site.*arte/.test(h)),'artes agrupadas por pedido: '+heads.join(' | '));
+  console.log('miniaturas: '+JSON.stringify(await evaluate(`[...document.querySelectorAll('.film-pending-preview')].map(p=>({html:p.innerHTML.slice(0,160)}))`)));
+  await wait(`[...document.querySelectorAll('.film-pending-preview img')].some(i=>/[?&]w=240/.test(i.src)&&!i.dataset.fpuFull)`,'miniatura leve de 240 px',10000);
+  assert(!(await evaluate(`[...document.querySelectorAll('.film-pending-preview img')].some(i=>i.src&&!/[?&]w=240/.test(i.src)&&/qa-art/.test(i.src))`)),'nenhuma miniatura baixou o PNG inteiro');
+  await type('BRUNO');let found=await visibleRows();report.push('busca "BRUNO": '+found.join(' | '));assert(found.length>=1&&found.every(t=>/Bruno/.test(t)),'busca pelo nome');
+  await type('99990002');found=await visibleRows();report.push('busca WhatsApp: '+found.length);assert(found.length>=1&&found.every(t=>/Bruno/.test(t)),'busca pelo WhatsApp');
+  await type('(19) 9 9999-0002');assert((await visibleRows()).every(t=>/Bruno/.test(t)),'WhatsApp com máscara');
+  await type('ninguém assim');assert.equal((await visibleRows()).length,0);assert(await evaluate('!document.querySelector(".fpu-empty").hidden'),'aviso de nada encontrado');
+  await type('bruno');
+  assert(await evaluate(`[...document.querySelectorAll('.film-pending-row')].filter(r=>/Bruno/.test(r.textContent)).every(r=>r.querySelector('[data-pending-produced]'))`),'"Já está pronta" na arte subida sem posição (pedido do Natan)');
+  await noSideScroll('aguardando com busca');await shot('5b-aguardando-busca');
+  await type('');
   assert(await evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>/Adicionar selecionados ao filme/.test(b.textContent)&&!b.disabled);if(!b)return false;b.click();return true})()`),'adicionar do Aguardando produção');
   await wait(`[...document.querySelectorAll('#filmItems article')].some(a=>/Bruno Site/.test(a.textContent))`,'arte sem posição no filme',30000);
   report.push('arte sem posição entrou no filme pelo Aguardando produção');
+  // Botão Buscar pedido: mesma janela com a busca pronta e "Já impresso · tirar da fila".
+  await evaluate('document.querySelector("#findFilmOrder").click()');
+  await wait('document.querySelector("[data-fpu-search]")','Buscar pedido abre a janela',20000);await delay(200);
+  assert(await evaluate('document.activeElement?.matches?.("[data-fpu-search]")'),'busca já com o cursor');
+  await evaluate('window.confirm=()=>true');
+  const printedName=await evaluate(`(()=>{const b=document.querySelector('[data-fpu-printed]');if(!b)return '';const name=b.closest('.fpu-group').querySelector('strong').textContent;b.click();return name})()`);
+  assert(printedName,'botão Já impresso no pedido');
+  await wait('(window.qa.printed||[]).length>0','Já impresso chama a função da exportação',10000);
+  await wait(`!!document.querySelector('.fpu-printed-tag')`,'cartão marcado como impresso',10000);
+  report.push('Já impresso: '+printedName+' → '+JSON.stringify(await evaluate('window.qa.printed[0]')));
+  await shot('5c-buscar-pedido-impresso');
+  await evaluate(`document.querySelectorAll('.film-pending-modal .close').forEach(b=>b.click())`);await delay(300);
 
   // 4) QR "Subir arte" do cupom: abre o pedido direto, medida do pedido, pasta pronta, sem mockup e Jogar no filme.
   await send('Page.navigate',{url:origin+'/index.html#/zero19-fila?pedido=50001'});
