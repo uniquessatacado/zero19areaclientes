@@ -142,7 +142,7 @@ function assertNothingLost(source, plan, alphaOf, label) {
   // cortes no meio das faixas vazias
   assert.deepEqual(plan.cuts, [Math.round((1140 + 1179) / 2), Math.round((1780 + 1899) / 2)]);
   const auto = await scanPng(blob).then(a => planOptions(a, { pxPerCm, maxCm: 100 }));
-  assert.equal(auto.options[0].mode, 'straight', 'com linha reta vazia a recomendada é o corte reto'); assert.equal(auto.options[0].parts.length, 3);
+  assert.equal(auto.options[0].straight, true, 'com corredor vazio entre as estampas a recomendada é corte reto'); assert.equal(auto.options[0].parts.length, 3);
   assert(auto.options.length >= 2 && auto.options.length <= 3, 'até 3 opções');
   // partes de até 50 cm: mais partes, mesma garantia
   const half = await checkSplit(c, blob, { pxPerCm, maxCm: 50, label: 'partes de 50 cm', expectOversize: 3 });
@@ -274,6 +274,36 @@ function assertNothingLost(source, plan, alphaOf, label) {
   const full = rgbaCanvas(80, 400); rect(full, 0, 0, 80, 400, [9, 9, 9], false);
   const bg = planOptions(await scanPng(encodePng({ width: 80, height: 400, rows: full.rows })), { pxPerCm: 2, maxCm: 100 });
   assert.equal(bg.options[0].parts.length, 1); assert.equal(bg.options[0].parts[0].oversize, true); assert.equal(bg.background, true, 'avisa que parece ter fundo');
+}
+
+// 6c) Estampa com linhas vazias por dentro (halftone em linhas, desenho com texto embaixo) bem onde cairia o corte de
+//     1 m: nenhuma opção pode cortar dentro dela (13/11, dono: "nos 3 exemplos está cortando reto passando em cima da
+//     estampa; tem que contornar a estampa para não cortar"). O corte só passa ENTRE as estampas.
+{
+  const pxPerCm = 12, W = 300, H = 2400, c = rgbaCanvas(W, H);
+  rect(c, 20, 20, 260, 780, [30, 30, 200]);                                   // estampa de cima
+  for (let y = 900; y <= 1500; y += 4) rect(c, 20, y, 260, 2, [200, 30, 30], false); // halftone em linhas: 2 px de pixel, 2 px vazios
+  rect(c, 40, 1530, 220, 40, [200, 30, 30], false);                            // texto embaixo do desenho (a 28 px = 2,3 cm)
+  rect(c, 20, 1700, 260, 650, [30, 160, 30]);                                  // estampa de baixo
+  const blob = encodePng({ width: W, height: H, rows: c.rows }), analysis = await scanPng(blob), halftone = [];
+  for (let y = 900; y <= 1569; y++) for (let x = 40; x < 260; x += 37) if (alphaAt(c, x, y) >= VISIBLE_ALPHA) halftone.push([x, y]);
+  // o corte reto "em qualquer linha vazia" (o de antes) cortaria a estampa:
+  const naive = planSplit(analysis, { pxPerCm, maxCm: 100, params: { mode: 'straight', fill: 1 } });
+  assert(naive.parts.some(p => p.top > 900 && p.top < 1500), 'o corte reto antigo cortaria dentro da estampa (o teste reproduz o problema)');
+  const { options } = planOptions(analysis, { pxPerCm, maxCm: 100 });
+  assert(options.length >= 1);
+  for (const [k, option] of options.entries()) {
+    const plan = planFor(analysis, pxPerCm, 100, option.params), { written } = await splitPng(blob, analysis, { pxPerCm, maxCm: 100, params: option.params });
+    const where = new Map();
+    for (const part of written) {
+      const img = await decodePng(part.blob);
+      for (const [x, y] of halftone) if (y >= part.top && y <= part.bottom && x >= part.left && x <= part.right && img.rows[y - part.top][(x - part.left) * 4 + 3] >= VISIBLE_ALPHA) where.set(x + ',' + y, part.index);
+    }
+    const parts = new Set(halftone.map(([x, y]) => where.get(x + ',' + y)));
+    assert(!parts.has(undefined), 'opção ' + (k + 1) + ': pedaço da estampa perdido');
+    assert.equal(parts.size, 1, 'opção ' + (k + 1) + ': a estampa foi cortada em ' + parts.size + ' partes (' + JSON.stringify(option.params) + ')');
+    assert(plan.parts.every(p => !p.oversize), 'opção ' + (k + 1) + ' dentro do limite');
+  }
 }
 
 // 6) Nomes: "ana" → "ana 1/2"; arquivo sem barra.

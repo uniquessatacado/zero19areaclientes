@@ -299,8 +299,13 @@ function finishParts(parts, pxPerCm) {
 const maxPxOf = (pxPerCm, maxCm) => Math.floor(maxCm * pxPerCm + 1e-6);
 
 // Corte reto (linhas inteiras sem pixel). fill < 1 = cada parte vai só até essa fração do limite (corte mais alto).
-function planStraight(analysis, pxPerCm, maxCm, fill = 1) {
-  const blocks = visibleBlocks(analysis);
+// minGapPx: só corta em faixa vazia com pelo menos essa altura (faixa menor é espaço DENTRO de uma estampa).
+function planStraight(analysis, pxPerCm, maxCm, fill = 1, minGapPx = 0) {
+  const blocks = [];
+  for (const block of visibleBlocks(analysis)) {
+    const last = blocks[blocks.length - 1];
+    if (last && block[0] - last[1] - 1 < minGapPx) last[1] = block[1]; else blocks.push([...block]);
+  }
   if (!blocks.length) throw fail('A imagem não tem arte visível (só transparência).');
   const H = analysis.height, maxPx = maxPxOf(pxPerCm, maxCm), limit = Math.max(1, Math.floor(maxPx * fill)), parts = [];
   let i = 0, upLimit = 0;
@@ -317,14 +322,14 @@ function planStraight(analysis, pxPerCm, maxCm, fill = 1) {
   }
   finishParts(parts, pxPerCm);
   const cuts = parts.slice(1).map((part, index) => Math.round((parts[index].bottom + part.top) / 2));
-  return { mode: 'straight', params: { mode: 'straight', fill }, parts, cuts, maxPx, pxPerCm, maxCm };
+  return { mode: 'straight', params: { mode: 'straight', fill, minGapPx }, parts, cuts, maxPx, pxPerCm, maxCm };
 }
 
 // --- Corte que contorna as artes -------------------------------------------------------------------------------------
 // "Arte" = grupo de pixels visíveis próximos (letras de um nome, pontos de um halftone, peças de uma estampa ficam
 // juntas). Junta o que está a menos de X mm; quanto maior X, mais seguro (menos chance de separar peças de uma mesma
 // estampa). Cada arte vai inteira para UMA parte; a parte leva só as artes dela (o resto do retângulo fica transparente).
-const MERGE_MM = [10, 5, 3, 1.5, 0.5, 0];
+const MERGE_MM = [20, 10, 5, 3, 1.5, 0.5, 0];
 const FILLS = [1, 0.95, 0.9, 0.85, 0.8];
 
 function dilate(src, gw, gh, r) {
@@ -426,6 +431,19 @@ function planContour(analysis, pxPerCm, maxCm, prep, fill = 1) {
   if (!prep.elements.length) throw fail('A imagem não tem arte visível (só transparência).');
   const maxPx = maxPxOf(pxPerCm, maxCm), groups = groupElements(prep.elements, Math.max(1, Math.floor(maxPx * fill)));
   const parts = groups.map((group, p) => ({ ...groupBox(group), mask: true, ownerId: p })).map(part => ({ ...part, oversize: part.height > maxPx }));
+  // Partes separadas por uma reta (sem se encaixar): recorte exato pela regra da prancheta (alfa ≥ 8 + até 2 px de borda
+  // suave), como o corte reto; todo pixel dessas linhas é da própria parte.
+  const ordered = [...parts].sort((a, b) => a.top - b.top), { maxA } = analysis.rows;
+  if (ordered.every((part, k) => !k || part.top > ordered[k - 1].bottom)) {
+    ordered.forEach((part, k) => {
+      let top = part.top, bottom = part.bottom;
+      while (top <= bottom && maxA[top] < VISIBLE_ALPHA) top++;
+      while (bottom >= top && maxA[bottom] < VISIBLE_ALPHA) bottom--;
+      if (top > bottom) return;
+      const exact = boxFor(analysis, top, bottom, k ? ordered[k - 1].bottom + 1 : 0, k + 1 < ordered.length ? ordered[k + 1].top - 1 : analysis.height - 1);
+      if (exact) Object.assign(part, exact, { oversize: exact.height > maxPx });
+    });
+  }
   finishParts(parts, pxPerCm);
   return { mode: 'contour', params: { mode: 'contour', mergeMm: prep.mergeMm, fill }, parts, cuts: [], maxPx, pxPerCm, maxCm, groups, prep };
 }
@@ -457,7 +475,7 @@ function transparentPixel(info) {
 // Plano completo de uma escolha (mesmo resultado sempre para os mesmos parâmetros).
 export function planFor(analysis, pxPerCm, maxCm, params) {
   checkScale(pxPerCm, maxCm);
-  if (!params || params.mode === 'straight') return planStraight(analysis, pxPerCm, maxCm, params?.fill || 1);
+  if (!params || params.mode === 'straight') return planStraight(analysis, pxPerCm, maxCm, params?.fill || 1, params?.minGapPx || 0);
   if (!analysis.grid || !transparentPixel(analysis)) throw fail('Este PNG não permite contornar as artes.');
   const plan = planContour(analysis, pxPerCm, maxCm, contourPrep(analysis, pxPerCm, params.mergeMm), params.fill || 1);
   plan.owner = contourOwner(analysis, plan); plan.grid = { c: analysis.grid.c, gw: analysis.grid.gw, gh: analysis.grid.gh };
@@ -488,23 +506,26 @@ function previewOf(analysis, plan) {
 const sortedParts = plan => [...plan.parts].sort((a, b) => a.top - b.top);
 const isStraight = plan => plan.mode === 'straight' || sortedParts(plan).every((part, k, list) => !k || part.top > list[k - 1].bottom);
 function summarize(analysis, plan, extra = {}) {
-  return { params: plan.params, mode: plan.mode, straight: isStraight(plan), mergeMm: plan.params.mergeMm ?? null, fill: plan.params.fill,
+  const straight = isStraight(plan), ordered = sortedParts(plan), cuts = plan.mode === 'straight' ? plan.cuts : straight ? ordered.slice(1).map((part, k) => Math.round((ordered[k].bottom + part.top) / 2)) : [];
+  return { params: plan.params, mode: plan.mode, straight, mergeMm: plan.params.mergeMm ?? null, fill: plan.params.fill,
     parts: plan.parts.map(({ index, total, top, bottom, left, right, width, height, widthCm, heightCm, oversize }) => ({ index, total, top, bottom, left, right, width, height, widthCm, heightCm, oversize })),
-    cuts: plan.cuts, maxPx: plan.maxPx, pxPerCm: plan.pxPerCm, maxCm: plan.maxCm, preview: previewOf(analysis, plan), ...extra };
+    cuts, maxPx: plan.maxPx, pxPerCm: plan.pxPerCm, maxCm: plan.maxCm, preview: previewOf(analysis, plan), ...extra };
 }
-// Até 3 opções diferentes, da melhor para a pior: menos partes acima do limite, menos partes, corte reto antes de contorno,
-// juntando peças a mais distância (mais seguro), e partes menores. Opções iguais (ou quase: diferença menor que 1 cm) saem.
-export function planOptions(analysis, { pxPerCm, maxCm = 100 } = {}) {
+// Até 3 opções diferentes. As opções são montadas pelas ESTAMPAS (grupos de pixels próximos), nunca por linha vazia
+// solta: o corte só passa entre estampas — reto quando há um corredor vazio entre elas, contornando quando não há
+// (13/11 (3), dono: "nos 3 exemplos está cortando reto passando em cima da estampa; tem que contornar a estampa").
+// Ordem: dentro do limite; juntando peças a mais distância (mais seguro: menos chance de separar uma estampa); menos
+// partes; corte reto antes de contorno; parte cheia até o limite antes de partes parecidas. Opções quase iguais (menos de
+// 1 cm de diferença) não se repetem.
+export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000 } = {}) {
   checkScale(pxPerCm, maxCm);
-  const maxPx = maxPxOf(pxPerCm, maxCm), base = planStraight(analysis, pxPerCm, maxCm, 1);
-  if (base.parts.length === 1 && !base.parts[0].oversize) return { fits: true, options: [summarize(analysis, base)] };
-  const candidates = [], box = artBox(analysis);
-  const add = plan => { if (plan) candidates.push(plan); };
-  const score = plan => [plan.parts.filter(p => p.oversize).length, plan.parts.length, isStraight(plan) ? 0 : 1, -(plan.params.mergeMm ?? 99), plan.params.fill === 1 ? 0 : 1, Math.max(...plan.parts.map(p => p.height))];
+  const maxPx = maxPxOf(pxPerCm, maxCm), box = artBox(analysis);
+  if (!box) throw fail('A imagem não tem arte visível (só transparência).');
+  if (box.height <= maxPx) return { fits: true, options: [summarize(analysis, planStraight(analysis, pxPerCm, maxCm, 1))] };
+  const candidates = [], started = Date.now();
+  const valid = plan => !plan.parts.some(p => p.oversize);
+  const score = plan => [plan.parts.filter(p => p.oversize).length, -(plan.params.mergeMm ?? plan.params.minGapPx / pxPerCm * 10), plan.parts.length, isStraight(plan) ? 0 : 1, plan.params.fill === 1 ? 0 : 1, Math.max(...plan.parts.map(p => p.height))];
   const balancedFill = count => Math.min(1, Math.ceil(box.height / Math.max(1, count)) * 1.04 / maxPx);
-  for (const fill of FILLS) add(fill === 1 ? base : planStraight(analysis, pxPerCm, maxCm, fill));
-  const fewest = () => Math.min(...candidates.filter(p => !p.parts.some(q => q.oversize)).map(p => p.parts.length), Infinity);
-  if (fewest() < Infinity) add(planStraight(analysis, pxPerCm, maxCm, balancedFill(fewest())));
   const pick = () => {
     const ranked = candidates.map(plan => ({ plan, key: score(plan) })).sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i]; return 0; });
     const chosen = [], tolerance = Math.max(1, pxPerCm);
@@ -516,19 +537,26 @@ export function planOptions(analysis, { pxPerCm, maxCm = 100 } = {}) {
     }
     return chosen;
   };
-  let chosen = pick();
-  if ((chosen.length < 3 || chosen[0].parts.some(p => p.oversize)) && analysis.grid && transparentPixel(analysis)) {
+  if (analysis.grid && transparentPixel(analysis)) {
     for (const mm of MERGE_MM) {
       const prep = contourPrep(analysis, pxPerCm, mm);
       if (!prep.elements.length) break;
-      for (const fill of FILLS) add(planContour(analysis, pxPerCm, maxCm, prep, fill));
-      const valid = candidates.filter(p => !p.parts.some(q => q.oversize));
-      if (valid.length) add(planContour(analysis, pxPerCm, maxCm, prep, balancedFill(Math.min(...valid.map(p => p.parts.length)))));
-      chosen = pick();
-      if (chosen.length === 3 && !chosen.some(p => p.parts.some(q => q.oversize))) break;
+      const level = FILLS.map(fill => planContour(analysis, pxPerCm, maxCm, prep, fill)), good = level.filter(valid);
+      if (good.length) level.push(planContour(analysis, pxPerCm, maxCm, prep, balancedFill(Math.min(...good.map(p => p.parts.length)))));
+      candidates.push(...level);
+      const picked = pick();
+      // Só as que ainda podem ser escolhidas guardam o mapa de grupos (cada um tem dezenas de MB num arquivo de 2 m).
+      for (const plan of candidates) if (!picked.includes(plan)) plan.prep = null;
+      if (picked.length === 3 && picked.every(valid)) break;
+      if (picked.some(valid) && Date.now() - started > budgetMs) break;
     }
+  } else {
+    // Formato sem cor transparente para apagar (raro): só corte reto, e só em faixa vazia de pelo menos 1 cm.
+    const minGapPx = Math.ceil(pxPerCm);
+    for (const fill of FILLS) candidates.push(planStraight(analysis, pxPerCm, maxCm, fill, minGapPx));
   }
-  const whole = !chosen.some(p => p.parts.length > 1) && box && box.width * box.height >= 0.9 * analysis.width * analysis.height;
+  const chosen = pick();
+  const whole = !chosen.some(p => p.parts.length > 1) && box.width * box.height >= 0.9 * analysis.width * analysis.height;
   return { fits: false, background: whole, options: chosen.map((plan, k) => summarize(analysis, plan, { recommended: k === 0, balanced: plan.params.fill !== 1 && !FILLS.includes(plan.params.fill) })) };
 }
 

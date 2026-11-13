@@ -16,7 +16,7 @@ const cmField = value => String(Math.round(value * 100) / 100).replace('.', ',')
 const sizeText = value => value >= 100 ? (value / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' m' : cmText(value) + ' cm';
 const isPng = file => !!file && (file.type === 'image/png' || /\.png$/i.test(file.name || ''));
 const baseName = q => String(q.name || '').trim() || String(q.file?.name || 'Arte').replace(/\.[^.]+$/, '').trim() || 'Arte';
-const mergeText = mm => mm >= 10 ? 'peças a menos de 1 cm ficam juntas' : mm > 0 ? 'peças a menos de ' + String(mm).replace('.', ',') + ' mm ficam juntas' : 'só peças encostadas ficam juntas';
+const mergeText = mm => mm >= 10 ? 'peças a menos de ' + String(mm / 10).replace('.', ',') + ' cm ficam juntas' : mm > 0 ? 'peças a menos de ' + String(mm).replace('.', ',') + ' mm ficam juntas' : 'só peças encostadas ficam juntas';
 
 // O trabalho pesado vai para um Worker; se o navegador não deixar, roda aqui mesmo (mais lento, mesmo resultado).
 let worker = null, workerBroken = false, sequence = 0;
@@ -112,11 +112,8 @@ export const busy = queue => (queue || []).some(q => q.splitBusy);
 
 function optionTitle(option) {
   const parts = option.parts, top = Math.min(...parts.map(p => p.top));
-  if (option.straight) {
-    const cuts = option.mode === 'straight' ? option.cuts : [...parts].sort((a, b) => a.top - b.top).slice(1).map(p => p.top);
-    return 'Corte reto' + (cuts.length ? ' a ' + cuts.map(cut => cmShort((cut - top) / option.pxPerCm) + ' cm').join(' e ') : '');
-  }
-  return 'Contorna as artes · ' + mergeText(option.mergeMm);
+  if (option.straight) return 'Corte reto entre as estampas' + (option.cuts.length ? ' a ' + option.cuts.map(cut => cmShort((cut - top) / option.pxPerCm) + ' cm').join(' e ') : '') + (option.mergeMm !== null ? ' · ' + mergeText(option.mergeMm) : '');
+  return 'Contorna as estampas · ' + mergeText(option.mergeMm);
 }
 function partsListHTML(parts, maxCm, name) {
   return '<ul>' + [...parts].sort((a, b) => a.index - b.index).map(part => '<li' + (part.oversize ? ' class="upload-split-warn"' : '') + '><i style="background:' + COLORS[(part.index - 1) % COLORS.length] + '"></i>' + esc(partName(name, part.index, part.total)) + ' · ' + esc(cmText(part.widthCm)) + ' × ' + esc(cmText(part.heightCm)) + ' cm' + (part.oversize ? ' · maior que ' + esc(cmText(maxCm)) + ' cm (uma arte sozinha passa do limite)' : '') + '</li>').join('') + '</ul>';
@@ -135,7 +132,7 @@ export function boxHTML(q, i, { trim = true } = {}) {
   if (!q.png.hasAlpha) return '<div class="upload-split is-blocked"><b>✂ Sem transparência</b><small>Esta imagem não tem fundo transparente: não dá para separar as artes sem cortar.</small></div>';
   return '<div class="upload-split" data-split-box="' + i + '">'
     + '<div class="upload-split-text"><b>✂ Arte com ' + esc(sizeText(height)) + ' de altura</b>'
-    + '<small>Divide em partes de até ' + esc(cmText(maxCm)) + ' cm sem cortar nenhuma estampa: corta numa linha sem pixel ou contorna as artes. Você vê até 3 opções e escolhe uma antes de gravar. Os nomes ficam “' + esc(baseName(q)) + ' 1/2”, “' + esc(baseName(q)) + ' 2/2”…</small></div>'
+    + '<small>Divide em partes de até ' + esc(cmText(maxCm)) + ' cm sem cortar nenhuma estampa: o corte passa só entre as estampas (reto quando há espaço vazio entre elas, contornando quando não há). Você vê até 3 opções e escolhe uma antes de gravar. Os nomes ficam “' + esc(baseName(q)) + ' 1/2”, “' + esc(baseName(q)) + ' 2/2”…</small></div>'
     + '<label class="upload-split-max">Partes de até <input data-split-max="' + i + '" inputmode="decimal" value="' + esc(cmField(maxCm)) + '" aria-label="Altura máxima de cada parte em cm"> cm</label>'
     + '<button type="button" class="btn small upload-split-run" data-split-run="' + i + '"' + (q.splitBusy ? ' disabled' : '') + '>' + (q.splitBusy ? 'Calculando…' : '✂ Ver opções de corte') + '</button>'
     + (q.splitBusy ? '<small class="upload-split-status" data-split-status="' + esc(q.splitKey) + '" role="status">' + esc(q.splitStatus || 'Preparando…') + '</small>' : '')
@@ -168,7 +165,7 @@ function partHTML(q) {
     + '<canvas class="upload-split-map" data-split-map="' + esc(group.id) + '" aria-label="Como a arte foi dividida"></canvas>'
     + '<div class="upload-split-text"><b>✂ “' + esc(group.name) + '” dividida em ' + p.total + ' partes</b><small>' + esc(optionTitle(group.option)) + '</small>'
     + partsListHTML(group.option.parts, group.maxCm, group.name)
-    + '<small>' + (group.option.straight ? 'Cortes só onde não tem pixel.' : 'O corte contorna as artes: cada parte leva só as artes dela (o resto fica transparente).') + ' Escala: ' + esc(group.from) + '. Cada parte leva os pixels exatos do arquivo, sem redimensionar.</small></div>'
+    + '<small>' + (group.option.straight ? 'Corte reto entre as estampas.' : 'O corte contorna as estampas: cada parte leva só as estampas dela (o resto fica transparente).') + ' Escala: ' + esc(group.from) + '. Cada parte leva os pixels exatos do arquivo, sem redimensionar.</small></div>'
     + '<div class="upload-split-option-actions"><button type="button" class="btn small" data-split-zoom-group="' + esc(group.id) + '">🔍 Ampliar</button><button type="button" class="btn small" data-split-undo="' + esc(group.id) + '">↶ Desfazer divisão</button></div>'
     + '</div>';
 }
@@ -215,7 +212,7 @@ function drawMap(canvas, source, option) {
   }
   const line = Math.max(1, Math.round(t.height / 400));
   for (const part of option.parts) { ctx.lineWidth = line; ctx.strokeStyle = COLORS[(part.index - 1) % COLORS.length]; ctx.setLineDash([]); ctx.strokeRect(part.left * sx + line / 2, part.top * sy + line / 2, Math.max(1, part.width * sx - line), Math.max(1, part.height * sy - line)); }
-  if (option.mode === 'straight') { ctx.lineWidth = line * 2; ctx.strokeStyle = '#dc2626'; ctx.setLineDash([line * 5, line * 3]); for (const cut of option.cuts) { const y = Math.round(cut * sy) + .5; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(t.width, y); ctx.stroke(); } ctx.setLineDash([]); }
+  if (option.straight && option.cuts?.length) { ctx.lineWidth = line * 2; ctx.strokeStyle = '#dc2626'; ctx.setLineDash([line * 5, line * 3]); for (const cut of option.cuts) { const y = Math.round(cut * sy) + .5; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(t.width, y); ctx.stroke(); } ctx.setLineDash([]); }
   const font = Math.max(11, Math.round(t.height / 45));
   ctx.font = 'bold ' + font + 'px system-ui, sans-serif'; ctx.textBaseline = 'middle';
   for (const part of option.parts) {

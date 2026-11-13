@@ -65,14 +65,16 @@ const steps=String.raw`
   await wait('document.querySelector(".upload-split.is-choosing [data-split-choose]")','opções de corte',120000);
   const opts=await evaluate("[...document.querySelectorAll('.upload-split-option')].map(o=>({title:o.querySelector('b').textContent,text:o.innerText.replace(/\\s+/g,' '),map:o.querySelector('canvas').width}))");
   report.push('opções (ana): '+opts.map(o=>o.text.slice(0,80)).join(' | '));
-  assert(opts.length>=2&&opts.length<=3,'2 ou 3 opções');assert.match(opts[0].title,/recomendada/);assert.match(opts[0].text,/Corte reto/);assert(opts.every(o=>o.map>10),'mapa em cada opção');
+  assert(opts.length>=2&&opts.length<=3,'2 ou 3 opções');assert.match(opts[0].title,/recomendada/);assert(opts.every(o=>o.map>10),'mapa em cada opção');
+  // B e C estão a 4 mm: a recomendada (mais segura) junta as duas como se fossem uma estampa (3 partes); a de 2 partes vem como opção.
+  assert.match(opts[0].text,/5 mm/,'recomendada junta peças a menos de 5 mm');const two=opts.findIndex(o=>/· 2 partes/.test(o.text));assert(two>0,'opção com 2 partes oferecida');assert.match(opts[two].text,/Corte reto entre as estampas/);
   assert.equal(await evaluate('document.querySelectorAll("#uploadList .upload-row").length'),1,'nada muda antes de escolher');
   await shot('2a-opcoes');
   await evaluate('document.querySelector("[data-split-zoom]").click()');
   await wait('document.querySelector(".upload-split-zoom canvas")','ampliar a opção',10000);await shot('2b-ampliar');
   await evaluate('document.querySelector("[data-zoom-close]").click()');
   await wait('!document.querySelector(".upload-split-zoom")','fechar o ampliar',5000);
-  await evaluate('document.querySelector("[data-split-choose]").click()');
+  await evaluate('document.querySelectorAll("[data-split-choose]")['+two+'].click()');
   await wait('document.querySelector(".upload-split.is-done")','divisão pronta',120000);
   const rows=await evaluate("[...document.querySelectorAll('#uploadList .upload-row')].map(r=>({name:r.querySelector('input[data-k=name]').value,w:r.querySelector('[data-size-axis=width]').value,h:r.querySelector('[data-size-axis=height]').value,ro:r.querySelector('[data-size-axis=width]').readOnly&&r.querySelector('[data-size-axis=height]').readOnly,thumb:(r.querySelector('.upload-thumb')?.src||'').slice(0,22)}))");
   report.push('partes na lista: '+JSON.stringify(rows));
@@ -86,7 +88,7 @@ const steps=String.raw`
   await wait('document.querySelectorAll("#uploadList .upload-row").length===1&&document.querySelector("#uploadList input[data-k=name]").value==="ana"','desfazer volta a arte inteira',10000);
   await evaluate('document.querySelector("[data-split-run]").click()');
   await wait('document.querySelector(".upload-split.is-choosing [data-split-choose]")','opções de novo (já lida)',60000);
-  await evaluate('document.querySelector("[data-split-choose]").click()');
+  await evaluate('document.querySelectorAll("[data-split-choose]")['+two+'].click()');
   await wait('document.querySelector(".upload-split.is-done")','divisão de novo',60000);
   // 4) Salvar: duas artes, PNG com os pixels exatos do original, medida exata.
   const assetsBefore=await evaluate('(window.qa.assets||[]).length');
@@ -167,7 +169,7 @@ const steps=String.raw`
   await wait('document.querySelector(".upload-split.is-choosing [data-split-choose]")','opções com contorno',120000);
   const sopts=await evaluate("[...document.querySelectorAll('.upload-split-option')].map(o=>o.innerText.replace(/\\s+/g,' '))");
   report.push('opções (escada): '+sopts.map(t=>t.slice(0,110)).join(' | '));
-  assert(sopts.length>=2&&sopts.length<=3,'2 ou 3 opções');assert.match(sopts[0],/recomendada/);assert.match(sopts[0],/Contorna as artes/);
+  assert(sopts.length>=2&&sopts.length<=3,'2 ou 3 opções');assert.match(sopts[0],/recomendada/);assert.match(sopts[0],/Contorna as estampas/);
   await shot('6a-opcoes-contorno');
   await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:2,mobile:true});await delay(400);
   await evaluate('document.querySelector(".upload-split-option")?.scrollIntoView({block:"start"})');await delay(200);
