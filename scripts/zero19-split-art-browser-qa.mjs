@@ -199,9 +199,82 @@ const steps=String.raw`
   for(const [x0,x1,top,bottom] of designs){const first=where[top*1500+x0];for(let y=top;y<=bottom;y+=37)for(let x=x0;x<=x1;x+=29)assert.equal(where[y*1500+x],first,'estampa dividida entre partes ('+x0+','+top+')');}
   assert.equal(where[5500*1500+700],where[6300*1500+700],'a estampa de 2 peças ficou inteira numa parte');
   report.push('escada: '+n+' partes de até 50 cm, cada estampa inteira numa parte, pixels iguais ao original');
+
+  // 7) PDF (13/11 (4), dono: "permita subir PDF também"): PDF de 20 × 120 cm com 2 artes vira PNG 300 DPI no tamanho real,
+  //    a medida vem preenchida, divide entre as artes e, ao salvar, o original guardado é o PDF.
+  const pdfFile=(name,wCm,hCm,ops)=>{const pt=v=>(v/2.54*72).toFixed(2),content=ops.map(([r,g,b,x,y,w,h])=>r+' '+g+' '+b+' rg '+pt(x)+' '+pt(hCm-y-h)+' '+pt(w)+' '+pt(h)+' re f').join('\n');
+    const objs=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>','<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+pt(wCm)+' '+pt(hCm)+'] /Contents 4 0 R /Resources << >> >>','<< /Length '+Buffer.byteLength(content)+' >>\nstream\n'+content+'\nendstream'];
+    let out='%PDF-1.4\n';const offs=[];objs.forEach((o,i)=>{offs.push(Buffer.byteLength(out));out+=(i+1)+' 0 obj\n'+o+'\nendobj\n';});
+    const xref=Buffer.byteLength(out);out+='xref\n0 '+(objs.length+1)+'\n0000000000 65535 f \n'+offs.map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+'trailer\n<< /Size '+(objs.length+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF\n';
+    const file=path.join(out_dir_pdf,name);fsSync.writeFileSync(file,out);return file;};
+  const out_dir_pdf=out;
+  const cartaz=pdfFile('cartaz.pdf',20,120,[[1,0,0,2,2,16,50],[0,0,1,2,62,16,56]]),logo=pdfFile('logo.pdf',10,8,[[0,0.5,0,1,1,8,6]]);
+  await send('Page.navigate',{url:origin+'/index.html#/filme'});
+  await wait('document.querySelector("#quickUploadFilmAsset")','Montar filme (PDF)',40000);
+  await evaluate('document.querySelector("#quickUploadFilmAsset").click()');
+  await wait('document.querySelector(".upload-modal #fileInput")','janela de subir arte (PDF)',30000);
+  const acceptPdf=await evaluate('document.querySelector(".upload-modal #fileInput").accept');assert.match(acceptPdf,/pdf/,'escolher arquivo aceita PDF');
+  await fileInput([cartaz]);
+  await wait('document.querySelector("#uploadList input[data-k=name]")&&document.querySelector(".upload-split-pdf")','PDF convertido na lista',120000);
+  await wait('Number((document.querySelector("#uploadList input[data-size-axis=width]")?.value||"").replace(",","."))>0','medida do PDF preenchida',60000);
+  const pdfRow=await evaluate("(()=>{const r=document.querySelector('#uploadList .upload-row');return {name:r.querySelector('input[data-k=name]').value,w:r.querySelector('[data-size-axis=width]').value,h:r.querySelector('[data-size-axis=height]').value,note:r.querySelector('.upload-split-pdf').innerText}})()");
+  report.push('PDF na lista: '+JSON.stringify(pdfRow));
+  assert.equal(pdfRow.name,'cartaz');assert(Math.abs(Number(pdfRow.w.replace(',','.'))-16)<0.05,'largura do PDF (16 cm)');assert(Math.abs(Number(pdfRow.h.replace(',','.'))-116)<0.05,'altura do PDF (116 cm)');
+  await shot('7a-pdf-convertido');
+  await wait('document.querySelector("[data-split-run]")','caixa de dividir (PDF)',30000);
+  await evaluate('document.querySelector("[data-split-run]").click()');
+  await wait('document.querySelector(".upload-split.is-choosing [data-split-choose]")','opções (PDF)',120000);
+  const popts=await evaluate("[...document.querySelectorAll('.upload-split-option')].map(o=>o.innerText.replace(/\\s+/g,' '))");report.push('opções (PDF): '+popts.map(t=>t.slice(0,90)).join(' | '));
+  assert.match(popts[0],/Corte reto entre as estampas/);assert.match(popts[0],/2 partes/);
+  // 8) Juntar peças no Ampliar: toca nas duas artes, refaz as opções e a nota da junção aparece.
+  await evaluate('document.querySelector("[data-split-zoom]").click()');
+  await wait('document.querySelector(".upload-split-zoom canvas")','ampliar (PDF)',10000);
+  await evaluate('document.querySelector("[data-zoom-join]").click()');
+  const tapAt=(xCm,yCm)=>evaluate("(()=>{const c=document.querySelector('.upload-split-zoom canvas'),r=c.getBoundingClientRect(),W=2363,H=14174,x=r.left+("+xCm+"*300/2.54)/W*r.width,y=r.top+("+yCm+"*300/2.54)/H*r.height;c.dispatchEvent(new MouseEvent('click',{clientX:x,clientY:y,bubbles:true}));return document.querySelector('[data-zoom-join-text]').textContent})()");
+  report.push('junção: '+(await tapAt(10,20))+' / '+(await tapAt(10,90)));
+  await shot('8a-juntar');
+  await evaluate('document.querySelector("[data-zoom-join-done]").click()');
+  await wait('/1 junção feita por você/.test(document.querySelector("#uploadList")?.innerText||"")&&!document.querySelector("[data-split-run][disabled]")','opções refeitas com a junção',120000);
+  const afterJoin=await evaluate('document.querySelector("#uploadList")?.innerText.replace(/\\s+/g," ").slice(0,300)');report.push('depois de juntar: '+afterJoin);
+  await shot('8b-depois-de-juntar');
+  // juntar as duas artes passa de 1 m: desfaz a junção e escolhe a opção reta
+  if(await evaluate('!!document.querySelector("[data-split-unjoin]")'))await evaluate('document.querySelector("[data-split-unjoin]").click()');
+  else{await evaluate('document.querySelector("[data-split-run]")?.click()');}
+  await wait('document.querySelector(".upload-split.is-choosing [data-split-choose]")&&!/junção feita/.test(document.querySelector(".upload-split.is-choosing").innerText)','opções sem junção de novo',120000);
+  await evaluate('document.querySelector("[data-split-choose]").click()');
+  await wait('document.querySelector(".upload-split.is-done")','PDF dividido',120000);
+  const openButtons=await evaluate('document.querySelectorAll("[data-split-open]").length');assert.equal(openButtons,2,'Ver em tamanho real em cada parte');
+  const pdfThumbs=await evaluate("[...document.querySelectorAll('#uploadList .upload-thumb')].map(i=>i.naturalWidth+'x'+i.naturalHeight)");report.push('miniaturas das partes: '+pdfThumbs.join(', '));
+  await shot('7b-pdf-dividido');
+  const before4=await evaluate('(window.qa.assets||[]).length');
+  await evaluate('document.querySelector("#processUpload").click()');
+  await wait('(window.qa.assets||[]).length>='+(before4+2),'partes do PDF salvas',180000);await delay(800);
+  const pdfAssets=await evaluate("(window.qa.assets||[]).slice("+before4+").map(a=>({name:a.name,w:a.width,h:a.height,original:a.original_path,processed:a.processed_path,pdf:a.metadata?.from_pdf,dpi:a.dpi}))");
+  report.push('salvas (PDF): '+pdfAssets.map(a=>a.name+' '+a.w+'×'+a.h+' '+a.dpi+' DPI · original '+a.original.split('.').pop()).join(' | '));
+  assert.deepEqual(pdfAssets.map(a=>a.name),['cartaz 1/2','cartaz 2/2']);
+  for(const a of pdfAssets){assert(/\.pdf$/.test(a.original),a.name+': original guardado é o PDF');assert.equal(a.pdf?.name,'cartaz.pdf');assert.equal(a.dpi,300);
+    const orig=await uploadBytes(a.original);assert.equal(orig.subarray(0,5).toString('latin1'),'%PDF-',a.name+': original enviado é o PDF');
+    const img=decode(await uploadBytes(a.processed));assert.equal(img.ppm,11811);assert.equal(img.W,a.w);assert.equal(img.H,a.h);}
+  assert(Math.abs(pdfAssets[0].h-50/2.54*300)<4&&Math.abs(pdfAssets[1].h-56/2.54*300)<4,'altura de cada parte = altura da arte no PDF');
+  // PDF pequeno, sem dividir: medida do PDF, PNG final e o PDF como original.
+  await wait('!document.querySelector(".upload-modal")','janela fechada (PDF)',30000);
+  await send('Page.navigate',{url:origin+'/index.html#/filme'});
+  await wait('document.querySelector("#quickUploadFilmAsset")','Montar filme (logo PDF)',40000);
+  await evaluate('document.querySelector("#quickUploadFilmAsset").click()');
+  await wait('document.querySelector(".upload-modal #fileInput")','janela (logo PDF)',30000);
+  await fileInput([logo]);
+  await wait('Number((document.querySelector("#uploadList input[data-size-axis=width]")?.value||"").replace(",","."))>0','medida do logo PDF',60000);
+  const logoRow=await evaluate("(()=>{const r=document.querySelector('#uploadList .upload-row');return {w:r.querySelector('[data-size-axis=width]').value,h:r.querySelector('[data-size-axis=height]').value}})()");
+  assert(Math.abs(Number(logoRow.w.replace(',','.'))-8)<0.05&&Math.abs(Number(logoRow.h.replace(',','.'))-6)<0.05,'logo PDF 8 × 6 cm: '+JSON.stringify(logoRow));
+  const before5=await evaluate('(window.qa.assets||[]).length');
+  await wait('!document.querySelector("#processUpload").disabled','salvar logo PDF',10000);
+  await evaluate('document.querySelector("#processUpload").click()');
+  await wait('(window.qa.assets||[]).length>'+before5,'logo PDF salvo',120000);await delay(500);
+  const lg=await evaluate("(()=>{const a=(window.qa.assets||[]).at(-1);return {name:a.name,w:a.width,h:a.height,original:a.original_path,engine:a.metadata?.processing_engine}})()");
+  report.push('logo PDF: '+JSON.stringify(lg));assert(/\.pdf$/.test(lg.original),'logo: original é o PDF');assert(Math.abs(lg.w-8/2.54*300)<4&&Math.abs(lg.h-6/2.54*300)<4,'logo: PNG no tamanho do PDF a 300 DPI');
   const tela=errors.filter(e=>!/ResizeObserver/.test(e));if(tela.length)console.log('ERROS DE TELA:',[...new Set(tela)].slice(0,8).join(' | '));assert(!tela.length,'erro de tela');
   console.log(report.join('\n'));
-  console.log('PASS dividir arte de 2 m: opções com mapa e ampliar, partes ana 1/2 e 2/2 com pixels e medidas exatas, desfazer, PNG grande sem canvas, contorno sem linha reta (estampas inteiras). Fotos: '+out);
+  console.log('PASS dividir arte de 2 m: opções com mapa e ampliar, PDF (convertido, dividido e pequeno, PDF como original), juntar peças, partes ana 1/2 e 2/2 com pixels e medidas exatas, desfazer, PNG grande sem canvas, contorno sem linha reta (estampas inteiras). Fotos: '+out);
 }finally{socket?.close();child.kill();server.close()}
 `;
 const tmp=path.join(here,'.zero19-split-art-qa.generated.mjs');

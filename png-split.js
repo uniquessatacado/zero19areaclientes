@@ -103,8 +103,8 @@ function unsupported(info) {
 }
 
 // Alfa (0–255, como o navegador mostra) de cada pixel da linha.
-function alphaReader(info) {
-  const { colorType: ct, bitDepth: bd, trns } = info, w = info.width;
+function alphaReader(info, width = info.width) {
+  const { colorType: ct, bitDepth: bd, trns } = info, w = width;
   const a16 = v => Math.round(v / 257);
   if (ct === 6 && bd === 8) return (raw, out) => { for (let x = 0, i = 3; x < w; x++, i += 4) out[x] = raw[i]; };
   if (ct === 6) return (raw, out) => { for (let x = 0, i = 6; x < w; x++, i += 8) out[x] = a16((raw[i] << 8) | raw[i + 1]); };
@@ -215,8 +215,9 @@ export async function scanPng(blob, { signal, onProgress, thumbMax = 1200 } = {}
   const W = info.width, H = info.height, maxA = new Uint8Array(H), min8 = new Int32Array(H).fill(-1), max8 = new Int32Array(H).fill(-1),
     minAny = new Int32Array(H).fill(-1), maxAny = new Int32Array(H).fill(-1), alpha = new Uint8Array(W), readAlpha = alphaReader(info), readRgba = rgbaReader(info);
   const scale = Math.min(1, thumbMax / Math.max(W, H)), tw = Math.max(1, Math.round(W * scale)), th = Math.max(1, Math.round(H * scale)), thumb = new Uint8ClampedArray(tw * th * 4);
-  const sampleX = new Int32Array(tw); for (let tx = 0; tx < tw; tx++) sampleX[tx] = Math.min(W - 1, Math.floor((tx + 0.5) * W / tw));
-  let nextThumbRow = 0, nextThumbY = Math.min(H - 1, Math.floor(0.5 * H / th));
+  // Miniatura pela MÉDIA dos pixels de cada ponto (cor ponderada pelo alfa): nítida, sem serrilhado.
+  const sums = new Float64Array(tw * th * 4), counts = new Float64Array(tw * th), thumbX = new Int32Array(W), colCount = new Float64Array(tw), px = new Uint8ClampedArray(4), rgba8 = info.colorType === 6 && info.bitDepth === 8;
+  for (let x = 0; x < W; x++) { thumbX[x] = Math.min(tw - 1, Math.floor(x * tw / W)); colCount[thumbX[x]]++; }
   // 13/11 (2): mapa de onde tem pixel visível, em quadradinhos de c px — é com ele que o corte contorna as artes
   // quando não existe linha reta vazia.
   let c = 4; while (Math.ceil(W / c) * Math.ceil(H / c) > 40e6) c *= 2;
@@ -225,19 +226,21 @@ export async function scanPng(blob, { signal, onProgress, thumbMax = 1200 } = {}
   for await (const { y, raw } of pngRows(blob, info, { signal, onProgress })) {
     readAlpha(raw, alpha);
     let top = 0, a8 = -1, b8 = -1, a0 = -1, b0 = -1;
-    const cellRow = Math.floor(y / c) * gw;
+    const cellRow = Math.floor(y / c) * gw, thumbRow = Math.min(th - 1, Math.floor(y * th / H)) * tw;
+    for (let tx = 0; tx < tw; tx++) counts[thumbRow + tx] += colCount[tx];
     for (let x = 0; x < W; x++) {
       const a = alpha[x];
       if (!a) continue;
       if (a0 < 0) a0 = x; b0 = x; if (a > top) top = a;
       if (a >= VISIBLE_ALPHA) { if (a8 < 0) a8 = x; b8 = x; occ[cellRow + cellOfX[x]] = 1; }
+      const k = (thumbRow + thumbX[x]) * 4;
+      if (rgba8) { const o = x * 4; sums[k] += raw[o] * a; sums[k + 1] += raw[o + 1] * a; sums[k + 2] += raw[o + 2] * a; }
+      else { readRgba(raw, x, a, px, 0); sums[k] += px[0] * a; sums[k + 1] += px[1] * a; sums[k + 2] += px[2] * a; }
+      sums[k + 3] += a;
     }
     maxA[y] = top; min8[y] = a8; max8[y] = b8; minAny[y] = a0; maxAny[y] = b0;
-    while (nextThumbRow < th && y === nextThumbY) {
-      for (let tx = 0; tx < tw; tx++) readRgba(raw, sampleX[tx], alpha[sampleX[tx]], thumb, (nextThumbRow * tw + tx) * 4);
-      nextThumbRow++; nextThumbY = Math.min(H - 1, Math.floor((nextThumbRow + 0.5) * H / th));
-    }
   }
+  for (let k = 0; k < tw * th; k++) { const A = sums[k * 4 + 3]; if (A > 0) { thumb[k * 4] = sums[k * 4] / A; thumb[k * 4 + 1] = sums[k * 4 + 1] / A; thumb[k * 4 + 2] = sums[k * 4 + 2] / A; thumb[k * 4 + 3] = A / counts[k]; } }
   const analysis = { ...info, rows: { maxA, min8, max8, minAny, maxAny }, thumb: { width: tw, height: th, data: thumb }, grid: { c, gw, gh, occ } };
   analysis.box = artBox(analysis);
   return analysis;
@@ -387,12 +390,49 @@ function cellElements(occ, label, count, gw, c, W, H) {
     if (y < minR[l]) minR[l] = y; if (y > maxR[l]) maxR[l] = y; if (x < minC[l]) minC[l] = x; if (x > maxC[l]) maxC[l] = x;
   }
   const elements = [];
-  for (let l = 1; l <= count; l++) if (maxR[l] >= 0) elements.push({ id: l, top: Math.max(0, (minR[l] - 1) * c), bottom: Math.min(H - 1, (maxR[l] + 2) * c - 1), left: Math.max(0, (minC[l] - 1) * c), right: Math.min(W - 1, (maxC[l] + 2) * c - 1) });
+  for (let l = 1; l <= count; l++) if (maxR[l] >= 0) { const top = Math.max(0, (minR[l] - 1) * c), bottom = Math.min(H - 1, (maxR[l] + 2) * c - 1), left = Math.max(0, (minC[l] - 1) * c), right = Math.min(W - 1, (maxC[l] + 2) * c - 1); elements.push({ id: l, top, bottom, left, right, width: right - left + 1, height: bottom - top + 1 }); }
   return elements;
 }
-function contourPrep(analysis, pxPerCm, mergeMm) {
+// Legenda (13/11 (4), dono: "a frase nutri que ficava embaixo desta arte ficou em outro corte"): peça pequena logo acima
+// ou abaixo de uma arte maior, alinhada com ela e a até 3 cm (e até 30% da altura da arte), fica JUNTO dessa arte.
+function attachCaptions(elements, pxPerCm, union) {
+  if (elements.length < 2 || elements.length > 4000) return;
+  const maxGap = 3 * pxPerCm;
+  for (const e of elements) {
+    let best = null, bestGap = Infinity;
+    for (const f of elements) {
+      if (f === e || e.height > 0.35 * f.height) continue;
+      if (Math.min(e.right, f.right) - Math.max(e.left, f.left) + 1 < 0.6 * Math.min(e.width, f.width)) continue;
+      const gap = e.top > f.bottom ? e.top - f.bottom - 1 : f.top > e.bottom ? f.top - e.bottom - 1 : -1;
+      if (gap < 0 || gap > maxGap || gap > 0.3 * f.height) continue;
+      // a mais perto; empate (até 2 mm de diferença) fica com a de cima (legenda costuma ficar embaixo da arte)
+      const above = f.bottom < e.top, tie = Math.abs(gap - bestGap) <= 0.2 * pxPerCm;
+      if (!best || (tie ? above && !(best.bottom < e.top) : gap < bestGap)) { best = f; bestGap = gap; }
+    }
+    if (best) union(e.id, best.id);
+  }
+}
+// joins: peças que a pessoa juntou na tela, cada uma como [x1, y1, x2, y2] em pixels do arquivo (ficam juntas sempre).
+function contourPrep(analysis, pxPerCm, mergeMm, joins = []) {
   const { c, gw, gh, occ } = analysis.grid, r = Math.max(0, Math.round((mergeMm / 10 * pxPerCm / c - 1) / 2)), { label, count } = labelCells(occ, gw, gh, r);
-  return { mergeMm, r, label, count, elements: count ? cellElements(occ, label, count, gw, c, analysis.width, analysis.height) : [] };
+  const base = count ? cellElements(occ, label, count, gw, c, analysis.width, analysis.height) : [], parent = new Int32Array(count + 1);
+  for (let i = 0; i <= count; i++) parent[i] = i;
+  const find = a => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[Math.max(a, b)] = Math.min(a, b); };
+  attachCaptions(base, pxPerCm, union);
+  // ponto tocado → arte mais perto (até 4 quadradinhos em volta)
+  const at = (x, y) => { const cx = Math.floor(x / c), cy = Math.floor(y / c); for (let d = 0; d <= 4; d++) for (let dy = -d; dy <= d; dy++) for (let dx = -d; dx <= d; dx++) { if (Math.max(Math.abs(dx), Math.abs(dy)) !== d) continue; const xx = cx + dx, yy = cy + dy; if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue; const i = yy * gw + xx; if (occ[i]) return label[i]; } return 0; };
+  let joined = 0;
+  for (const join of joins || []) { const a = at(join[0], join[1]), b = at(join[2], join[3]); if (a && b && find(a) !== find(b)) { union(a, b); joined++; } }
+  const rootOf = new Int32Array(count + 1), boxes = new Map();
+  for (const e of base) {
+    const root = find(e.id), box = boxes.get(root);
+    rootOf[e.id] = root;
+    if (!box) boxes.set(root, { ...e, id: root });
+    else { box.top = Math.min(box.top, e.top); box.bottom = Math.max(box.bottom, e.bottom); box.left = Math.min(box.left, e.left); box.right = Math.max(box.right, e.right); box.width = box.right - box.left + 1; box.height = box.bottom - box.top + 1; }
+  }
+  for (let l = 1; l <= count; l++) if (!rootOf[l]) rootOf[l] = find(l);
+  return { mergeMm, r, label, count, rootOf, joins: joins || [], joined, elements: [...boxes.values()] };
 }
 // Partes "até onde cabe": a de cima leva todas as artes que cabem no limite a partir da arte mais alta (o menor número
 // de partes possível). Arte sozinha maior que o limite fica numa parte própria (com o que couber ao lado dela).
@@ -445,14 +485,14 @@ function planContour(analysis, pxPerCm, maxCm, prep, fill = 1) {
     });
   }
   finishParts(parts, pxPerCm);
-  return { mode: 'contour', params: { mode: 'contour', mergeMm: prep.mergeMm, fill }, parts, cuts: [], maxPx, pxPerCm, maxCm, groups, prep };
+  return { mode: 'contour', params: { mode: 'contour', mergeMm: prep.mergeMm, fill, joins: prep.joins }, parts, cuts: [], maxPx, pxPerCm, maxCm, groups, prep };
 }
 // Dono de cada quadradinho (parte), com a borda suave em volta de cada arte (-2 = encostado em artes de duas partes).
 function contourOwner(analysis, plan) {
   const { gw, gh, occ } = analysis.grid, { label } = plan.prep, partOf = new Int32Array(plan.prep.count + 1).fill(-1);
   plan.groups.forEach((group, p) => { for (const e of group) partOf[e.id] = p; });
   const n = gw * gh, owner = new Int16Array(n).fill(-1);
-  for (let i = 0; i < n; i++) if (occ[i]) owner[i] = partOf[label[i]];
+  for (let i = 0; i < n; i++) if (occ[i]) owner[i] = partOf[plan.prep.rootOf[label[i]]];
   const grid = owner.slice();
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
     const i = y * gw + x;
@@ -477,7 +517,7 @@ export function planFor(analysis, pxPerCm, maxCm, params) {
   checkScale(pxPerCm, maxCm);
   if (!params || params.mode === 'straight') return planStraight(analysis, pxPerCm, maxCm, params?.fill || 1, params?.minGapPx || 0);
   if (!analysis.grid || !transparentPixel(analysis)) throw fail('Este PNG não permite contornar as artes.');
-  const plan = planContour(analysis, pxPerCm, maxCm, contourPrep(analysis, pxPerCm, params.mergeMm), params.fill || 1);
+  const plan = planContour(analysis, pxPerCm, maxCm, contourPrep(analysis, pxPerCm, params.mergeMm, params.joins || []), params.fill || 1);
   plan.owner = contourOwner(analysis, plan); plan.grid = { c: analysis.grid.c, gw: analysis.grid.gw, gh: analysis.grid.gh };
   return plan;
 }
@@ -496,7 +536,7 @@ function previewOf(analysis, plan) {
         // ponto da miniatura cai num quadradinho sem pixel visível (borda suave): usa o vizinho com arte
         let o = -1;
         const cx = Math.floor(x / c), cy = Math.floor(y / c);
-        for (let d = 0; d <= 1 && o < 0; d++) for (let dy = -d; dy <= d && o < 0; dy++) for (let dx = -d; dx <= d && o < 0; dx++) { const i = (cy + dy) * gw + cx + dx; if (cy + dy >= 0 && cx + dx >= 0 && cx + dx < gw && i < occ.length && occ[i]) o = partOf[plan.prep.label[i]]; }
+        for (let d = 0; d <= 1 && o < 0; d++) for (let dy = -d; dy <= d && o < 0; dy++) for (let dx = -d; dx <= d && o < 0; dx++) { const i = (cy + dy) * gw + cx + dx; if (cy + dy >= 0 && cx + dx >= 0 && cx + dx < gw && i < occ.length && occ[i]) o = partOf[plan.prep.rootOf[plan.prep.label[i]]]; }
         out[ty * t.width + tx] = o;
       } else for (const part of plan.parts) if (y >= part.top && y <= part.bottom && x >= part.left && x <= part.right) { out[ty * t.width + tx] = part.index - 1; break; }
     }
@@ -517,7 +557,7 @@ function summarize(analysis, plan, extra = {}) {
 // Ordem: dentro do limite; juntando peças a mais distância (mais seguro: menos chance de separar uma estampa); menos
 // partes; corte reto antes de contorno; parte cheia até o limite antes de partes parecidas. Opções quase iguais (menos de
 // 1 cm de diferença) não se repetem.
-export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000 } = {}) {
+export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000, joins = [] } = {}) {
   checkScale(pxPerCm, maxCm);
   const maxPx = maxPxOf(pxPerCm, maxCm), box = artBox(analysis);
   if (!box) throw fail('A imagem não tem arte visível (só transparência).');
@@ -527,7 +567,9 @@ export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000 } 
   const score = plan => [plan.parts.filter(p => p.oversize).length, -(plan.params.mergeMm ?? plan.params.minGapPx / pxPerCm * 10), plan.parts.length, isStraight(plan) ? 0 : 1, plan.params.fill === 1 ? 0 : 1, Math.max(...plan.parts.map(p => p.height))];
   const balancedFill = count => Math.min(1, Math.ceil(box.height / Math.max(1, count)) * 1.04 / maxPx);
   const pick = () => {
-    const ranked = candidates.map(plan => ({ plan, key: score(plan) })).sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i]; return 0; });
+    // opção acima do limite só aparece quando nenhuma fica dentro dele
+    const pool = candidates.some(valid) ? candidates.filter(valid) : candidates;
+    const ranked = pool.map(plan => ({ plan, key: score(plan) })).sort((a, b) => { for (let i = 0; i < a.key.length; i++) if (a.key[i] !== b.key[i]) return a.key[i] - b.key[i]; return 0; });
     const chosen = [], tolerance = Math.max(1, pxPerCm);
     for (const { plan } of ranked) {
       const parts = sortedParts(plan);
@@ -539,7 +581,7 @@ export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000 } 
   };
   if (analysis.grid && transparentPixel(analysis)) {
     for (const mm of MERGE_MM) {
-      const prep = contourPrep(analysis, pxPerCm, mm);
+      const prep = contourPrep(analysis, pxPerCm, mm, joins);
       if (!prep.elements.length) break;
       const level = FILLS.map(fill => planContour(analysis, pxPerCm, maxCm, prep, fill)), good = level.filter(valid);
       if (good.length) level.push(planContour(analysis, pxPerCm, maxCm, prep, balancedFill(Math.min(...good.map(p => p.parts.length)))));
@@ -563,7 +605,7 @@ export function planOptions(analysis, { pxPerCm, maxCm = 100, budgetMs = 6000 } 
 // Passo 3: grava as partes. Pixels copiados do original (mesmo filtro de linha do original, recalculado para o recorte).
 // Partes que se encaixam (corte contornando) são gravadas juntas, cada uma só com as artes dela.
 export async function writeParts(blob, analysis, parts, { pxPerCm = 0, owner = null, signal, onProgress } = {}) {
-  const info = analysis, bpp = info.bpp, ordered = [...parts].sort((a, b) => a.top - b.top || a.index - b.index);
+  const info = analysis, bpp = info.bpp, ordered = [...parts].sort((a, b) => a.top - b.top || a.index - b.index), readRgba = rgbaReader(info);
   const masked = !!owner && ordered.every(part => part.mask && part.ownerId >= 0), blank = masked ? transparentPixel(info) : null;
   if (masked && !blank) throw fail('Este PNG não tem cor transparente para separar as artes: divisão cancelada.');
   if (!masked) for (let k = 1; k < ordered.length; k++) if (ordered[k].top <= ordered[k - 1].bottom) throw fail('Partes sobrepostas: divisão cancelada.');
@@ -592,10 +634,17 @@ export async function writeParts(blob, analysis, parts, { pxPerCm = 0, owner = n
     const reading = (async () => { for (;;) { const { value, done } = await reader.read(); if (done) break; pending.push(value); pendingBytes += value.length; if (pendingBytes >= IDAT_TARGET) flush(); } flush(); })();
     reading.catch(() => {});
     const rowLength = part.width * bpp, prev = new Uint8Array(rowLength), work = masked ? new Uint8Array(rowLength) : null;
+    const pScale = Math.min(1, 480 / Math.max(part.width, part.height)), pw = Math.max(1, Math.round(part.width * pScale)), ph = Math.max(1, Math.round(part.height * pScale));
+    const pSums = new Float64Array(pw * ph * 4), pCounts = new Float64Array(pw * ph), pX = new Int32Array(part.width), pColCount = new Float64Array(pw), pAlpha = new Uint8Array(part.width), readPartAlpha = alphaReader(info, part.width), px = new Uint8ClampedArray(4);
+    for (let x = 0; x < part.width; x++) { pX[x] = Math.min(pw - 1, Math.floor(x * pw / part.width)); pColCount[pX[x]]++; }
     return {
       async row(filterType, raw, y) {
         let source = raw.subarray(part.left * bpp, (part.right + 1) * bpp);
         if (work) { work.set(source); applyMask(work, y, part); source = work; }
+        readPartAlpha(source, pAlpha);
+        const pRow = Math.min(ph - 1, Math.floor((y - part.top) * ph / part.height)) * pw;
+        for (let t = 0; t < pw; t++) pCounts[pRow + t] += pColCount[t];
+        for (let x = 0; x < part.width; x++) { const a = pAlpha[x]; if (!a) continue; readRgba(source, x, a, px, 0); const k = (pRow + pX[x]) * 4; pSums[k] += px[0] * a; pSums[k + 1] += px[1] * a; pSums[k + 2] += px[2] * a; pSums[k + 3] += a; }
         const line = new Uint8Array(rowLength + 1);
         line[0] = filterType; filterRow(filterType, source, prev, line.subarray(1), bpp); prev.set(source);
         await writer.write(line);
@@ -610,7 +659,9 @@ export async function writeParts(blob, analysis, parts, { pxPerCm = 0, owner = n
         pieces.push(...idat);
         for (const c of after) pieces.push(blob.slice(c.offset, c.dataOffset + c.length + 4));
         pieces.push(chunkBytes('IEND', new Uint8Array(0)));
-        return { ...part, blob: new Blob(pieces, { type: 'image/png' }) };
+        const pData = new Uint8ClampedArray(pw * ph * 4);
+        for (let k = 0; k < pw * ph; k++) { const A = pSums[k * 4 + 3]; if (A > 0) { pData[k * 4] = pSums[k * 4] / A; pData[k * 4 + 1] = pSums[k * 4 + 1] / A; pData[k * 4 + 2] = pSums[k * 4 + 2] / A; pData[k * 4 + 3] = A / pCounts[k]; } }
+        return { ...part, blob: new Blob(pieces, { type: 'image/png' }), preview: { width: pw, height: ph, data: pData } };
       },
       abort() { writer.abort(abortError()).catch(() => {}); },
     };
@@ -637,6 +688,39 @@ export async function splitPng(blob, analysis, { pxPerCm, maxCm = 100, params, s
   if (plan.parts.length < 2) return { plan: summarize(analysis, plan), written: [] };
   const written = await writeParts(blob, analysis, plan.parts, { pxPerCm, owner: plan.owner ? { grid: plan.owner, ...plan.grid } : null, signal, onProgress });
   return { plan: summarize(analysis, plan), written };
+}
+
+// PNG RGBA 8 bits gravado linha por linha (sem canvas do tamanho da imagem): usado para converter PDF em PNG.
+// Filtro de cada linha: o que deixa os bytes menores (Sub ou Up), como os editores de imagem fazem.
+export function createPngWriter({ width, height, ppm = 0 }) {
+  if (!(width > 0 && height > 0)) throw fail('Tamanho de imagem inválido.');
+  const cs = new CompressionStream('deflate'), writer = cs.writable.getWriter(), reader = cs.readable.getReader(), idat = [], rowLength = width * 4;
+  let pending = [], pendingBytes = 0, rows = 0, prev = new Uint8Array(rowLength), sub = new Uint8Array(rowLength + 1), up = new Uint8Array(rowLength + 1);
+  const flush = () => { if (!pendingBytes) return; const data = new Uint8Array(pendingBytes); let o = 0; for (const p of pending) { data.set(p, o); o += p.length; } idat.push(chunkBytes('IDAT', data)); pending = []; pendingBytes = 0; };
+  const reading = (async () => { for (;;) { const { value, done } = await reader.read(); if (done) break; pending.push(value); pendingBytes += value.length; if (pendingBytes >= IDAT_TARGET) flush(); } flush(); })();
+  reading.catch(() => {});
+  const cost = line => { let total = 0; for (let i = 1; i < line.length; i++) { const v = line[i]; total += v < 128 ? v : 256 - v; } return total; };
+  return {
+    async addRow(rgba) {
+      if (rows >= height) throw fail('Linhas demais para a imagem.');
+      const raw = rgba instanceof Uint8Array ? rgba : new Uint8Array(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+      if (raw.length !== rowLength) throw fail('Linha com tamanho errado.');
+      sub[0] = 1; filterRow(1, raw, prev, sub.subarray(1), 4); up[0] = 2; filterRow(2, raw, prev, up.subarray(1), 4);
+      const line = (cost(sub) <= cost(up) ? sub : up).slice();
+      prev.set(raw); rows++;
+      await writer.write(line);
+    },
+    async finish() {
+      if (rows !== height) throw fail('Imagem incompleta: ' + rows + ' de ' + height + ' linhas.');
+      await writer.close(); await reading;
+      const ihdr = new Uint8Array(13), v = new DataView(ihdr.buffer);
+      v.setUint32(0, width); v.setUint32(4, height); ihdr[8] = 8; ihdr[9] = 6;
+      const pieces = [SIGNATURE, chunkBytes('IHDR', ihdr)];
+      if (ppm > 0) { const d = new Uint8Array(9), dv = new DataView(d.buffer); dv.setUint32(0, ppm); dv.setUint32(4, ppm); d[8] = 1; pieces.push(chunkBytes('pHYs', d)); }
+      pieces.push(...idat, chunkBytes('IEND', new Uint8Array(0)));
+      return new Blob(pieces, { type: 'image/png' });
+    },
+  };
 }
 
 // Nome das partes: "ana" → "ana 1/2", "ana 2/2".

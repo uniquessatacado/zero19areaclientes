@@ -3,7 +3,7 @@
 // decodificada por um leitor independente e comparada byte a byte com o recorte do original.
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
-import { scanPng, planSplit, planOptions, planFor, splitPng, writeParts, readPngInfo, partName, partFileName, VISIBLE_ALPHA } from '../png-split.js';
+import { scanPng, planSplit, planOptions, planFor, splitPng, writeParts, readPngInfo, partName, partFileName, createPngWriter, VISIBLE_ALPHA } from '../png-split.js';
 
 const crcTable = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc = bytes => { let c = 0xffffffff; for (const b of bytes) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
@@ -306,6 +306,54 @@ function assertNothingLost(source, plan, alphaOf, label) {
   }
 }
 
+// 6d) Legenda embaixo da estampa (13/11 (4), dono: "a frase nutri que ficava embaixo desta arte ficou em outro corte"):
+//     coluna de estampas a 4 mm umas das outras; a frase fica a 8 mm embaixo da sua estampa e a 12 mm da estampa de baixo;
+//     o limite cai entre a estampa e a frase. Em TODAS as opções a frase vai junto com a sua estampa.
+{
+  const pxPerCm = 40, W = 800, H = 3520, c = rgbaCanvas(W, H);
+  rect(c, 50, 40, 701, 800, [30, 30, 200]);       // D1
+  rect(c, 50, 855, 701, 800, [200, 30, 30]);      // D2 ("bonito ser gostosa de energia")
+  rect(c, 250, 1686, 301, 120, [200, 30, 30]);    // a frase "nutri" embaixo da D2 (8 mm)
+  rect(c, 50, 1854, 701, 800, [30, 160, 30]);     // D3 (12 mm embaixo da frase)
+  rect(c, 50, 2670, 701, 800, [160, 160, 30]);    // D4
+  const blob = encodePng({ width: W, height: H, rows: c.rows }), analysis = await scanPng(blob);
+  const { options } = planOptions(analysis, { pxPerCm, maxCm: 42.5 });
+  assert(options.length >= 1 && options.every(o => !o.parts.some(p => p.oversize)), 'opções dentro do limite');
+  for (const [k, option] of options.entries()) {
+    const plan = planFor(analysis, pxPerCm, 42.5, option.params), partAt = (x, y) => plan.parts.find(p => y >= p.top && y <= p.bottom && x >= p.left && x <= p.right && (!plan.owner || plan.owner[Math.floor(y / plan.grid.c) * plan.grid.gw + Math.floor(x / plan.grid.c)] === p.ownerId))?.index;
+    assert.equal(partAt(400, 1740), partAt(400, 1200), 'opção ' + (k + 1) + ': a frase ficou em outra parte que a estampa');
+  }
+}
+
+// 6e) Juntar à mão: sem junção o adesivo vai com a estampa de baixo (corte reto entre as estampas); juntado à estampa de
+//     cima, vai com ela em todas as opções.
+{
+  const pxPerCm = 12, W = 600, H = 2300, c = rgbaCanvas(W, H);
+  rect(c, 0, 40, 301, 961, [30, 30, 200]);        // B
+  rect(c, 450, 1050, 101, 101, [200, 120, 0]);    // adesivo
+  rect(c, 0, 1250, 301, 901, [30, 160, 30]);      // E
+  const blob = encodePng({ width: W, height: H, rows: c.rows }), analysis = await scanPng(blob);
+  const where = (option, x, y) => { const plan = planFor(analysis, pxPerCm, 100, option.params); return plan.parts.find(p => y >= p.top && y <= p.bottom && x >= p.left && x <= p.right && plan.owner[Math.floor(y / plan.grid.c) * plan.grid.gw + Math.floor(x / plan.grid.c)] === p.ownerId)?.index; };
+  const free = planOptions(analysis, { pxPerCm, maxCm: 100 }).options[0];
+  assert.equal(where(free, 500, 1100), where(free, 150, 1700), 'sem juntar: o adesivo vai com a estampa de baixo (corte reto)');
+  const joined = planOptions(analysis, { pxPerCm, maxCm: 100, joins: [[500, 1100, 150, 500]] });
+  for (const option of joined.options) assert.equal(where(option, 500, 1100), where(option, 150, 500), 'juntado: o adesivo vai com a estampa de cima');
+  assert.deepEqual(joined.options[0].params.joins, [[500, 1100, 150, 500]], 'a junção vai junto na escolha (mesmo resultado ao gravar)');
+  const { written } = await splitPng(blob, analysis, { pxPerCm, maxCm: 100, params: joined.options[0].params });
+  for (const part of written) { assert(part.preview && part.preview.width > 0 && part.preview.height > 0, 'miniatura da parte'); assert(part.preview.data.some((v, i) => i % 4 === 3 && v > 200), 'miniatura com a arte'); }
+}
+
+// 6f) Gravador de PNG linha por linha (PDF convertido): o que entra é o que sai.
+{
+  const W = 37, H = 23, rows = Array.from({ length: H }, (_, y) => { const r = new Uint8Array(W * 4); for (let i = 0; i < r.length; i++) r[i] = (i * 7 + y * 13) & 255; return r; });
+  const writer = createPngWriter({ width: W, height: H, ppm: 11811 });
+  for (const r of rows) await writer.addRow(r);
+  const img = await decodePng(await writer.finish());
+  assert.equal(img.width, W); assert.equal(img.height, H); assert.equal(img.colorType, 6);
+  for (let y = 0; y < H; y++) assert(img.rows[y].equals(Buffer.from(rows[y])), 'linha ' + y + ' igual');
+  assert.equal(img.chunks.find(ch => ch.type === 'pHYs').data.readUInt32BE(0), 11811, 'DPI do PNG convertido');
+}
+
 // 6) Nomes: "ana" → "ana 1/2"; arquivo sem barra.
 assert.equal(partName('ana', 1, 2), 'ana 1/2'); assert.equal(partName('  ', 2, 3), 'Arte 2/3');
 assert.equal(partFileName('ana/maria', 1, 2), 'ana-maria 1-2.png');
@@ -321,4 +369,4 @@ if (process.env.PNG_SPLIT_BIG === '1') {
   assert(plan.parts.every(p => p.height <= plan.maxPx));
 }
 
-console.log('PASS dividir PNG: corte reto ou contornando as artes (sem cortar arte, até 3 opções), cortes só em linha sem pixel, partes até o limite (ou marcadas), pixels idênticos ao original, nada visível perdido, DPI exato, perfil de cor e textos preservados, 16 bits/cinza/paleta/RGB, arquivos inválidos recusados.');
+console.log('PASS dividir PNG: corte só entre estampas (reto ou contornando, até 3 opções), legenda junto da estampa, peças juntadas à mão, miniaturas, gravador do PDF, cortes só em linha sem pixel, partes até o limite (ou marcadas), pixels idênticos ao original, nada visível perdido, DPI exato, perfil de cor e textos preservados, 16 bits/cinza/paleta/RGB, arquivos inválidos recusados.');
