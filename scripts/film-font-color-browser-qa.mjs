@@ -161,6 +161,34 @@ try{
   check(after.j&&after.j[1]>120&&after.j[2]<120,'Palmeiras (outra fonte) continua verde');
   const layoutAfter=await evaluate('JSON.stringify([...document.querySelectorAll("#filmPreview [data-placement]")].map(n=>n.style.cssText))');check(layoutAfter===layoutBefore,'encaixe não mudou');
   await evaluate('document.querySelector(".color-film-font").scrollIntoView({block:"start"})');await delay(300);await shot('5-depois');
+  // TAMANHO: só o 10 → números 30 cm; depois todas da Brasil 2026 → letras 8 cm. JOAO (outra fonte) não muda.
+  const sizes=()=>evaluate(`[...document.querySelectorAll('.film-item b')].map(b=>b.textContent+' '+b.parentElement.querySelector('small')?.textContent).join(' | ')`);
+  report.push('antes: '+await sizes());
+  await evaluate('[...document.querySelectorAll(".size-film-font")].find(b=>b.dataset.id==="f2").click()');
+  await wait('document.querySelector("[aria-label=\'Tamanho da fonte no filme\']")','janela tamanho');
+  check(!await evaluate('!!document.querySelector("[data-size-name]")'),'número sozinho não mostra campo de letras');
+  await evaluate(`(()=>{const i=document.querySelector('[data-size-number]');i.value='30';i.dispatchEvent(new Event('input'))})()`);
+  await evaluate('document.querySelector("[data-font-ask]").click()');await wait('document.querySelector("[data-font-apply]")','confirmação tamanho');
+  report.push('confirmação: '+await evaluate('document.querySelector("[role=alert]:not([data-size-error])")?.textContent'));
+  await shot('6-tamanho-so-este');
+  await evaluate('document.querySelector("[data-font-apply]").click()');
+  await wait('!document.querySelector("[aria-label=\'Tamanho da fonte no filme\']")','janela tamanho fechou',30000);await wait('document.body.innerText.includes("Tamanho mudado em 1 escrita")','aviso tamanho 1',30000);await delay(800);
+  await wait('document.querySelectorAll("#filmPreview [data-placement] img").length>=4&&[...document.querySelectorAll("#filmPreview [data-placement] img")].every(i=>i.complete&&i.naturalWidth>0)','filme recalculado',60000);
+  const s1=await sizes();report.push('depois 10→30: '+s1);check(/Fonte · 10 [\d.]+ × 30\.00 cm/.test(s1),'10 com 30 cm de altura');
+  await evaluate('document.querySelector("[data-film-font-sizes]").click()');
+  await wait('document.querySelector("[data-font-group]")','escolher fonte (tamanho)');
+  await evaluate(`[...document.querySelectorAll('[data-font-group]')].find(b=>/Brasil 2026/.test(b.textContent)).click()`);
+  await evaluate(`(()=>{const i=document.querySelector('[data-size-name]');i.value='8';i.dispatchEvent(new Event('input'))})()`);
+  await shot('7-tamanho-todas');
+  await evaluate('document.querySelector("[data-font-ask]").click()');await wait('document.querySelector("[data-font-apply]")','confirmação tamanho todas');
+  report.push('confirmação: '+await evaluate('document.querySelector("[role=alert]:not([data-size-error])")?.textContent'));
+  await evaluate('document.querySelector("[data-font-apply]").click()');
+  await wait('!document.querySelector("[aria-label=\'Tamanho da fonte no filme\']")','janela tamanho fechou 2',30000);await wait('document.body.innerText.includes("Tamanho mudado em 2 escritas")','aviso tamanho 2',30000);await delay(800);
+  await wait('document.querySelectorAll("#filmPreview [data-placement] img").length>=4&&[...document.querySelectorAll("#filmPreview [data-placement] img")].every(i=>i.complete&&i.naturalWidth>0)','filme recalculado 2',60000);
+  report.push('toasts: '+await evaluate(`[...document.querySelectorAll('.toast,[class*=toast]')].map(t=>t.textContent).join(' | ')`));const s2=await sizes();report.push('depois letras→8: '+s2);
+  check(/BRUNA [^|]*corpo letra 8 cm/.test(s2)&&/CLOVIS [^|]*corpo letra 8 cm/.test(s2),'CLOVIS e BRUNA com corpo 8');check(/JOAO [^|]*corpo letra 5,5 cm/.test(s2),'JOAO continua 5,5');check(/Fonte · 10 [\d.]+ × 30\.00 cm/.test(s2),'10 continua 30');
+  const blue=await colorOf('f3');check(blue&&blue[2]>180,'cor azul mantida depois do tamanho');
+  await shot('8-depois-tamanho');
   check(!errors.length,'erros na página: '+errors.join(' | '));
   console.log('PASS cor da fonte no filme\n'+report.join('\n'));
 }catch(error){console.log('FALHOU',error.message);console.log(report.join('\n'));if(errors.length)console.log('erros:',errors.join(' | '));process.exitCode=1}
