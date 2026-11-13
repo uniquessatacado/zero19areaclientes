@@ -3,7 +3,7 @@
 // decodificada por um leitor independente e comparada byte a byte com o recorte do original.
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
-import { scanPng, planSplit, writeParts, readPngInfo, partName, partFileName, VISIBLE_ALPHA } from '../png-split.js';
+import { scanPng, planSplit, planOptions, planFor, splitPng, writeParts, readPngInfo, partName, partFileName, VISIBLE_ALPHA } from '../png-split.js';
 
 const crcTable = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc = bytes => { let c = 0xffffffff; for (const b of bytes) c = crcTable[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
@@ -72,7 +72,7 @@ const alphaAt = (img, x, y) => img.rows[y][x * 4 + 3];
 // Confere: partes ≤ limite (ou marcadas), sem sobreposição, corte só em linha sem pixel visível, cada parte = recorte exato,
 // nenhum pixel visível perdido.
 async function checkSplit(source, blob, { pxPerCm, maxCm, expectParts, expectOversize = 0, label }) {
-  const analysis = await scanPng(blob), plan = planSplit(analysis, { pxPerCm, maxCm });
+  const analysis = await scanPng(blob), plan = planSplit(analysis, { pxPerCm, maxCm, params: { mode: 'straight', fill: 1 } });
   if (expectParts !== undefined) assert.equal(plan.parts.length, expectParts, label + ': número de partes');
   assert.equal(plan.parts.filter(p => p.oversize).length, expectOversize, label + ': partes maiores que o limite');
   for (const p of plan.parts) if (!p.oversize) assert(p.height <= plan.maxPx, label + ': parte ' + p.index + ' passa do limite');
@@ -141,6 +141,9 @@ function assertNothingLost(source, plan, alphaOf, label) {
   assert(Math.abs(plan.parts[0].widthCm - 342 / 12) < 1e-9);
   // cortes no meio das faixas vazias
   assert.deepEqual(plan.cuts, [Math.round((1140 + 1179) / 2), Math.round((1780 + 1899) / 2)]);
+  const auto = await scanPng(blob).then(a => planOptions(a, { pxPerCm, maxCm: 100 }));
+  assert.equal(auto.options[0].mode, 'straight', 'com linha reta vazia a recomendada é o corte reto'); assert.equal(auto.options[0].parts.length, 3);
+  assert(auto.options.length >= 2 && auto.options.length <= 3, 'até 3 opções');
   // partes de até 50 cm: mais partes, mesma garantia
   const half = await checkSplit(c, blob, { pxPerCm, maxCm: 50, label: 'partes de 50 cm', expectOversize: 3 });
   assertNothingLost(c, half.plan, alphaAt, 'partes de 50 cm');
@@ -207,6 +210,72 @@ function assertNothingLost(source, plan, alphaOf, label) {
   }
 }
 
+// 6b) Sem nenhuma linha reta vazia (artes encaixadas em escada): o corte contorna as artes. Cada arte inteira numa parte
+//     só, nenhum pixel visível perdido nem repetido, o que é da outra parte fica transparente, até 3 opções diferentes
+//     para escolher, e a recomendada não separa uma estampa de duas peças que fica bem no lugar do corte.
+{
+  const pxPerCm = 12, maxCm = 100, maxPx = 1200, W = 600, H = 2200, c = rgbaCanvas(W, H), designs = [];
+  const columns = [[20, 180, 20], [220, 380, 120], [420, 580, 220]];
+  for (const [x0, x1, y0] of columns) for (let k = 0; k < 6; k++) { const top = y0 + k * 320; designs.push([x0, x1, top, top + 299]); }
+  for (const [x0, x1, top, bottom] of designs) {
+    if (x0 === 220 && top === 1080) { rect(c, x0, top, x1 - x0 + 1, 120, [200, 0, 90]); rect(c, x0, top + 128, x1 - x0 + 1, bottom - top - 127, [200, 0, 90]); continue; } // estampa de 2 peças (vão de 8 px = 6,7 mm)
+    rect(c, x0, top, x1 - x0 + 1, bottom - top + 1, [(x0 * 3) & 255, (top >> 2) & 255, 120]);
+  }
+  for (let y = 25; y < 2120; y++) assert(c.rows[y].some((v, i) => i % 4 === 3 && v >= 8), 'teste montado sem linha reta vazia (' + y + ')');
+  const blob = encodePng({ width: W, height: H, rows: c.rows }), analysis = await scanPng(blob);
+  const straight = planSplit(analysis, { pxPerCm, maxCm, params: { mode: 'straight', fill: 1 } });
+  assert.equal(straight.parts.length, 1); assert.equal(straight.parts[0].oversize, true, 'sem linha reta: o corte reto não consegue');
+  const { options, fits } = planOptions(analysis, { pxPerCm, maxCm });
+  assert.equal(fits, false); assert(options.length >= 2 && options.length <= 3, 'até 3 opções: ' + options.length);
+  assert(options.every(o => o.parts.every(p => !p.oversize)), 'todas as opções dentro do limite');
+  assert.equal(options[0].recommended, true); assert.equal(options[0].mode, 'contour'); assert.equal(options[0].parts.length, 2, 'recomendada com 2 partes');
+  assert(options[0].mergeMm >= 5, 'recomendada junta peças a pelo menos 5 mm: ' + options[0].mergeMm);
+  for (let a = 0; a < options.length; a++) for (let b = a + 1; b < options.length; b++) assert.notDeepEqual(options[a].parts.map(p => [p.top, p.bottom, p.left, p.right]), options[b].parts.map(p => [p.top, p.bottom, p.left, p.right]), 'opções diferentes');
+  for (const o of options) assert.equal(o.preview.length, analysis.thumb.width * analysis.thumb.height, 'mapa de cada opção');
+  // grupos de pixels visíveis ligados (8 vizinhos) do original
+  const comp = new Int32Array(W * H).fill(-1); let comps = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (alphaAt(c, x, y) < VISIBLE_ALPHA || comp[y * W + x] >= 0) continue;
+    const stack = [y * W + x]; comp[y * W + x] = comps;
+    while (stack.length) { const i = stack.pop(), yy = (i / W) | 0, xx = i - yy * W; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const ny = yy + dy, nx = xx + dx; if (ny < 0 || nx < 0 || ny >= H || nx >= W) continue; const j = ny * W + nx; if (comp[j] < 0 && alphaAt(c, nx, ny) >= VISIBLE_ALPHA) { comp[j] = comps; stack.push(j); } } }
+    comps++;
+  }
+  for (const [k, option] of options.entries()) {
+    const label = 'contorno opção ' + (k + 1), again = planFor(analysis, pxPerCm, maxCm, option.params);
+    assert.deepEqual(again.parts.map(p => [p.top, p.bottom, p.left, p.right]), option.parts.map(p => [p.top, p.bottom, p.left, p.right]), label + ': mesmo resultado ao refazer');
+    const { written } = await splitPng(blob, analysis, { pxPerCm, maxCm, params: option.params });
+    assert.equal(written.length, option.parts.length, label + ': partes gravadas');
+    const where = new Int8Array(W * H).fill(-1);
+    for (const part of written) {
+      assert(part.height <= maxPx, label + ': parte passa do limite');
+      const img = await decodePng(part.blob);
+      assert.equal(img.width, part.width); assert.equal(img.height, part.height);
+      const phys = img.chunks.find(ch => ch.type === 'pHYs'); assert(phys && phys.data.readUInt32BE(0) === 1200, label + ': DPI');
+      for (let y = 0; y < part.height; y++) for (let x = 0; x < part.width; x++) {
+        const o = x * 4, sx = part.left + x, sy = part.top + y, px = img.rows[y].subarray(o, o + 4);
+        if (px[0] === 0 && px[1] === 0 && px[2] === 0 && px[3] === 0) continue; // apagado (é de outra parte) ou transparente
+        assert(px.equals(c.rows[sy].subarray(sx * 4, sx * 4 + 4)), label + ': pixel diferente do original em ' + sx + ',' + sy);
+        if (px[3] >= VISIBLE_ALPHA) { assert.equal(where[sy * W + sx], -1, label + ': pixel repetido em duas partes ' + sx + ',' + sy); where[sy * W + sx] = part.index; }
+      }
+    }
+    const partOfComp = new Map();
+    for (let i = 0; i < W * H; i++) {
+      if (comp[i] < 0) continue;
+      assert(where[i] > 0, label + ': pixel visível perdido em ' + (i % W) + ',' + ((i / W) | 0));
+      const seen = partOfComp.get(comp[i]);
+      if (seen === undefined) partOfComp.set(comp[i], where[i]); else assert.equal(where[i], seen, label + ': uma arte foi cortada em duas partes');
+    }
+    if (option.recommended) {
+      const top = where[1090 * W + 300], bottom = where[1300 * W + 300];
+      assert.equal(top, bottom, 'recomendada: a estampa de 2 peças fica inteira numa parte só');
+    }
+  }
+  // Fundo em tudo (sem transparência entre as artes): não dá para cortar sem cortar arte, e a tela avisa.
+  const full = rgbaCanvas(80, 400); rect(full, 0, 0, 80, 400, [9, 9, 9], false);
+  const bg = planOptions(await scanPng(encodePng({ width: 80, height: 400, rows: full.rows })), { pxPerCm: 2, maxCm: 100 });
+  assert.equal(bg.options[0].parts.length, 1); assert.equal(bg.options[0].parts[0].oversize, true); assert.equal(bg.background, true, 'avisa que parece ter fundo');
+}
+
 // 6) Nomes: "ana" → "ana 1/2"; arquivo sem barra.
 assert.equal(partName('ana', 1, 2), 'ana 1/2'); assert.equal(partName('  ', 2, 3), 'Arte 2/3');
 assert.equal(partFileName('ana/maria', 1, 2), 'ana-maria 1-2.png');
@@ -222,4 +291,4 @@ if (process.env.PNG_SPLIT_BIG === '1') {
   assert(plan.parts.every(p => p.height <= plan.maxPx));
 }
 
-console.log('PASS dividir PNG: cortes só em linha sem pixel, partes até o limite (ou marcadas), pixels idênticos ao original, nada visível perdido, DPI exato, perfil de cor e textos preservados, 16 bits/cinza/paleta/RGB, arquivos inválidos recusados.');
+console.log('PASS dividir PNG: corte reto ou contornando as artes (sem cortar arte, até 3 opções), cortes só em linha sem pixel, partes até o limite (ou marcadas), pixels idênticos ao original, nada visível perdido, DPI exato, perfil de cor e textos preservados, 16 bits/cinza/paleta/RGB, arquivos inválidos recusados.');
