@@ -1,0 +1,49 @@
+/* 2.17.99 · Barra do Montar filme organizada: configuração, ações principais (sempre à vista) e categorias. Tudo no mesmo padrão. */
+body .film-page .ft-section{display:block!important;margin:0 0 14px!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+body .film-page .ft-section::before{content:none!important;display:none!important}
+.ft-bar{display:grid;gap:12px;padding:14px;border:2px solid #e2e8f0;border-radius:22px;background:#fff;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+.ft-setup{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:10px;align-items:end}
+body .film-page .ft-setup .ft-field{display:grid!important;gap:4px;margin:0!important;min-width:0}
+body .film-page .ft-setup .ft-field label{font-size:11px!important;font-weight:900!important;letter-spacing:.6px;text-transform:uppercase;color:#64748b!important}
+body .film-page .ft-setup .ft-field label::before{content:none!important}
+body .film-page .ft-setup .ft-field input,body .film-page .ft-setup .ft-field select{min-height:44px!important;height:44px;border-radius:12px!important;border:2px solid #e2e8f0!important;background:#fff!important;color:#0f172a!important;font-size:15px!important;font-weight:700!important;padding:0 12px!important;width:100%}
+.ft-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+body .film-page .ft-btn{display:inline-flex!important;align-items:center;justify-content:center;gap:6px;width:100%;min-width:0;margin:0!important;border-radius:14px!important;border:2px solid #cbd5e1!important;background:#fff!important;color:#0f172a!important;font-weight:900!important;line-height:1.15;text-align:center;white-space:normal;box-shadow:none!important;transition:transform .12s ease,background .12s ease}
+body .film-page .ft-btn:hover:not(:disabled){transform:translateY(-1px)}
+body .film-page .ft-btn:disabled{opacity:.45;cursor:default}
+body .film-page .ft-big{min-height:58px!important;padding:6px 10px!important;font-size:14.5px!important;position:relative}
+body .film-page .ft-small{min-height:44px!important;padding:4px 12px!important;font-size:13.5px!important;width:auto;flex:1 1 170px}
+/* Uma cor por função, só nas principais (as categorias ficam neutras). */
+body .film-page .ft-btn.is-primary{background:#f97316!important;border-color:#ea580c!important;color:#fff!important}
+body .film-page .ft-btn.is-pending{background:#ecfdf5!important;border-color:#10b981!important;color:#065f46!important}
+body .film-page .ft-btn.is-dtf{background:#eff6ff!important;border-color:#3b82f6!important;color:#1e3a8a!important}
+body .film-page .ft-btn.is-library{background:#fff7ed!important;border-color:#fb923c!important;color:#9a3412!important}
+body .film-page .ft-btn.is-upload{background:#f8fafc!important;border-color:#94a3b8!important;color:#1e293b!important}
+body .film-page .ft-btn.is-export{background:#0f172a!important;border-color:#0f172a!important;color:#fff!important}
+body .film-page .ft-btn.is-pending *{font-size:12px!important}
+/* Regras antigas presas ao id de cada botão (ordem, largura, "2 ·", "3 ·", "MAIS USADO") não valem dentro da barra nova. */
+body .film-page .ft-bar #addOfficialPending,body .film-page .ft-bar #addFilmAsset,body .film-page .ft-bar #quickUploadFilmAsset,body .film-page .ft-bar #calculateFilm,body .film-page .ft-bar #openDtfOrders{order:0!important;grid-column:auto!important;min-height:58px!important;font-size:14.5px!important;padding:6px 10px!important}
+body .film-page .ft-bar #addOfficialPending::before,body .film-page .ft-bar #addOfficialPending::after,body .film-page .ft-bar #calculateFilm::before{content:none!important;display:none!important}
+body .film-page .ft-bar #addOfficialPending{flex-wrap:wrap;gap:4px!important;background:#ecfdf5!important;border-color:#10b981!important;color:#065f46!important}
+body .film-page .ft-bar #addFilmAsset{background:#fff7ed!important;border-color:#fb923c!important;color:#9a3412!important}
+body .film-page .ft-bar #quickUploadFilmAsset{background:#f8fafc!important;border-color:#94a3b8!important;color:#1e293b!important}
+body .film-page .ft-bar #calculateFilm{background:#f97316!important;border-color:#ea580c!important;color:#fff!important}
+body .film-page .ft-setup .film-name-field,body .film-page .ft-setup .film-media-field{grid-column:auto!important;order:0!important}
+body .film-page .ft-setup .film-name-field label::before{content:none!important}
+body .film-page .ft-btn.is-pending::before,body .film-page .ft-btn.is-pending::after{content:none!important}
+.ft-groups{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:10px}
+.ft-group{min-width:0;padding:10px;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
+.ft-group h3{margin:0 0 8px;font-size:11px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:#64748b}
+.ft-group-buttons{display:flex;flex-wrap:wrap;gap:6px}
+@media (max-width:1180px){.ft-groups{grid-template-columns:1fr}}
+@media (max-width:760px){
+  .ft-bar{padding:10px;border-radius:18px;gap:10px}
+  .ft-setup{grid-template-columns:1fr}
+  .ft-main{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body .film-page .ft-big,body .film-page .ft-bar #addOfficialPending,body .film-page .ft-bar #addFilmAsset,body .film-page .ft-bar #quickUploadFilmAsset,body .film-page .ft-bar #calculateFilm{min-height:54px!important;font-size:13.5px!important}
+  body .film-page .ft-bar #calculateFilm{grid-column:1/-1!important}
+  body .film-page .ft-small{flex:1 1 calc(50% - 6px)}
+}
+/* Botões das categorias: todos neutros e do mesmo tamanho (as regras antigas por id deixavam cada um de uma cor). */
+body .film-page .ft-group #addFilmTeam,body .film-page .ft-group #openFilmStudio,body .film-page .ft-group #openFilmKits,body .film-page .ft-group #findFilmOrder,body .film-page .ft-group #viewNextOrders,body .film-page .ft-group #openSitePrints,body .film-page .ft-group #openVectorizer,body .film-page .ft-group #viewFilm{order:0!important;grid-column:auto!important;min-height:44px!important;font-size:13.5px!important;background:#fff!important;border:2px solid #cbd5e1!important;color:#0f172a!important;box-shadow:none!important}
+body .film-page .ft-group #addFilmTeam::before,body .film-page .ft-group #openFilmStudio::before,body .film-page .ft-group #viewNextOrders::before,body .film-page .ft-group #findFilmOrder::before{content:none!important}
