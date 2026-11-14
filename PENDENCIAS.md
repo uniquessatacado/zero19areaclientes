@@ -369,3 +369,5 @@ Dependência cruzada: acompanhar também `C:\sistemas visualcode\venduss\novoven
 - Corrigido o frete/etiqueta do #49733: base virtual de estampa avulsa não conta como camisa física. Validação de quantidades preservada, mensagem sem sigla interna. Testes cobrem base virtual, camisa, estampa legada e quantidades divergentes.
 - Publicadas smartenvios-requote-order v6 e smartenvios-generate-label v126, autenticação preservada. Não comprada etiqueta de teste. Conferência final no navegador pelo operador ainda não realizada.
 - Limite: preservação no PDV vale para composição existente inalterada (preços/pagamento podem mudar); editar peças/quantidades segue fluxo próprio. Nenhuma pendência anterior foi encerrada por esta correção.
+
+- 14/11: 019 2.17.100 no Git, FALTA publicar na Vercel (login expirou: dono roda `npx vercel login`, depois deploy e conferir 2.17.100 no ar). Rebuild do NovoVenduss no Portainer continua pendente (dono). Avisos aos clientes: dono revisar e ligar.

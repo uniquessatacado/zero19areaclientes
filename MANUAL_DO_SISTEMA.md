@@ -395,3 +395,9 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 - 19/10/2026 — Teste `variacoes` do PDV e lição: testar com dados parecidos com os reais.
 
 - 19/10/2026 — Criado pelo Claude a pedido do dono ("documento dentro do sistema com tudo que sabe sobre o sistema, sempre atualizado, para quando trocar de IA ela saber tudo").
+
+## Regras fixas (14/11)
+- Campo de número nunca muda com a roda do mouse: trava global no NovoVenduss (src/main.tsx) e no 019 (no-wheel-number.js). Em tela nova, preferir campo de texto com inputMode numérico.
+- Toda função do banco com UPDATE ou DELETE precisa de WHERE: a API do Supabase carrega safeupdate e recusa ("UPDATE requires a WHERE clause").
+- Estampas do site · halftone (019): trocar a arte grava metadata.art_override_asset_id na aplicação que espera produção; os gatilhos do pedido do site, da VDR e da entrada de arte respeitam essa arte (só se for da mesma estampa). "Não vai halftone" fica em zero19_vdr_private.political_defaults.no_halftone; o botão do Montar filme alerta pelo z19p_site_prints_alert.
+- Publicar o 019: se a Vercel responder "Not authorized", o login expirou: `npx vercel login` e depois o deploy de sempre.
