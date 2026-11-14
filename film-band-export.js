@@ -14,7 +14,11 @@ export function filmBandRows(width,budgetBytes=128e6){
   return Math.max(ROWS,Math.min(16384,rows));
 }
 
-export function needsBandedFilm(width,height){return height>32767||width*height*4>900e6}
+// 14/11 (dono: "o 019 não está gerando o TIFF, fica carregando e não gera"): o filme inteiro numa imagem só (58 × 120 cm =
+// 390 MB, e o TIFF precisa de duas) fazia o Chrome travar ou fechar a aba em computador com pouca memória. A partir de
+// 160 MB o PNG e o TIFF são feitos em faixas (o mesmo caminho dos filmes longos): ~130 MB por vez, mesmo tempo e mesmo arquivo.
+export const FILM_BAND_MIN_BYTES=160e6;
+export function needsBandedFilm(width,height){return height>32767||width*height*4>FILM_BAND_MIN_BYTES}
 
 // renderBand({top,rows,signal}) must return a canvas `width` px wide and `rows` px
 // tall containing the film translated by -top (integer pixels only).
@@ -115,7 +119,7 @@ export function createFilmBandPainter({width,placements,loadImage,drawPlacement,
     const g=canvas.getContext('2d',{willReadFrequently:true});
     if(!g){canvas.width=canvas.height=1;throw new Error('Falta memória para renderizar uma faixa do filme.')}
     try{
-      const needed=placements.filter(p=>p.y<top+rows+2&&p.y+p.h>top-2),keys=new Set(needed.map(p=>p.id));
+      const needed=placements.filter(p=>p.y<top+rows+2&&p.y+p.h>top-2),keys=new Set(placements.filter(p=>p.y<top+rows*3+2&&p.y+p.h>top-2).map(p=>p.id)); // 14/11: a arte continua aberta se volta logo abaixo (cópias seguidas), sem baixar e abrir de novo
       for(const [key,image] of images)if(!keys.has(key)){if(image)image.src='';images.delete(key)}
       g.translate(0,-top);
       for(const p of needed){

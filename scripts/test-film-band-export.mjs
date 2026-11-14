@@ -12,7 +12,8 @@ const renderBand=async({top,rows})=>{
   return canvas;
 };
 assert.equal(needsBandedFilm(width,height),true);
-assert.equal(needsBandedFilm(7087,20000),false);
+assert.equal(needsBandedFilm(7087,20000),true,'14/11: filme médio (567 MB numa imagem só) também usa faixas, para não travar o Chrome');
+assert.equal(needsBandedFilm(6850,5000),false,'filme curto (137 MB) continua numa imagem só');
 assert.equal(needsBandedFilm(7087,33000),true,'2,8 m de filme agora usa faixas em vez de bloquear');
 
 const bounds=await scanBandAlpha({width,height,renderBand,bandRows:4096});
