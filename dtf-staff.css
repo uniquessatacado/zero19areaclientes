@@ -115,3 +115,16 @@ textarea.z19dtf-input { resize: vertical; }
 .z19dtf-artfoot { position: sticky; bottom: -1px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 12px; padding: 10px 0; background: #fff; border-top: 1px solid #e5e7eb; }
 .z19dtf-artfoot span { margin-right: auto; font-weight: 800; color: #475569; font-size: 13px; }
 @media (max-width: 600px) { .z19dtf-artgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .z19dtf-artpick .z19dtf-thumb { height: 110px; } .z19dtf-artfoot .btn { flex: 1 1 100%; } }
+
+/* 14/11 · ajustes pedidos pelo cliente */
+.z19dtf-notes { margin: 8px 0; padding: 10px; border-radius: 14px; border: 2px solid #f59e0b; background: #fffbeb; display: grid; gap: 8px; }
+.z19dtf-notes-title { color: #92400e; font-size: 14px; }
+.z19dtf-noterow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px; border-radius: 10px; background: #fff; border: 1px solid #fcd34d; }
+.z19dtf-noterow > div:first-child { min-width: 0; flex: 1 1 260px; }
+.z19dtf-noterow p { margin: 4px 0 0; font-weight: 800; color: #78350f; font-size: 14px; }
+.z19dtf-noterow.is-done { opacity: .85; border-color: #86efac; }
+.z19dtf-noteacts { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn.z19dtf-locked { background: #f1f5f9 !important; border-color: #cbd5e1 !important; color: #475569 !important; }
+.z19dtf-arts figure.is-note .z19dtf-thumb { border: 2px solid #f59e0b; }
+.z19dtf-fig-tag { position: absolute; top: 4px; left: 4px; font-style: normal; font-size: 10.5px; font-weight: 900; padding: 1px 6px; border-radius: 999px; background: #f59e0b; color: #fff; }
+.z19dtf-fig-tag.is-ok { background: #16a34a; }

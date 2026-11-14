@@ -4,10 +4,10 @@
 // "Pedidos DTF metro" do Montar filme. Ele acompanha o andamento em "Meus pedidos". Cada função tem um balão de ajuda no
 // primeiro toque, com "Já entendi" (nunca mais aparece).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
-import { createTips } from './dtf-tips.js?v=2.17.96';
-import { filmPrice, formatMoney } from './dtf-pricing.js?v=2.17.96';
-import { ACCEPT, analyzeFile, buildPrint, quality, dpiOf, releaseEntry } from './dtf-upload.js?v=2.17.96';
-import { nestFilm, drawFilm } from './dtf-nest.js?v=2.17.96';
+import { createTips } from './dtf-tips.js?v=2.17.103';
+import { filmPrice, formatMoney } from './dtf-pricing.js?v=2.17.103';
+import { ACCEPT, analyzeFile, buildPrint, quality, dpiOf, releaseEntry } from './dtf-upload.js?v=2.17.103';
+import { nestFilm, drawFilm } from './dtf-nest.js?v=2.17.103';
 
 const SUPABASE_URL = 'https://kedggjyerexnzmipaick.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_WoobBV7n0p5Jf-4DLJVzIA_4sUoAvsT';
@@ -61,6 +61,7 @@ const TIPS = {
   'film-size': { title: 'Tamanho da arte no filme', text: 'Digite a largura OU a altura em centímetros: a outra muda junto, sem distorcer.', affects: 'Muda só neste filme. O encaixe e o valor são refeitos.' },
   'film-qty': { title: 'Quantidade', text: 'Quantas vezes esta arte vai ser impressa neste filme. Use − e + ou digite.', affects: 'O encaixe, o comprimento e o valor são refeitos.' },
   'film-remove': { title: 'Tirar do filme', text: 'Tira esta arte só deste filme.', affects: 'A arte continua em "Minhas artes".' },
+  'film-note': { title: 'Observação para a ZERO19', text: 'Escreva o que precisamos fazer nesta arte antes de imprimir (ex.: "tirar o fundo branco", "trocar o nome para JOÃO").', affects: 'A ZERO19 faz o ajuste e só depois coloca a arte no filme, na medida e quantidade que você escolheu.' },
   'film-preview': { title: 'Prévia do filme', text: 'Mostra como as artes ficam no filme. A linha vermelha tracejada marca cada metro. O xadrez é a parte sem impressão.' },
   'film-price': { title: 'Valor do filme', text: 'Mostra o comprimento do filme e como ele é cobrado (pelo metro ou por arte, como combinado com a ZERO19).', affects: 'O pagamento é combinado com a ZERO19.' },
   'film-send': { title: 'Enviar para produção', text: 'Manda este filme para a ZERO19 imprimir. Vira um pedido com número, que você acompanha em "Meus pedidos".', affects: 'Depois de enviado, o filme não muda mais (dá para cancelar enquanto estiver na fila).' },
@@ -773,7 +774,9 @@ function renderBuilder(main, film) {
       const a = assetById(item.assetId), q = quality(realDpi(a, item.widthCm)), fits = itemFits(item, film);
       return '<div class="dtf-item' + (fits ? '' : ' is-bad') + '" data-i="' + index + '"><div class="dtf-item-thumb dtf-checker"><img alt="" src="' + esc(urlOf(a.thumb_path)) + '"></div>'
         + '<div class="dtf-item-main"><b class="dtf-item-name" title="' + esc(a.name) + '">' + esc(a.name) + '</b>' + sizeFieldsHTML(item.widthCm, item.heightCm, 'film-size')
-        + '<div class="dtf-item-info"><span class="dtf-q is-' + q.level + '" data-q>' + q.label + '</span>' + (fits ? '' : '<span class="dtf-warn-chip">Não cabe no filme de ' + film.film_width_cm + ' cm</span>') + '</div></div>'
+        + '<div class="dtf-item-info"><span class="dtf-q is-' + q.level + '" data-q>' + q.label + '</span>' + (fits ? '' : '<span class="dtf-warn-chip">Não cabe no filme de ' + film.film_width_cm + ' cm</span>') + '</div>'
+        + (item.note || item.noteOpen ? '<label class="dtf-item-note"><span>💬 Observação para a ZERO19</span><textarea rows="2" maxlength="300" data-note data-tip="film-note" placeholder="Ex.: a arte não está pronta, preciso que tire o fundo">' + esc(item.note || '') + '</textarea></label>'
+          : '<button type="button" class="dtf-note-add" data-note-add data-tip="film-note">💬 Pedir ajuste nesta arte (observação)</button>') + '</div>'
         + '<div class="dtf-item-side"><div class="dtf-qty" data-tip="film-qty"><button type="button" data-q="-1" aria-label="Menos uma">−</button><input inputmode="numeric" value="' + item.quantity + '" aria-label="Quantidade" data-qi><button type="button" data-q="1" aria-label="Mais uma">+</button></div>'
         + '<button type="button" class="dtf-btn dtf-btn-sm dtf-btn-icon dtf-btn-rose" data-rm data-tip="film-remove" aria-label="Tirar do filme">🗑</button></div></div>';
     }).join('');
@@ -790,6 +793,10 @@ function renderBuilder(main, film) {
       qi.addEventListener('change', () => setQ(parseNum(qi.value)));
       qi.addEventListener('focus', () => qi.select());
       node.querySelector('[data-rm]').onclick = () => { film.items.splice(Number(node.dataset.i), 1); changed(); };
+      // 14/11 (dono): observação por arte; a ZERO19 faz o ajuste antes de pôr no filme.
+      node.querySelector('[data-note-add]')?.addEventListener('click', () => { item.noteOpen = true; paintItems(); main.querySelector('.dtf-item[data-i="' + node.dataset.i + '"] [data-note]')?.focus(); });
+      const note = node.querySelector('[data-note]');
+      if (note) note.addEventListener('input', () => { item.note = note.value.slice(0, 300); note.closest('.dtf-item-note').classList.toggle('is-filled', Boolean(item.note.trim())); scheduleSave(film); });
     });
   };
   paintItems();
@@ -940,7 +947,7 @@ function orderDetails(o) {
   const items = o.items || [], p = o.price || {};
   const how = p.charged === 'meter' && p.meter ? '<div class="dtf-sum-line"><span>' + p.meter.meters + ' m × ' + formatMoney(p.meter.perMeter) + '</span><b>' + formatMoney(p.meter.total) + '</b></div>'
     : (p.art?.lines || []).map(l => '<div class="dtf-sum-line"><span>' + l.quantity + '× ' + esc(l.name || 'arte') + '</span><b>' + formatMoney(l.subtotal) + '</b></div>').join('');
-  openModal({ title: 'Pedido #' + (o.orderNumber || ''), size: 'is-wide', body: '<div class="dtf-detail-list">' + items.map(i => '<div class="dtf-detail"><span class="dtf-item-thumb dtf-checker"><img alt="" src="' + esc(urlOf(i.thumbPath)) + '"></span><div><b>' + esc(i.name) + '</b><span class="dtf-muted dtf-small">' + cmText(i.widthCm, i.heightCm) + '</span></div><b class="dtf-detail-q">' + i.quantity + '×</b></div>').join('') + '</div>'
+  openModal({ title: 'Pedido #' + (o.orderNumber || ''), size: 'is-wide', body: '<div class="dtf-detail-list">' + items.map(i => '<div class="dtf-detail"><span class="dtf-item-thumb dtf-checker"><img alt="" src="' + esc(urlOf(i.thumbPath)) + '"></span><div><b>' + esc(i.name) + '</b><span class="dtf-muted dtf-small">' + cmText(i.widthCm, i.heightCm) + '</span>' + (i.note ? '<span class="dtf-detail-note">💬 ' + esc(i.note) + (i.resolved ? ' · ✓ feito pela ZERO19' : '') + '</span>' : '') + '</div><b class="dtf-detail-q">' + i.quantity + '×</b></div>').join('') + '</div>'
     + '<div class="dtf-summary dtf-summary-static"><div class="dtf-sum-big"><div><span>Filme</span><b>' + o.filmWidthCm + ' cm</b></div><div><span>Comprimento</span><b>' + metersText(Number(o.lengthCm)) + '</b></div></div>' + how + (p.override ? '<div class="dtf-sum-line"><span>Valor combinado com a ZERO19</span><b>' + formatMoney(o.total) + '</b></div>' : '') + '<div class="dtf-sum-total"><span>Total</span><b>' + formatMoney(o.total) + '</b></div>' + paymentText(o) + '</div>'
     + (o.note ? '<p class="dtf-muted"><b>Sua observação:</b> ' + esc(o.note) + '</p>' : ''), footer: '<button type="button" class="dtf-btn dtf-btn-primary" data-close>Fechar</button>' });
 }

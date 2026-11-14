@@ -409,3 +409,12 @@ body:has(.dtf-modal-back) .dtf-tip.is-sheet { bottom: calc(8px + var(--safe-b));
   .dtf-price-card b { font-size: 19px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* 14/11 · observação por arte do filme */
+.dtf-note-add { margin-top: 6px; align-self: flex-start; border: 1.5px dashed #cbd5e1; background: #fff; border-radius: 10px; padding: 6px 10px; font: inherit; font-size: 12.5px; font-weight: 800; color: #334155; cursor: pointer; }
+.dtf-note-add:hover { border-color: #f59e0b; color: #92400e; }
+.dtf-item-note { display: grid; gap: 4px; margin-top: 6px; padding: 8px; border-radius: 12px; background: #fffbeb; border: 1.5px solid #fcd34d; }
+.dtf-item-note.is-filled, .dtf-item-note:has(textarea:not(:placeholder-shown)) { border-color: #f59e0b; background: #fef3c7; }
+.dtf-item-note span { font-size: 12px; font-weight: 900; color: #92400e; }
+.dtf-item-note textarea { width: 100%; resize: vertical; border: 1.5px solid #fcd34d; border-radius: 10px; padding: 8px; font: inherit; font-size: 14px; font-weight: 700; color: #0f172a; background: #fff; }
+.dtf-detail-note { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 800; color: #92400e; }

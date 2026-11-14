@@ -23,6 +23,9 @@ const STATUS = { sent: ['Novo · na fila', 'is-new'], printing: ['Em produção'
 
 let api = null, lastCount = null, pollTimer = null, filmAdder = null;
 
+// 14/11 (dono): arte com observação do cliente trava o "Pôr no meu filme" até "✓ Arte pronta" ou "Subir arte modificada".
+const pendingNotes = order => (order.items || []).map((item, index) => ({ item, index })).filter(({ item }) => item.note && !item.resolved);
+const printPath = item => item.fixedPath || item.path;
 // 14/11 (dono): baixar as artes do cliente em PNG (o arquivo de impressão, 300 DPI na medida do cliente).
 const fileName = (name, w, h) => String(name || 'arte').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) + (w && h ? ' - ' + num(w) + 'x' + num(h) + 'cm' : '') + '.png';
 async function downloadPng(path, name) {
@@ -40,7 +43,7 @@ async function downloadMany(list) {
 function injectCss() {
   if (document.querySelector('link[data-dtf-staff]')) return;
   const link = document.createElement('link');
-  link.rel = 'stylesheet'; link.href = new URL('./dtf-staff.css?v=2.17.102', import.meta.url).href; link.dataset.dtfStaff = '1';
+  link.rel = 'stylesheet'; link.href = new URL('./dtf-staff.css?v=2.17.103', import.meta.url).href; link.dataset.dtfStaff = '1';
   document.head.appendChild(link);
 }
 const isZero19 = () => String(api?.owner?.() || '') === ZERO19_OWNER;
@@ -131,7 +134,7 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
     const { data, error } = await api.supabase.rpc('z19p_dtf_staff_orders', { p_scope: scope });
     if (error) { pane.innerHTML = '<p class="z19dtf-error">' + esc(error.message) + '</p>'; return; }
     orders = data || [];
-    const paths = orders.flatMap(o => (o.items || []).map(i => i.thumbPath)).filter(Boolean);
+    const paths = orders.flatMap(o => (o.items || []).flatMap(i => [i.thumbPath, i.fixedPath])).filter(Boolean);
     if (paths.length) { try { const { data: signed } = await api.supabase.storage.from(BUCKET).createSignedUrls([...new Set(paths)], 3600); for (const row of signed || []) if (row?.signedUrl) urls.set(row.path, row.signedUrl); } catch { /* sem miniatura: o pedido aparece igual */ } }
     const fresh = orders.filter(o => o.status === 'sent').length;
     const badge = m.el.querySelector('[data-count-orders]'); badge.textContent = fresh ? fresh : ''; badge.hidden = !fresh;
@@ -156,9 +159,10 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
       + '<div class="z19dtf-facts"><span><b>Filme ' + o.filmWidthCm + ' cm</b></span><span>📏 ' + num(Number(o.lengthCm) / 100, 2) + ' m</span><span>🖼 ' + (o.items || []).length + ' arte(s) · ' + units + ' impressões</span><span>' + (o.delivery === 'shipping' ? '🚚 Receber (frete a combinar)' : '🏪 Retira na loja') + '</span><b class="z19dtf-total">' + money(o.total) + '</b>' + pay + '</div>'
       + (o.note ? '<p class="z19dtf-note">💬 ' + esc(o.note) + '</p>' : '')
       + (o.price?.override ? '<p class="z19dtf-note">✎ Preço mudado pela equipe: era ' + money(o.price.override.previous) + (o.price.override.reason ? ' · ' + esc(o.price.override.reason) : '') + '</p>' : '')
-      + '<div class="z19dtf-arts">' + (o.items || []).map((i, n) => '<figure title="' + esc(i.name) + '"><span class="z19dtf-thumb"><img alt="" loading="lazy" src="' + esc(urls.get(i.thumbPath) || '') + '"></span><figcaption><b>' + i.quantity + '×</b> ' + num(i.widthCm) + ' × ' + num(i.heightCm) + ' cm</figcaption><button type="button" class="z19dtf-dl" data-dl="' + n + '" title="Baixar o PNG de impressão">⬇ PNG</button></figure>').join('') + '</div>'
+      + notesBlock(o)
+      + '<div class="z19dtf-arts">' + (o.items || []).map((i, n) => '<figure title="' + esc(i.name) + '"' + (i.note && !i.resolved ? ' class="is-note"' : '') + '><span class="z19dtf-thumb"><img alt="" loading="lazy" src="' + esc(urls.get(i.fixedPath || i.thumbPath) || urls.get(i.thumbPath) || '') + '"></span>' + (i.note ? '<em class="z19dtf-fig-tag ' + (i.resolved ? 'is-ok' : '') + '">' + (i.resolved ? (i.fixedPath ? '✓ trocada' : '✓ pronta') : '⚠ ajuste') + '</em>' : '') + '<figcaption><b>' + i.quantity + '×</b> ' + num(i.widthCm) + ' × ' + num(i.heightCm) + ' cm</figcaption><button type="button" class="z19dtf-dl" data-dl="' + n + '" title="Baixar o PNG de impressão">⬇ PNG</button></figure>').join('') + '</div>'
       + '<div class="z19dtf-actions">'
-      + (['sent', 'printing', 'ready'].includes(o.status) ? '<button type="button" class="btn primary small" data-a="film">＋ Pôr no meu filme</button>' : '')
+      + (['sent', 'printing', 'ready'].includes(o.status) ? (pendingNotes(o).length ? '<button type="button" class="btn small z19dtf-locked" data-a="film" title="Resolva as observações do cliente antes">🔒 Pôr no meu filme · ' + pendingNotes(o).length + ' ajuste(s) pendente(s)</button>' : '<button type="button" class="btn primary small" data-a="film">＋ Pôr no meu filme</button>') : '')
       + (['sent', 'printing', 'ready'].includes(o.status) ? '<button type="button" class="btn small z19dtf-price" data-a="price">✎ Mudar preço</button>' : '')
       + ((o.items || []).length ? '<button type="button" class="btn small" data-a="pngs">⬇ Baixar PNGs (' + (o.items || []).length + ')</button>' : '')
       + (['sent', 'printing'].includes(o.status) ? '<button type="button" class="btn small z19dtf-green" data-a="ready">✓ Pronto</button>' : '')
@@ -174,15 +178,48 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
       + (orders.length ? '<div class="z19dtf-orders">' + orders.map(orderCard).join('') + '</div>' : '<div class="z19dtf-empty">Nenhum pedido DTF ' + (scope === 'open' ? 'em aberto' : 'nos últimos 60 dias') + '.<br><small>Os clientes enviam pela área do cliente: ' + esc(location.origin) + '/dtf</small></div>');
     pane.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { scope = b.dataset.s; loadOrders(); });
     pane.querySelector('[data-reload]').onclick = loadOrders;
+    pane.querySelectorAll('[data-nr]').forEach(b => b.onclick = async () => {
+      const o = orders.find(x => x.id === b.closest('[data-o]').dataset.o), index = Number(b.dataset.idx), item = o?.items?.[index]; if (!item) return;
+      if (b.dataset.nr === 'ready') {
+        if (!await ask({ title: 'Arte pronta?', text: '<b>' + esc(item.name) + '</b><br>Pedido do cliente: <i>' + esc(item.note) + '</i><br><br>Confirme que o ajuste foi feito (ou não precisa). A arte vai para o filme como está, na medida e quantidade do cliente.', ok: '✓ Arte pronta' })) return;
+        b.disabled = true;
+        const { error } = await api.supabase.rpc('z19p_dtf_staff_resolve_item', { p_film_id: o.id, p_index: index });
+        if (error) { b.disabled = false; api.toast(error.message, 'err'); return; }
+        api.toast('"' + item.name + '" liberada para o filme.', 'ok'); loadOrders(); return;
+      }
+      if (b.dataset.nr === 'fix') {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png';
+        input.onchange = async () => {
+          const file = input.files?.[0]; if (!file) return;
+          if (file.type !== 'image/png') { api.toast('Envie a arte modificada em PNG (com transparência).', 'err'); return; }
+          let width = 0, height = 0;
+          try { const bmp = await createImageBitmap(file); width = bmp.width; height = bmp.height; bmp.close?.(); } catch { api.toast('Não foi possível ler o PNG.', 'err'); return; }
+          const dpi = Math.round(width / (Number(item.widthCm) / 2.54)), ratioOld = Number(item.widthCm) / Number(item.heightCm), ratioNew = width / height;
+          const warn = Math.abs(ratioNew - ratioOld) / ratioOld > 0.03 ? '<br><b style="color:#b91c1c">A proporção é diferente da arte do cliente: na medida ' + num(item.widthCm) + ' × ' + num(item.heightCm) + ' cm a arte vai ficar esticada ou achatada.</b>' : '';
+          if (!await ask({ title: 'Trocar pela arte modificada?', text: '<b>' + esc(item.name) + '</b> · ' + width + ' × ' + height + ' px (' + dpi + ' DPI na medida)<br>Fica com a medida (' + num(item.widthCm) + ' × ' + num(item.heightCm) + ' cm) e a quantidade (' + item.quantity + '×) que o cliente pediu.' + (dpi < 250 ? '<br><b style="color:#b45309">Resolução baixa para essa medida.</b>' : '') + warn, ok: 'Trocar e liberar' })) return;
+          b.disabled = true; b.textContent = 'Enviando…';
+          try {
+            const path = String(api.owner()) + '/dtf-fix/' + o.id + '/' + (globalThis.crypto?.randomUUID?.() || Date.now().toString(16) + '-0000-4000-8000-000000000000') + '.png';
+            const up = await api.supabase.storage.from(BUCKET).upload(path, file, { contentType: 'image/png', upsert: false });
+            if (up.error) throw new Error(up.error.message);
+            const { error } = await api.supabase.rpc('z19p_dtf_staff_resolve_item', { p_film_id: o.id, p_index: index, p_path: path, p_width_px: width, p_height_px: height });
+            if (error) throw new Error(error.message);
+            api.toast('"' + item.name + '" trocada pela arte modificada e liberada para o filme.', 'ok'); loadOrders();
+          } catch (error) { b.disabled = false; b.textContent = '⇧ Subir arte modificada'; api.toast('Não foi possível trocar: ' + error.message, 'err'); }
+        };
+        input.click();
+      }
+    });
     pane.querySelectorAll('[data-dl]').forEach(b => b.onclick = async () => {
       const o = orders.find(x => x.id === b.closest('[data-o]').dataset.o), item = o?.items?.[Number(b.dataset.dl)]; if (!item) return;
-      b.disabled = true; try { await downloadPng(item.path, fileName(item.name, item.widthCm, item.heightCm)); } catch (error) { api.toast('Não baixou: ' + error.message, 'err'); } b.disabled = false;
+      b.disabled = true; try { await downloadPng(printPath(item), fileName(item.name, item.widthCm, item.heightCm)); } catch (error) { api.toast('Não baixou: ' + error.message, 'err'); } b.disabled = false;
     });
     pane.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
       const o = orders.find(x => x.id === b.closest('[data-o]').dataset.o); if (!o) return;
       const action = b.dataset.a;
-      if (action === 'pngs') { b.disabled = true; await downloadMany((o.items || []).map(i => ({ path: i.path, name: fileName(i.name, i.widthCm, i.heightCm) }))); b.disabled = false; return; }
+      if (action === 'pngs') { b.disabled = true; await downloadMany((o.items || []).map(i => ({ path: printPath(i), name: fileName(i.name, i.widthCm, i.heightCm) }))); b.disabled = false; return; }
       if (action === 'price') { if (await changePrice(o)) loadOrders(); return; }
+      if (action === 'film' && pendingNotes(o).length) { api.toast('O cliente pediu ajuste em ' + pendingNotes(o).length + ' arte(s). Faça o ajuste e toque em "✓ Arte pronta" ou "⇧ Subir arte modificada" antes de pôr no filme.', 'err'); b.closest('[data-o]').querySelector('.z19dtf-notes')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
       if (action === 'film') {
         if (!addToFilm) { try { sessionStorage.setItem(PENDING_KEY, o.id); } catch { /* ok */ } m.close(); api.nav('/filme'); return; }
         if (await importOrder(o, addToFilm)) { m.close(); refreshCount(); }
@@ -280,18 +317,31 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
   setTab(tab);
 }
 
+function notesBlock(o) {
+  const list = (o.items || []).map((item, index) => ({ item, index })).filter(({ item }) => item.note);
+  if (!list.length) return '';
+  const open = ['sent', 'printing', 'ready'].includes(o.status);
+  return '<div class="z19dtf-notes"><b class="z19dtf-notes-title">' + (pendingNotes(o).length ? '⚠ O cliente pediu ajuste · faça antes de pôr no filme' : '✓ Ajustes pedidos pelo cliente · feitos') + '</b>'
+    + list.map(({ item, index }) => '<div class="z19dtf-noterow' + (item.resolved ? ' is-done' : '') + '"><div><b>' + esc(item.name) + '</b> <span class="z19dtf-sub">' + num(item.widthCm) + ' × ' + num(item.heightCm) + ' cm · ' + item.quantity + '×</span><p>💬 ' + esc(item.note) + '</p>'
+      + (item.resolved ? '<span class="z19dtf-pill is-ok">' + (item.fixedPath ? '✓ Trocada pela arte modificada' : '✓ Marcada como pronta') + ' ' + dateText(item.resolvedAt) + '</span>' : '') + '</div>'
+      + (open && !item.resolved ? '<div class="z19dtf-noteacts"><button type="button" class="btn small z19dtf-green" data-nr="ready" data-idx="' + index + '">✓ Arte pronta</button><button type="button" class="btn small primary" data-nr="fix" data-idx="' + index + '">⇧ Subir arte modificada</button></div>' : '')
+      + (open && item.resolved ? '<div class="z19dtf-noteacts"><button type="button" class="btn small" data-nr="fix" data-idx="' + index + '">⇧ Trocar de novo</button></div>' : '')
+      + '</div>').join('') + '</div>';
+}
+
 // Cada arte do pedido vira um item do filme (medida e quantidade do cliente), editável como qualquer arte.
 export function dtfFilmItems(order) {
   return (order.items || []).map(item => ({
     localId: globalThis.crypto?.randomUUID?.() || 'dtf-' + Date.now() + '-' + Math.random().toString(36).slice(2),
     type: 'asset', sourceId: 'dtf:' + item.assetId, label: order.clientName + ' • ' + item.name, workspaceId: null, companyName: 'DTF · ' + order.clientName,
     widthCm: Number(item.widthCm), heightCm: Number(item.heightCm), quantity: Math.max(1, Number(item.quantity) || 1), halftone: false,
-    allowInternalNesting: true, rotationPolicy: '90', path: item.path, storageBucket: BUCKET, sizeOverride: false,
+    allowInternalNesting: true, rotationPolicy: '90', path: printPath(item), storageBucket: BUCKET, sizeOverride: false,
     dtfFilmId: order.id, dtfOrderNumber: order.orderNumber,
   }));
 }
 async function importOrder(order, addToFilm, { confirmAgain = true } = {}) {
   if (confirmAgain && order.printingAt && !await ask({ title: 'Colocar de novo?', text: 'As artes do pedido #' + esc(order.orderNumber) + ' já foram colocadas num filme em ' + dateText(order.printingAt) + '. Colocar de novo neste filme?', ok: 'Colocar de novo' })) return false;
+  if (pendingNotes(order).length) { api.toast('O pedido #' + order.orderNumber + ' tem ' + pendingNotes(order).length + ' arte(s) com ajuste pedido pelo cliente. Abra Pedidos DTF metro, faça o ajuste e libere antes de pôr no filme.', 'err'); return false; }
   const items = dtfFilmItems(order);
   if (!items.length) { api.toast('Este pedido não tem artes.', 'err'); return false; }
   await addToFilm(items);
