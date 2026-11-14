@@ -23,10 +23,24 @@ const STATUS = { sent: ['Novo · na fila', 'is-new'], printing: ['Em produção'
 
 let api = null, lastCount = null, pollTimer = null, filmAdder = null;
 
+// 14/11 (dono): baixar as artes do cliente em PNG (o arquivo de impressão, 300 DPI na medida do cliente).
+const fileName = (name, w, h) => String(name || 'arte').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) + (w && h ? ' - ' + num(w) + 'x' + num(h) + 'cm' : '') + '.png';
+async function downloadPng(path, name) {
+  const { data, error } = await api.supabase.storage.from(BUCKET).createSignedUrl(path, 600, { download: name });
+  if (error || !data?.signedUrl) throw new Error(error?.message || 'arquivo não encontrado');
+  const link = document.createElement('a'); link.href = data.signedUrl; link.download = name; link.rel = 'noopener';
+  document.body.appendChild(link); link.click(); link.remove();
+}
+async function downloadMany(list) {
+  let ok = 0;
+  for (const item of list) { try { await downloadPng(item.path, item.name); ok++; await new Promise(r => setTimeout(r, 450)); } catch (error) { api.toast('Não baixou ' + item.name + ': ' + error.message, 'err'); } }
+  if (ok) api.toast(ok + ' PNG baixado(s).', 'ok');
+}
+
 function injectCss() {
   if (document.querySelector('link[data-dtf-staff]')) return;
   const link = document.createElement('link');
-  link.rel = 'stylesheet'; link.href = new URL('./dtf-staff.css?v=2.17.96', import.meta.url).href; link.dataset.dtfStaff = '1';
+  link.rel = 'stylesheet'; link.href = new URL('./dtf-staff.css?v=2.17.102', import.meta.url).href; link.dataset.dtfStaff = '1';
   document.head.appendChild(link);
 }
 const isZero19 = () => String(api?.owner?.() || '') === ZERO19_OWNER;
@@ -141,9 +155,12 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
     return '<article class="z19dtf-order ' + cls + '" data-o="' + o.id + '"><header><div><b class="z19dtf-client">' + esc(o.clientName) + '</b><span class="z19dtf-sub">Pedido #' + esc(o.orderNumber) + ' · enviado ' + dateText(o.sentAt) + (o.printingAt ? ' · no filme ' + dateText(o.printingAt) : '') + '</span></div><span class="z19dtf-status ' + cls + '">' + label + '</span></header>'
       + '<div class="z19dtf-facts"><span><b>Filme ' + o.filmWidthCm + ' cm</b></span><span>📏 ' + num(Number(o.lengthCm) / 100, 2) + ' m</span><span>🖼 ' + (o.items || []).length + ' arte(s) · ' + units + ' impressões</span><span>' + (o.delivery === 'shipping' ? '🚚 Receber (frete a combinar)' : '🏪 Retira na loja') + '</span><b class="z19dtf-total">' + money(o.total) + '</b>' + pay + '</div>'
       + (o.note ? '<p class="z19dtf-note">💬 ' + esc(o.note) + '</p>' : '')
-      + '<div class="z19dtf-arts">' + (o.items || []).map(i => '<figure title="' + esc(i.name) + '"><span class="z19dtf-thumb"><img alt="" loading="lazy" src="' + esc(urls.get(i.thumbPath) || '') + '"></span><figcaption><b>' + i.quantity + '×</b> ' + num(i.widthCm) + ' × ' + num(i.heightCm) + ' cm</figcaption></figure>').join('') + '</div>'
+      + (o.price?.override ? '<p class="z19dtf-note">✎ Preço mudado pela equipe: era ' + money(o.price.override.previous) + (o.price.override.reason ? ' · ' + esc(o.price.override.reason) : '') + '</p>' : '')
+      + '<div class="z19dtf-arts">' + (o.items || []).map((i, n) => '<figure title="' + esc(i.name) + '"><span class="z19dtf-thumb"><img alt="" loading="lazy" src="' + esc(urls.get(i.thumbPath) || '') + '"></span><figcaption><b>' + i.quantity + '×</b> ' + num(i.widthCm) + ' × ' + num(i.heightCm) + ' cm</figcaption><button type="button" class="z19dtf-dl" data-dl="' + n + '" title="Baixar o PNG de impressão">⬇ PNG</button></figure>').join('') + '</div>'
       + '<div class="z19dtf-actions">'
       + (['sent', 'printing', 'ready'].includes(o.status) ? '<button type="button" class="btn primary small" data-a="film">＋ Pôr no meu filme</button>' : '')
+      + (['sent', 'printing', 'ready'].includes(o.status) ? '<button type="button" class="btn small z19dtf-price" data-a="price">✎ Mudar preço</button>' : '')
+      + ((o.items || []).length ? '<button type="button" class="btn small" data-a="pngs">⬇ Baixar PNGs (' + (o.items || []).length + ')</button>' : '')
       + (['sent', 'printing'].includes(o.status) ? '<button type="button" class="btn small z19dtf-green" data-a="ready">✓ Pronto</button>' : '')
       + (['sent', 'printing', 'ready'].includes(o.status) ? '<button type="button" class="btn small z19dtf-gray" data-a="delivered">Entregue</button>' : '')
       + (['printing', 'ready'].includes(o.status) ? '<button type="button" class="btn small ghost" data-a="sent">↶ Voltar para a fila</button>' : '')
@@ -157,9 +174,15 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
       + (orders.length ? '<div class="z19dtf-orders">' + orders.map(orderCard).join('') + '</div>' : '<div class="z19dtf-empty">Nenhum pedido DTF ' + (scope === 'open' ? 'em aberto' : 'nos últimos 60 dias') + '.<br><small>Os clientes enviam pela área do cliente: ' + esc(location.origin) + '/dtf</small></div>');
     pane.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { scope = b.dataset.s; loadOrders(); });
     pane.querySelector('[data-reload]').onclick = loadOrders;
+    pane.querySelectorAll('[data-dl]').forEach(b => b.onclick = async () => {
+      const o = orders.find(x => x.id === b.closest('[data-o]').dataset.o), item = o?.items?.[Number(b.dataset.dl)]; if (!item) return;
+      b.disabled = true; try { await downloadPng(item.path, fileName(item.name, item.widthCm, item.heightCm)); } catch (error) { api.toast('Não baixou: ' + error.message, 'err'); } b.disabled = false;
+    });
     pane.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
       const o = orders.find(x => x.id === b.closest('[data-o]').dataset.o); if (!o) return;
       const action = b.dataset.a;
+      if (action === 'pngs') { b.disabled = true; await downloadMany((o.items || []).map(i => ({ path: i.path, name: fileName(i.name, i.widthCm, i.heightCm) }))); b.disabled = false; return; }
+      if (action === 'price') { if (await changePrice(o)) loadOrders(); return; }
       if (action === 'film') {
         if (!addToFilm) { try { sessionStorage.setItem(PENDING_KEY, o.id); } catch { /* ok */ } m.close(); api.nav('/filme'); return; }
         if (await importOrder(o, addToFilm)) { m.close(); refreshCount(); }
@@ -182,7 +205,7 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
     return '<article class="z19dtf-client-row' + (c.active ? '' : ' is-off') + '" data-c="' + c.id + '"><div class="z19dtf-client-main"><b>' + esc(c.name) + (c.active ? '' : ' · desativado') + '</b><span class="z19dtf-sub">' + esc(c.email) + (c.whatsapp ? ' · ' + esc(c.whatsapp) : '') + '</span>'
       + '<span class="z19dtf-sub">58 cm: ' + (Number(c.price58) > 0 ? money(c.price58) + '/m' : '—') + ' · 28 cm: ' + (Number(c.price28) > 0 ? money(c.price28) + '/m' : '—') + ' · ' + esc(MODE_LABEL[c.mode] || c.mode) + (c.mode !== 'meter' ? ' (' + (c.artTable || []).length + ' faixa(s))' : '') + '</span>'
       + '<span class="z19dtf-sub">' + c.arts + ' arte(s) · ' + c.orders + ' pedido(s)</span>' + access + '</div>'
-      + '<div class="z19dtf-actions"><button type="button" class="btn small" data-ca="edit">✎ Editar</button><button type="button" class="btn small primary" data-ca="link">🔗 ' + (c.hasAccess ? 'Link para trocar a senha' : 'Link de acesso') + '</button></div></article>';
+      + '<div class="z19dtf-actions"><button type="button" class="btn small z19dtf-green" data-ca="arts">🗂 Artes do cliente</button><button type="button" class="btn small" data-ca="edit">✎ Editar</button><button type="button" class="btn small primary" data-ca="link">🔗 ' + (c.hasAccess ? 'Link para trocar a senha' : 'Link de acesso') + '</button></div></article>';
   };
   const paintClients = () => {
     const t = search.toLowerCase(), list = clients.filter(c => !t || (c.name + ' ' + c.email + ' ' + (c.whatsapp || '')).toLowerCase().includes(t));
@@ -192,7 +215,7 @@ export async function openDtfPanel({ tab = 'orders', addToFilm = null } = {}) {
     const s = pane.querySelector('[data-search]');
     s.oninput = () => { search = s.value; const pos = s.selectionStart; paintClients(); const s2 = pane.querySelector('[data-search]'); s2.focus(); try { s2.setSelectionRange(pos, pos); } catch { /* ok */ } };
     pane.querySelector('[data-new]').onclick = () => editClient(null);
-    pane.querySelectorAll('[data-ca]').forEach(b => b.onclick = () => { const c = clients.find(x => x.id === b.closest('[data-c]').dataset.c); if (b.dataset.ca === 'edit') editClient(c); else accessLink(c); });
+    pane.querySelectorAll('[data-ca]').forEach(b => b.onclick = () => { const c = clients.find(x => x.id === b.closest('[data-c]').dataset.c); if (b.dataset.ca === 'arts') openClientArts(c, addToFilm); else if (b.dataset.ca === 'edit') editClient(c); else accessLink(c); });
   };
   const editClient = c => {
     const rows = (c?.artTable?.length ? c.artTable : [{ maxWidthCm: 10, maxHeightCm: 10, price: '' }, { maxWidthCm: 30, maxHeightCm: 30, price: '' }]).map(r => ({ ...r }));
@@ -275,4 +298,70 @@ async function importOrder(order, addToFilm, { confirmAgain = true } = {}) {
   const { error } = await api.supabase.rpc('z19p_dtf_staff_set_status', { p_film_id: order.id, p_status: 'printing' });
   api.toast(items.length + ' arte(s) do pedido #' + order.orderNumber + ' (' + order.clientName + ') no filme' + (error ? ', mas não deu para marcar "Em produção": ' + error.message : '. O cliente vê "Em produção".'), error ? 'err' : 'ok');
   return true;
+}
+
+// ── 14/11 · Mudar o preço do pedido (o cliente vê o valor novo; o pedido do PDV e "Pagamentos na retirada" acompanham) ──
+function changePrice(o) {
+  return new Promise(resolve => {
+    const m = modal({ title: 'Mudar o preço · pedido #' + esc(o.orderNumber), body: '<p class="z19dtf-text">' + esc(o.clientName) + ' · valor atual <b>' + money(o.total) + '</b>' + (o.price?.override ? ' (antes da mudança: ' + money(o.price.override.previous) + ')' : '') + '</p>'
+      + '<label class="z19dtf-field"><span>Novo valor do pedido (R$)</span><input class="z19dtf-input z19dtf-big" data-v inputmode="decimal" autocomplete="off" placeholder="0,00" value="' + esc(String(Number(o.total || 0).toFixed(2)).replace('.', ',')) + '"></label>'
+      + '<label class="z19dtf-field"><span>Motivo (opcional, o cliente não vê)</span><input class="z19dtf-input" data-r maxlength="200" placeholder="Ex.: desconto combinado no WhatsApp"></label>'
+      + '<p class="z19dtf-hint">Muda o total do pedido DTF (o cliente vê na área dele) e o pedido do PDV: valor menor vira desconto do pedido; maior vira uma linha "Ajuste de preço (DTF)". O que falta receber fica em "Pagamentos na retirada".</p>',
+      footer: '<button type="button" class="btn ghost" data-no>Cancelar</button><button type="button" class="btn primary" data-yes>Salvar preço</button>' });
+    const input = m.el.querySelector('[data-v]'); setTimeout(() => { input.focus(); input.select(); }, 30);
+    const done = value => { m.close(); resolve(value); };
+    m.el.querySelector('[data-no]').onclick = () => done(false);
+    m.el.querySelector('[data-x]').onclick = () => done(false);
+    const save = async () => {
+      const value = parseNum(input.value), button = m.el.querySelector('[data-yes]');
+      if (!(value > 0)) { api.toast('Digite um valor maior que zero.', 'err'); input.focus(); return; }
+      button.disabled = true; button.textContent = 'Salvando…';
+      const { data, error } = await api.supabase.rpc('z19p_dtf_staff_set_price', { p_film_id: o.id, p_total: Math.round(value * 100) / 100, p_reason: m.el.querySelector('[data-r]').value.trim() || null });
+      if (error) { button.disabled = false; button.textContent = 'Salvar preço'; api.toast(error.message, 'err'); return; }
+      api.toast('Pedido #' + o.orderNumber + ': ' + money(data.previous) + ' → ' + money(data.total) + '. Cliente e PDV atualizados.', 'ok');
+      done(true);
+    };
+    m.el.querySelector('[data-yes]').onclick = save;
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); save(); } });
+  });
+}
+
+// ── 14/11 · Área do cliente pela equipe: pastas e artes, baixar PNG e pôr no filme ──
+async function openClientArts(client, addToFilm) {
+  const m = modal({ title: '🗂 Artes de ' + esc(client.name), wide: true, body: '<p class="z19dtf-loading">Carregando as artes…</p>' });
+  const body = m.el.querySelector('.z19dtf-body') || m.el;
+  const { data, error } = await api.supabase.rpc('z19p_dtf_staff_client_assets', { p_client_id: client.id });
+  const holder = m.el.querySelector('.z19dtf-loading')?.parentElement || body;
+  if (error) { holder.innerHTML = '<p class="z19dtf-error">' + esc(error.message) + '</p>'; return; }
+  const folders = data.folders || [], assets = data.assets || [], thumbs = new Map(), picked = new Set();
+  let folder = 'all', term = '';
+  const paths = [...new Set(assets.map(a => a.thumbPath || a.path).filter(Boolean))];
+  for (let i = 0; i < paths.length; i += 100) { try { const { data: signed } = await api.supabase.storage.from(BUCKET).createSignedUrls(paths.slice(i, i + 100), 3600); for (const row of signed || []) if (row?.signedUrl) thumbs.set(row.path, row.signedUrl); } catch { /* sem miniatura */ } }
+  const visible = () => assets.filter(a => (folder === 'all' || (folder === 'none' ? !a.folderId : a.folderId === folder)) && (!term || String(a.name).toLowerCase().includes(term)));
+  const paint = () => {
+    const list = visible();
+    holder.innerHTML = '<div class="z19dtf-bar"><input class="z19dtf-input" data-q type="search" placeholder="Buscar arte pelo nome" value="' + esc(term) + '"><span class="z19dtf-sub">' + assets.length + ' arte(s)</span></div>'
+      + '<div class="z19dtf-seg z19dtf-folders">' + [['all', 'Todas'], ...folders.map(f => [f.id, f.name]), ['none', 'Sem pasta']].map(([id, name]) => '<button type="button" data-f="' + esc(id) + '" class="' + (folder === id ? 'is-on' : '') + '">' + esc(name) + '</button>').join('') + '</div>'
+      + (list.length ? '<div class="z19dtf-artgrid">' + list.map(a => '<article class="z19dtf-artcard' + (picked.has(a.id) ? ' is-picked' : '') + '" data-id="' + a.id + '"><button type="button" class="z19dtf-artpick" data-pick aria-pressed="' + picked.has(a.id) + '"><span class="z19dtf-thumb"><img alt="" loading="lazy" src="' + esc(thumbs.get(a.thumbPath || a.path) || '') + '"></span>' + (picked.has(a.id) ? '<i>✓</i>' : '') + '</button>'
+        + '<b title="' + esc(a.name) + '">' + esc(a.name) + '</b><span class="z19dtf-sub">' + num(a.widthCm) + ' × ' + num(a.heightCm) + ' cm · ' + Math.round(Number(a.sourceDpi || a.dpi)) + ' DPI</span>'
+        + '<div class="z19dtf-artbtns"><button type="button" class="btn small" data-png>⬇ PNG</button>' + (addToFilm ? '<button type="button" class="btn small primary" data-film>＋ Filme</button>' : '') + '</div></article>').join('') + '</div>'
+        : '<div class="z19dtf-empty">' + (assets.length ? 'Nenhuma arte nesta pasta ou busca.' : 'Este cliente ainda não subiu artes.') + '</div>')
+      + '<div class="z19dtf-artfoot"><span>' + (picked.size ? picked.size + ' marcada(s)' : 'Toque nas artes para marcar várias') + '</span><button type="button" class="btn" data-allpng' + (picked.size || list.length ? '' : ' disabled') + '>⬇ Baixar ' + (picked.size ? 'marcadas' : 'todas desta lista') + ' em PNG</button>'
+        + (addToFilm ? '<button type="button" class="btn primary" data-allfilm' + (picked.size ? '' : ' disabled') + '>＋ Pôr marcadas no filme</button>' : '') + '</div>';
+    const q = holder.querySelector('[data-q]');
+    q.oninput = () => { term = q.value.trim().toLowerCase(); const pos = q.selectionStart; paint(); const q2 = holder.querySelector('[data-q]'); q2.focus(); try { q2.setSelectionRange(pos, pos); } catch { /* ok */ } };
+    holder.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { folder = b.dataset.f; paint(); });
+    const byCard = el => assets.find(a => a.id === el.closest('[data-id]').dataset.id);
+    holder.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { const a = byCard(b); picked.has(a.id) ? picked.delete(a.id) : picked.add(a.id); paint(); });
+    holder.querySelectorAll('[data-png]').forEach(b => b.onclick = async () => { const a = byCard(b); b.disabled = true; try { await downloadPng(a.path, fileName(a.name, a.widthCm, a.heightCm)); } catch (err) { api.toast('Não baixou: ' + err.message, 'err'); } b.disabled = false; });
+    const toFilm = async list => {
+      await addToFilm(list.map(a => ({ localId: globalThis.crypto?.randomUUID?.() || 'dtf-' + Date.now() + Math.random(), type: 'asset', sourceId: 'dtf:' + a.id, label: client.name + ' • ' + a.name, workspaceId: null,
+        companyName: 'DTF · ' + client.name, widthCm: Number(a.widthCm), heightCm: Number(a.heightCm), quantity: 1, halftone: false, allowInternalNesting: true, rotationPolicy: '90', path: a.path, storageBucket: BUCKET, sizeOverride: false })));
+      api.toast(list.length + ' arte(s) de ' + client.name + ' no filme (1 de cada, na medida do cliente).', 'ok');
+    };
+    holder.querySelectorAll('[data-film]').forEach(b => b.onclick = async () => { b.disabled = true; await toFilm([byCard(b)]); b.textContent = '✓ No filme'; });
+    holder.querySelector('[data-allpng]')?.addEventListener('click', async event => { const b = event.currentTarget; b.disabled = true; await downloadMany((picked.size ? assets.filter(a => picked.has(a.id)) : list).map(a => ({ path: a.path, name: fileName(a.name, a.widthCm, a.heightCm) }))); b.disabled = false; });
+    holder.querySelector('[data-allfilm]')?.addEventListener('click', async () => { await toFilm(assets.filter(a => picked.has(a.id))); picked.clear(); paint(); });
+  };
+  paint();
 }
