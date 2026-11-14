@@ -3,8 +3,12 @@
 // Lista as estampas do site com a arte que a produção usa; "Baixar PNG" (o arquivo de impressão, com DPI na medida), "Subir halftone"
 // (PNG com pelo menos 300 DPI na mesma largura; vale para os pedidos novos e para os que esperam produção) e "Voltar para a original".
 // Banco: z19p_site_prints_list / z19p_site_print_set_halftone / z19p_site_print_restore.
+// 2.17.100 (14/11, dono: "permita que eu marque as estampas que não são halftone para não ficar pendente; no GTA todas da frente não vão
+// halftone, só as costas; quando tiver estampa em produção e sem halftone alerte o botão do halftone"): "Não vai halftone" em cada estampa
+// (z19p_site_print_set_no_halftone), filtro "⚠ Falta halftone" e o botão do Montar filme fica vermelho com a quantidade (z19p_site_prints_alert).
 const esc = value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const COLLECTIONS = [['all', 'Todas'], ['GTA6', 'GTA VI'], ['BOLSONARO', 'Bolsonaro'], ['LULA', 'Lula'], ['HALFTONE', 'Já com halftone']];
+const COLLECTIONS = [['NEEDS', '⚠ Falta halftone'], ['all', 'Todas'], ['GTA6', 'GTA VI'], ['BOLSONARO', 'Bolsonaro'], ['LULA', 'Lula'], ['HALFTONE', 'Já com halftone'], ['NOHT', 'Não vai halftone']];
+const inCollection = (row, key) => key === 'all' || (key === 'HALFTONE' ? row.halftone : key === 'NEEDS' ? row.needs_halftone : key === 'NOHT' ? row.no_halftone : row.candidate === key);
 const plain = value => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fmt = (value, digits = 1) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: digits });
 let cssDone = false;
@@ -34,25 +38,29 @@ export function openSitePrints({ supabase, toast = message => alert(message), ow
 
   const filtered = () => {
     const term = plain(search.value).trim();
-    return rows.filter(row => (collection === 'all' || (collection === 'HALFTONE' ? row.halftone : row.candidate === collection)) && (!term || term.split(/\s+/).every(part => plain(row.name).includes(part))));
+    return rows.filter(row => inCollection(row, collection) && (!term || term.split(/\s+/).every(part => plain(row.name).includes(part))));
   };
   const minPx = row => Math.ceil(Number(row.width_cm || 0) / 2.54 * 300);
   const render = () => {
+    const needs = rows.filter(row => row.needs_halftone).length, chip = back.querySelector('[data-col="NEEDS"]');
+    if (chip) { chip.textContent = needs ? `⚠ Falta halftone · ${needs}` : '✓ Nada faltando'; chip.classList.toggle('alert', needs > 0); }
     const list = filtered();
-    if (!list.length) { body.innerHTML = '<p class="sp-empty">Nenhuma estampa nesta busca.</p>'; return; }
-    body.innerHTML = `<p class="sp-count">${list.length} estampa${list.length === 1 ? '' : 's'}</p><ul class="sp-list">${list.slice(0, limit).map(row => `<li class="sp-row${row.halftone ? ' is-halftone' : ''}" data-id="${esc(row.print_id)}">
+    if (!list.length) { body.innerHTML = `<p class="sp-empty">${collection === 'NEEDS' ? '✓ Nenhuma estampa com pedido esperando halftone.' : 'Nenhuma estampa nesta busca.'}</p>`; return; }
+    body.innerHTML = `<p class="sp-count">${list.length} estampa${list.length === 1 ? '' : 's'}</p><ul class="sp-list">${list.slice(0, limit).map(row => `<li class="sp-row${row.halftone ? ' is-halftone' : row.needs_halftone ? ' is-needs' : row.no_halftone ? ' is-noht' : ''}" data-id="${esc(row.print_id)}">
       <div class="sp-thumb${row.candidate === 'GTA6' || /costas|frente/i.test(row.name) ? ' dark' : ''}"><img src="${esc(row.preview_url)}" alt="" loading="lazy"></div>
       <div class="sp-info"><b>${esc(row.name)}</b>
         <span>${fmt(row.width_cm)} × ${fmt(row.height_cm)} cm · ${esc(row.width_px)} × ${esc(row.height_px)} px · <strong class="${Number(row.dpi) >= 300 ? 'ok' : 'low'}">${esc(row.dpi || '?')} DPI</strong></span>
-        <span class="sp-tags">${row.halftone ? '<em class="ht">HALFTONE em uso</em>' : '<em>Chapada (original)</em>'}${row.pending ? `<em class="wait">${row.pending} na fila</em>` : ''}</span></div>
-      <div class="sp-actions"><button type="button" data-act="download" ${busy ? 'disabled' : ''}>⬇ Baixar PNG</button><button type="button" data-act="upload" class="main" ${busy ? 'disabled' : ''}>${busy === row.print_id ? 'Enviando…' : '⇧ Subir halftone'}</button>${row.halftone ? `<button type="button" data-act="restore" class="soft" ${busy ? 'disabled' : ''}>↺ Voltar original</button>` : ''}</div>
+        <span class="sp-tags">${row.halftone ? '<em class="ht">HALFTONE em uso</em>' : row.no_halftone ? '<em class="noht">✓ Não vai halftone</em>' : '<em>Chapada (original)</em>'}${row.needs_halftone ? `<em class="need">⚠ ${row.pending} na fila sem halftone</em>` : row.pending ? `<em class="wait">${row.pending} na fila</em>` : ''}</span></div>
+      <div class="sp-actions"><button type="button" data-act="download" ${busy ? 'disabled' : ''}>⬇ Baixar PNG</button><button type="button" data-act="upload" class="main" ${busy ? 'disabled' : ''}>${busy === row.print_id ? 'Enviando…' : '⇧ Subir halftone'}</button>${row.halftone ? `<button type="button" data-act="restore" class="soft" ${busy ? 'disabled' : ''}>↺ Voltar original</button>` : row.no_halftone ? `<button type="button" data-act="need" class="soft" ${busy ? 'disabled' : ''}>↺ Precisa de halftone</button>` : `<button type="button" data-act="noht" class="noht" ${busy ? 'disabled' : ''}>✓ Não vai halftone</button>`}</div>
       <small class="sp-hint">Halftone: PNG transparente com pelo menos ${minPx(row)} px de largura (300 DPI em ${fmt(row.width_cm)} cm).</small>
     </li>`).join('')}</ul>${list.length > limit ? `<button type="button" class="sp-more">Mostrar mais (${list.length - limit})</button>` : ''}`;
   };
   const load = async () => {
     const { data, error } = await supabase.rpc('z19p_site_prints_list');
     if (error) { body.innerHTML = `<p class="sp-empty">Não foi possível abrir: ${esc(error.message)}</p>`; return; }
-    rows = data || []; render();
+    rows = data || [];
+    if (rows.some(row => row.needs_halftone)) { collection = 'NEEDS'; back.querySelectorAll('[data-col]').forEach(item => item.setAttribute('aria-pressed', String(item.dataset.col === 'NEEDS'))); }
+    render(); refreshSitePrintsAlert();
   };
   search.addEventListener('input', () => { limit = 40; render(); });
   back.querySelectorAll('[data-col]').forEach(button => button.addEventListener('click', () => { collection = button.dataset.col; limit = 40; back.querySelectorAll('[data-col]').forEach(item => item.setAttribute('aria-pressed', String(item === button))); render(); }));
@@ -73,13 +81,22 @@ export function openSitePrints({ supabase, toast = message => alert(message), ow
       } catch (error) { toast('Não foi possível baixar: ' + error.message, 'err'); }
       finally { button.disabled = false; button.textContent = '⬇ Baixar PNG'; }
     } else if (button.dataset.act === 'upload') { uploadFor = row; file.value = ''; file.click(); }
+    else if (button.dataset.act === 'noht' || button.dataset.act === 'need') {
+      const value = button.dataset.act === 'noht';
+      busy = row.print_id; render();
+      const { data, error } = await supabase.rpc('z19p_site_print_set_no_halftone', { p_print_id: row.print_id, p_value: value });
+      busy = '';
+      if (error) { toast(error.message, 'err'); render(); return; }
+      rows = data.list || rows; render(); refreshSitePrintsAlert();
+      toast(value ? `"${row.name}" marcada: não vai halftone (sai do alerta).` : `"${row.name}" volta a pedir halftone.`, 'ok');
+    }
     else if (button.dataset.act === 'restore') {
       if (!confirm(`Voltar "${row.name}" para a arte original (chapada)?\n\nPedidos novos e os que esperam produção voltam a usar a original.`)) return;
       busy = row.print_id; render();
       const { data, error } = await supabase.rpc('z19p_site_print_restore', { p_print_id: row.print_id });
       busy = '';
       if (error) { toast(error.message, 'err'); render(); return; }
-      rows = data.list || rows; render(); toast(`Voltou para a original${data.pending_swapped ? ` · ${data.pending_swapped} da fila trocados` : ''}.`, 'ok');
+      rows = data.list || rows; render(); refreshSitePrintsAlert(); toast(`Voltou para a original${data.pending_swapped ? ` · ${data.pending_swapped} da fila trocados` : ''}.`, 'ok');
     }
   });
   file.addEventListener('change', async () => {
@@ -100,10 +117,37 @@ export function openSitePrints({ supabase, toast = message => alert(message), ow
       if (upError) throw new Error(upError.message);
       const { data, error } = await supabase.rpc('z19p_site_print_set_halftone', { p_print_id: row.print_id, p_path: path, p_width_px: width, p_height_px: height });
       if (error) throw new Error(error.message);
-      rows = data.list || rows;
+      rows = data.list || rows; refreshSitePrintsAlert();
       toast(`Halftone em uso em "${row.name}" (${fmt(data.width_cm)} × ${fmt(data.height_cm)} cm)${data.pending_swapped ? ` · ${data.pending_swapped} pedidos da fila trocados` : ''}.`, 'ok');
     } catch (error) { toast('Não foi possível trocar: ' + error.message, 'err'); }
     finally { busy = ''; render(); }
   });
   void load();
+}
+
+// Alerta no botão "🖨 Estampas do site · halftone" do Montar filme: estampas com pedido esperando produção ainda sem halftone.
+let alertClient = null, alertTimer = 0, alertState = { prints: 0, items: 0 };
+const paintAlert = () => {
+  document.querySelectorAll('#openSitePrints').forEach(button => {
+    const { prints, items } = alertState;
+    button.classList.toggle('sp-alert', prints > 0);
+    button.title = prints ? `${prints} estampa${prints === 1 ? '' : 's'} com ${items} pedido${items === 1 ? '' : 's'} esperando, ainda sem halftone` : 'Baixar as estampas do site e trocar pela versão halftone';
+    let badge = button.querySelector('.sp-badge');
+    if (prints > 0) { if (!badge) { badge = document.createElement('span'); badge.className = 'sp-badge'; button.appendChild(badge); } badge.textContent = `⚠ ${prints} sem halftone`; }
+    else badge?.remove();
+  });
+};
+export async function refreshSitePrintsAlert() {
+  if (!alertClient) return;
+  try { const { data, error } = await alertClient.rpc('z19p_site_prints_alert'); if (!error && data) alertState = { prints: Number(data.prints) || 0, items: Number(data.items) || 0 }; } catch {}
+  paintAlert();
+}
+export function watchSitePrintsAlert(supabase) {
+  injectCss();
+  alertClient = supabase; paintAlert();
+  if (!alertTimer) {
+    alertTimer = setInterval(() => { if (document.querySelector('#openSitePrints') && !document.hidden) refreshSitePrintsAlert(); }, 60000);
+    new MutationObserver(() => { if (alertState.prints) document.querySelectorAll('#openSitePrints:not(.sp-alert)').forEach(() => paintAlert()); }).observe(document.body, { childList: true, subtree: true });
+  }
+  refreshSitePrintsAlert();
 }

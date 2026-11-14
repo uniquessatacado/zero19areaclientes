@@ -35,3 +35,14 @@
 .sp-hint{grid-column:1/-1;font-size:11.5px;font-weight:700;color:#64748b}
 .sp-more{display:block;width:100%;min-height:46px;margin-top:10px;border-radius:14px;border:2px solid #cbd5e1;background:#fff;font-weight:900;cursor:pointer}
 @media (min-width:760px){.sp-back{align-items:center;padding:16px}.sp-modal{border-radius:24px}.sp-row{grid-template-columns:72px minmax(0,1fr) auto;align-items:center}.sp-thumb{grid-row:auto}.sp-actions{grid-column:auto;display:flex;margin-top:0}.sp-actions button{padding:0 12px}}
+.sp-row.is-needs{border-color:#f87171;background:#fef2f2}
+.sp-row.is-noht{opacity:.85}
+.sp-tags em.need{background:#dc2626;color:#fff}.sp-tags em.noht{background:#dcfce7;color:#166534}
+.sp-actions button.noht{border-color:#86efac;color:#166534;background:#f0fdf4}
+.sp-chips button.alert{border-color:#dc2626;color:#b91c1c;background:#fef2f2}
+.sp-chips button.alert[aria-pressed=true]{background:#dc2626;color:#fff;border-color:#dc2626}
+/* Alerta no botão do Montar filme. */
+body .film-page .ft-group #openSitePrints.sp-alert,body .film-page #openSitePrints.sp-alert,body #openSitePrints.sp-alert{background:#fef2f2!important;border-color:#dc2626!important;color:#991b1b!important;flex-wrap:wrap;gap:4px!important}
+#openSitePrints .sp-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:#dc2626;color:#fff;font-size:11.5px;font-weight:900;animation:sp-pulse 1.6s ease-in-out infinite}
+@keyframes sp-pulse{50%{transform:scale(1.06)}}
+@media (prefers-reduced-motion:reduce){#openSitePrints .sp-badge{animation:none}}
