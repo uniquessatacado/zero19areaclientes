@@ -20,8 +20,9 @@ jobs:
         run: npm run build
       - name: Verify current release
         run: |
-          grep -q 'content="2.17.41"' dist/index.html
-          grep -q "APP_VERSION = '2.17.41'" dist/app.js
+          version=$(node -p "require('./package.json').version")
+          grep -Fq "name=\"z19-version\" content=\"$version\"" dist/index.html
+          grep -Fq "APP_VERSION = '$version'" dist/app.js
           test -s dist/venduss-artwork-archive.js
           grep -q 'createZero19PdvSync' dist/app.js
           grep -q 'Aguardando halftone' dist/zero19-pdv-sync.js

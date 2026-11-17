@@ -16,6 +16,27 @@ const timeFormat = new Intl.DateTimeFormat('pt-BR', {timeZone: SP, hour: '2-digi
 const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'}[c]));
 const validDate = value => { const date = value instanceof Date ? value : new Date(value); return Number.isFinite(date.getTime()) ? date : null; };
 
+/** Nome para a equipe identificar a peça. O contato do pedido continua no cadastro de origem. */
+export function queueCustomerName(summary) {
+  const queue = summary.queue || {};
+  const workspace = summary.workspace || {};
+  return [queue.source_customer_name, queue.customer_name, summary.project?.official_order_payload?.customer_name,
+    workspace.client_name, workspace.company_name].find(name => typeof name === 'string' && name.trim())?.trim() || 'Cliente sem nome';
+}
+
+export function queueCustomerHTML(name, vendussBuyer, heading = false) {
+  const container = heading ? 'div' : 'span';
+  const title = heading ? 'h3' : 'strong';
+  return '<' + container + ' class="z19q-customer"><span class="z19q-customer-label">' +
+    (vendussBuyer ? 'Comprador na Venduss' : 'Cliente') +
+    '</span><' + title + '>' + esc(name || 'Cliente sem nome') + '</' + title + '></' + container + '>';
+}
+
+export function queueCountLabel(rows) {
+  const waiting = rows.filter(row => row.stage === 'awaiting_release').length;
+  return (rows.length - waiting) + ' para produzir' + (waiting ? ' · ' + waiting + ' aguardando liberação da Venduss' : '');
+}
+
 export const spKey = value => { const date = validDate(value); return date ? keyFormat.format(date) : ''; };
 const shiftKey = (key, days) => new Date(Date.parse(key + 'T12:00:00Z') + days * 86400000).toISOString().slice(0, 10);
 export const dayLabel = key => key ? dayFormat.format(new Date(key + 'T12:00:00-03:00')).replace('.', '').replace(/^./, c => c.toUpperCase()) : '';
@@ -99,6 +120,12 @@ export function sortByQueue(summaries = []) {
 export const matchesOrigin = (summary, origin) => !origin || origin === 'all' || originInfo(summary.queue)?.key === origin;
 
 export const queueStyles = `
+.z19q-customer{display:grid;min-width:0;gap:2px;line-height:1.2;overflow-wrap:anywhere}
+.z19q-customer .z19q-customer-label{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:inherit}
+body .z19-zero19-card .z19-zero19-card-head .z19q-customer h3,.z19q-customer strong,.z19q-next-title .z19q-customer strong,.z19-order-picker-row .z19q-customer strong{color:inherit;font-size:clamp(19px,2.8vw,24px);font-weight:900;line-height:1.15}
+.z19q-next-title .z19q-customer{flex:1 1 100%;color:#0f172a}
+.z19-zero19-card-head>div:first-child,.z19-order-picker-row .z19q-customer{min-width:0}
+.z19q-adjustment{flex:1 1 100%;margin:0;padding:8px 12px;border-radius:8px;background:#fef3c7;color:#78350f;font-weight:700}
 .z19q-head{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:2px}
 .z19q-pos{display:flex;flex-direction:column;justify-content:center;min-width:64px;border-radius:14px;background:#0f172a;color:#fff;padding:6px 10px;font-size:20px;font-weight:900;line-height:1;text-align:center}
 .z19q-pos small{display:block;margin-top:2px;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:#cbd5e1}

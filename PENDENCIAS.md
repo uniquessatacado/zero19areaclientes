@@ -1,5 +1,6 @@
 # Pendências do Personalizações ZERO19
 
+- [~] 17/11 — 2.17.104 · Nome do comprador em destaque nos cartões da produção, nos próximos pedidos e na busca de pedidos recentes. Liberações pendentes da Venduss têm contagem própria.
 - [x] 14/11 (4) — 2.17.99 PUBLICADA (Vercel conferida): Montar filme organizado (barra nova), Estampas do site · halftone (baixar e trocar; pedidos novos e os que esperam) e Biblioteca de artes no celular.
 - [x] 14/11 — 2.17.98 PUBLICADA (Vercel conferida): PNG/TIFF do filme em faixas a partir de 160 MB (o TIFF travava o Chrome por memória em PC fraco; testado com o filme real RZ INFRA 3× 58 × 120 cm), arte continua aberta entre cópias, SQL e docs internos fora do site público, filtro GTA VI no Montar no estúdio. Se o TIFF ainda travar no PC da loja: abrir 019-personalizacoes.vercel.app, recarregar (Ctrl+F5) e conferir a versão 2.17.98.
 - [~] 13/11 (6) — GTA 6 (ver PENDENCIAS do NovoVenduss e AGENTS.md): 96 artes prontas para produção na biblioteca ZERO19 (pasta "GTA VI", perfis de impressão 10/30 cm) e filtro "GTA VI" no "Montar no estúdio" do filme.

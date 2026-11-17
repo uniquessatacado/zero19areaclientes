@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {queueCountLabel, queueCustomerHTML, queueCustomerName} from '../dist/zero19-production-queue.js';
+
+const row = {project: {official_order_payload: {customer_name: 'Nome do pedido'}}, workspace: {client_name: 'Nome do cadastro'}};
+assert.equal(queueCustomerName(row), 'Nome do pedido');
+assert.equal(queueCustomerName({workspace: {company_name: 'Loja'}}), 'Loja');
+assert.equal(queueCustomerName({}), 'Cliente sem nome');
+const linked = {...row, queue: {source_customer_name: 'Nome & Sobrenome <teste>', customer_name: 'Venduss'}};
+const buyer = queueCustomerName(linked);
+const heading = queueCustomerHTML(buyer, true, true);
+assert.ok(heading.includes('<h3>Nome &amp; Sobrenome &lt;teste&gt;</h3>'));
+assert.ok(heading.includes('Comprador na Venduss'));
+assert.ok(!queueCustomerHTML(buyer, false).includes('<teste>'));
+assert.equal(queueCountLabel([{stage:'awaiting_art'}, {stage:'awaiting_release'}]), '1 para produzir · 1 aguardando liberação da Venduss');
+const compiled = readFileSync(new URL('../dist/zero19-pdv-sync.js', import.meta.url), 'utf8');
+assert.ok(compiled.includes('queueCustomerHTML(queueCustomerName(summary),summary.queue?.source_customer_name,true)'));
+assert.ok(compiled.includes('queueCustomerHTML(row.source_customer_name||row.customer_name,row.source_customer_name)'));
+assert.ok(compiled.includes('queueCustomerHTML(queueCustomerName(summary),summary.queue?.source_customer_name)'));
+assert.ok(compiled.includes('queueCustomerName(row),row.workspace?.client_name'));
+assert.ok(compiled.includes('h(flow.shipping_adjustment_note)'));
+console.log('PASS · comprador na fila, no seletor, na busca e nos próximos pedidos; contagem de liberações e HTML escapado.');
