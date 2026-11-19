@@ -1,3 +1,4 @@
+import {pickFilmColor} from './film-color-sampler.js';
 import {cmToPx,nestItems,snapFilmPlacement,rotatedBoundsMm} from './nesting-core.js?v=2.17.5';
 import {openFilmAssetPicker,filmItemFromLibraryAsset} from './film-picker.js?v=2.17.5';
 import {openFilmStudio} from './film-studio.js?v=2.17.66';
@@ -1218,18 +1219,19 @@ export function createProductionModule(ctx){
     const targets=()=>scope==='one'&&item?phraseMates(item).filter(filmItemUsesFont):group().items;
     const units=list=>list.reduce((sum,entry)=>sum+Number(entry.quantity||1),0);
     const swatches=()=>{const set=new Map();for(const entry of filmItems){if(!filmItemUsesFont(entry))continue;for(const value of [colorFor(entry,'name'),...(entry.palette||[]).map(p=>p.color_hex)]){const c=canonicalVectorColor(value);if(c)set.set(c,c);}}for(const value of ['#ffffff','#000000','#facc15','#16a34a','#1d4ed8','#dc2626']){const c=canonicalVectorColor(value);set.set(c,c);}return [...set.values()].slice(0,18);};
+    let cancelSampling=null;
     const modal=document.createElement('div');modal.className='modal-backdrop';
     const draw=()=>{const current=group(),list=targets(),colorsNow=[...new Set(current.items.map(entry=>canonicalVectorColor(colorFor(entry,'name'))).filter(Boolean))];
       modal.innerHTML=`<div class="modal compact vector-color-modal" role="dialog" aria-modal="true" aria-label="Cor da fonte no filme"><div class="modal-head"><div><div class="eyebrow">COR DA FONTE NO FILME</div><h2>${h(item?filmFontItemText(item):'Escolha a fonte')}</h2><p>Muda letras e números feitos pela fonte. Caractere em vetor mantém as cores dele. Medidas e posição no filme não mudam.</p></div><button class="btn ghost small close" aria-label="Fechar">×</button></div>`
       +(item?'':`<div style="margin:12px 0"><b style="display:block;margin-bottom:6px">Fonte</b><div style="display:flex;flex-wrap:wrap;gap:8px">${groups.map(entry=>`<button type="button" class="btn small${entry.key===current.key?' primary':''}" data-font-group="${h(entry.key)}">${h(entry.name)} · ${entry.items.length} ${entry.items.length===1?'item':'itens'}</button>`).join('')}</div></div>`)
       +`<div style="margin:12px 0"><b style="display:block;margin-bottom:6px">Mudar</b><div style="display:grid;gap:8px">${item?`<button type="button" class="btn small${scope==='one'?' primary':''}" data-font-scope="one" style="justify-content:flex-start;text-align:left;white-space:normal">${scope==='one'?'●':'○'} Só esta: ${h(filmFontItemText(item))}${item.phrasePart?' (a frase inteira)':''}</button>`:''}<button type="button" class="btn small${scope==='all'?' primary':''}" data-font-scope="all" style="justify-content:flex-start;text-align:left;white-space:normal">${scope==='all'?'●':'○'} Todas da fonte ${h(current.name)} no filme · ${current.items.length} ${current.items.length===1?'item':'itens'} (${units(current.items)} un.)</button></div><small style="display:block;margin-top:6px">Cores agora nesta fonte: ${colorsNow.map(c=>`<span title="${c}" style="display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #0004;vertical-align:-2px;background:${c}"></span>`).join(' ')}</small></div>`
-      +`<div style="margin:12px 0"><b style="display:block;margin-bottom:6px">Nova cor</b><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input type="color" data-font-color value="${h(color)}" style="width:56px;height:42px"><input data-font-color-hex value="${h(color)}" maxlength="7" spellcheck="false" style="width:110px" aria-label="Código da cor"><button type="button" class="btn small" data-font-eyedrop ${typeof EyeDropper==='undefined'?'hidden':''}>💧 Conta-gotas</button></div></div><div class="vector-palette"><small>CORES</small><div>${swatches().map(c=>`<button type="button" data-font-swatch="${c}" title="${c}" style="--vector-color:${c}"></button>`).join('')}</div></div>`
+      +`<div style="margin:12px 0"><b style="display:block;margin-bottom:6px">Nova cor</b><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center"><input type="color" data-font-color value="${h(color)}" style="width:56px;height:42px"><input data-font-color-hex value="${h(color)}" maxlength="7" spellcheck="false" style="width:110px" aria-label="Código da cor"><button type="button" class="btn small" data-font-eyedrop>💧 Pegar cor no filme</button></div></div><div class="vector-palette"><small>CORES</small><div>${swatches().map(c=>`<button type="button" data-font-swatch="${c}" title="${c}" style="--vector-color:${c}"></button>`).join('')}</div></div>`
       +(confirming?`<div role="alert" style="margin-top:12px;padding:10px;border-radius:10px;border:2px solid #f59e0b;background:#fffbeb;color:#78350f"><b>Confirmar?</b> ${list.length} ${list.length===1?'item':'itens'} (${units(list)} un.) da fonte ${h(current.name)} vão ficar na cor <span style="display:inline-block;width:14px;height:14px;border-radius:50%;border:1px solid #0004;vertical-align:-2px;background:${h(color)}"></span> ${h(color)}.</div><div class="modal-footer"><button class="btn" data-font-back>Voltar</button><button class="btn primary" data-font-apply>Confirmar e mudar a cor</button></div>`:`<div class="modal-footer"><button class="btn close">Cancelar</button><button class="btn primary" data-font-ask ${list.length?'':'disabled'}>Mudar cor de ${list.length} ${list.length===1?'item':'itens'}</button></div>`)
       +`</div>`;
       bind();};
     const setColor=value=>{const c=canonicalVectorColor(value);if(!c)return false;color=c;const picker=modal.querySelector('[data-font-color]'),hex=modal.querySelector('[data-font-color-hex]');if(picker)picker.value=c;if(hex&&document.activeElement!==hex)hex.value=c;return true;};
-    const close=()=>{modal.remove();document.removeEventListener('keydown',onKey,true);};
-    const onKey=event=>{if(event.key==='Escape'){event.stopPropagation();close();}};
+    const close=()=>{cancelSampling?.();modal.remove();document.removeEventListener('keydown',onKey,true);};
+    const onKey=event=>{if(event.key==='Escape'&&modal.style.display!=='none'){event.stopPropagation();close();}};
     const bind=()=>{
       modal.querySelectorAll('.close').forEach(button=>button.onclick=close);
       modal.querySelectorAll('[data-font-group]').forEach(button=>button.onclick=()=>{groupKey=button.dataset.fontGroup;confirming=false;draw();});
@@ -1238,7 +1240,16 @@ export function createProductionModule(ctx){
       if(picker)picker.oninput=()=>{setColor(picker.value);if(confirming){confirming=false;draw();}};
       if(hex)hex.onchange=()=>{if(!setColor(hex.value.startsWith('#')?hex.value:'#'+hex.value)){hex.value=color;ctx.toast('Use uma cor como #FFFFFF.','err');}else if(confirming){confirming=false;draw();}};
       modal.querySelectorAll('[data-font-swatch]').forEach(button=>button.onclick=()=>{setColor(button.dataset.fontSwatch);confirming=false;draw();});
-      const eye=modal.querySelector('[data-font-eyedrop]');if(eye)eye.onclick=async()=>{try{const result=await new EyeDropper().open();setColor(result.sRGBHex);confirming=false;draw();}catch(error){if(error?.name!=='AbortError')ctx.toast(error.message||String(error),'err');}};
+      modal.querySelector('[data-font-eyedrop]').onclick=()=>{
+        const preview=app.querySelector('#filmPreview');
+        if(!preview?.querySelector('[data-placement] img')) {
+          ctx.toast('Atualize o filme para escolher uma cor na prévia.','err');
+          return;
+        }
+        cancelSampling=pickFilmColor(preview,modal,value=>{
+          setColor(value);confirming=false;draw();
+        });
+      };
       const ask=modal.querySelector('[data-font-ask]');if(ask)ask.onclick=()=>{confirming=true;draw();};
       const back=modal.querySelector('[data-font-back]');if(back)back.onclick=()=>{confirming=false;draw();};
       const apply=modal.querySelector('[data-font-apply]');if(apply)apply.onclick=()=>safe(async()=>{apply.disabled=true;const list=targets();for(const entry of list){entry.inkColor=color;delete entry.previewDataUrl;delete entry.previewQualityVersion;}close();await regenerateFilmDraftPreviews(null,list);await done(list);ctx.toast(`Cor mudada em ${list.length} ${list.length===1?'item':'itens'} da fonte ${group().name}.`,'ok');});

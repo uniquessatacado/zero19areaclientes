@@ -240,6 +240,8 @@ Ao entregar, diga claramente **o que foi testado e o que não foi** (ex.: "testa
 
 ### 019 Personalizações
 
+Em **Montar filme → Cor da fonte → Pegar cor no filme**, toque na tinta de uma estampa da prévia. A janela volta com a cor escolhida para a escrita ou o grupo selecionado. Confirme para aplicar. **Cancelar** ou **Esc** volta à cor anterior.
+
 - `index.html` + `app.js` (app), `production-v217.js` (produção e filme), `film-*.js` (prévia, exportação PNG em faixas, TIFF/BigTIFF, miniaturas, fila "Aguardando produção"), `queue-core.js` (fila), `production-scheduler.js` (prazo), `lettering-*.js` (escrita e fontes), `garment-*.js` (camisa), `studio-*.js` (estúdio no filme).
 - **Build em camadas**: `scripts/build-*.mjs` aplicam trocas conferidas (`replaceOnce`) sobre a versão anterior e checam a base (ex.: o v80 exige a 2.17.79). Se um trecho esperado sumir, o build **para** em vez de aplicar às cegas. Para uma mudança nova, siga o último `build-*-vNN.mjs` como exemplo, acrescente no `"build"` do `package.json` e suba a versão.
 - **Kits de camisa** (2.17.88): `film-kits.js` (regras, `createFilmKitStore`, janela `openFilmKits`, barra `filmKitBarsHTML`), guardados em `z19p_print_jobs` com `settings_snapshot.kind='film_kit_v1'`, que a lista de filmes salvos ignora (`JOB_KIND_FILTER`); cada item leva `kit:{groupId,kitId,name,perKit}` e o rascunho preserva. Ligação no filme e modo kit do seletor (`kitMode`) em `scripts/build-film-kits-v88.mjs`.

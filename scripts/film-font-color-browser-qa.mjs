@@ -144,6 +144,37 @@ try{
   await delay(500);
   const bruna=await colorOf('f3'),clovis=await colorOf('f1');report.push('depois só esta: BRUNA '+JSON.stringify(bruna)+' CLOVIS '+JSON.stringify(clovis));
   check(bruna&&bruna[0]>200&&bruna[1]<80,'BRUNA ficou vermelha');check(clovis&&clovis[1]>120&&clovis[0]<80,'CLOVIS continua verde');
+  // O alvo é BRUNA, mas o pixel vem de outra peça do filme.
+  await evaluate("document.querySelector('.color-film-font[data-id=f3]').click()");
+  const pickButton = "document.querySelector('[data-font-eyedrop]')";
+  await evaluate(pickButton + '.click()');
+  await wait("document.querySelector('.film-sampler-bar')", 'filme livre para escolher');
+  check(await evaluate(pickButton + '.getClientRects().length === 0'), 'janela saiu da frente');
+  await key('Escape',27);
+  check(await evaluate("document.querySelector('[data-font-color]').value")==='#dc2626','Escape preserva a cor');
+  await evaluate(pickButton + '.click()');
+  const point = await evaluate(`(()=>{
+    const img=[...document.querySelectorAll('#filmPreview [data-placement]')].find(n=>JSON.parse(n.dataset.placement)[0]==='f1').querySelector('img');
+    img.scrollIntoView({block:'center',inline:'center',behavior:'instant'});
+    const r=img.getBoundingClientRect(), c=document.createElement('canvas');
+    c.width=Math.round(r.width); c.height=Math.round(r.height);
+    const g=c.getContext('2d');g.drawImage(img,0,0,c.width,c.height);
+    const d=g.getImageData(0,0,c.width,c.height).data;
+    for(let y=2;y<c.height-2;y++)for(let x=2;x<c.width-2;x++){
+      if([0,1,-1,c.width,-c.width].every(k=>d[(y*c.width+x+k)*4+3]===255))
+        return {x:r.left+x+.5,y:r.top+y+.5};
+    }
+  })()`);
+  check(point,'pixel de tinta na arte de origem');
+  await mouseClick(point.x,point.y);
+  await wait("!document.querySelector('.film-sampler-bar')", 'cor capturada');
+  check(await evaluate("document.querySelector('[data-font-color]').value")==='#16a34a','capturou o verde do outro item');
+  await evaluate("document.querySelector('[data-font-ask]').click()");
+  await evaluate("document.querySelector('[data-font-apply]').click()");
+  await wait("!document.querySelector('[data-font-apply]')",'aplicou a cor à palavra selecionada');
+  await delay(500);
+  assert.deepEqual(await colorOf('f3'),clovis);
+  report.push('Conta-gotas: cancelamento e captura de outra estampa preservam o alvo.');
   // 2) Todas da fonte Brasil 2026 pelo botão geral
   await evaluate('document.querySelector("[data-film-font-colors]").click()');
   await wait('document.querySelector("[data-font-group]")','escolher fonte');
