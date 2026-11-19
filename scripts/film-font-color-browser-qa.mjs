@@ -157,23 +157,28 @@ try{
     const img=[...document.querySelectorAll('#filmPreview [data-placement]')].find(n=>JSON.parse(n.dataset.placement)[0]==='f1').querySelector('img');
     img.scrollIntoView({block:'center',inline:'center',behavior:'instant'});
     const r=img.getBoundingClientRect(), c=document.createElement('canvas');
-    c.width=Math.round(r.width); c.height=Math.round(r.height);
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
     const g=c.getContext('2d');g.drawImage(img,0,0,c.width,c.height);
     const d=g.getImageData(0,0,c.width,c.height).data;
-    for(let y=2;y<c.height-2;y++)for(let x=2;x<c.width-2;x++){
-      if([0,1,-1,c.width,-c.width].every(k=>d[(y*c.width+x+k)*4+3]===255))
-        return {x:r.left+x+.5,y:r.top+y+.5};
+    for(let y=Math.ceil(r.top)+2;y<r.bottom-2;y++)for(let x=Math.ceil(r.left)+2;x<r.right-2;x++){
+      const ix=Math.floor((x-r.left)*c.width/r.width), iy=Math.floor((y-r.top)*c.height/r.height);
+      const off=(iy*c.width+ix)*4, rgb=Array.from(d.slice(off,off+3));
+      if(d[off+3]===255 && rgb[1]>125 && rgb[0]<70 && rgb[2]<110)
+        return {x,y,rgb,hex:'#'+rgb.map(n=>n.toString(16).padStart(2,'0')).join('')};
     }
   })()`);
   check(point,'pixel de tinta na arte de origem');
   await mouseClick(point.x,point.y);
   await wait("!document.querySelector('.film-sampler-bar')", 'cor capturada');
-  check(await evaluate("document.querySelector('[data-font-color]').value")==='#16a34a','capturou o verde do outro item');
+  const picked=await evaluate("document.querySelector('[data-font-color]').value");
+  assert.equal(picked,point.hex,'o código vem do pixel da prévia');
   await evaluate("document.querySelector('[data-font-ask]').click()");
   await evaluate("document.querySelector('[data-font-apply]').click()");
   await wait("!document.querySelector('[data-font-apply]')",'aplicou a cor à palavra selecionada');
   await delay(500);
-  assert.deepEqual(await colorOf('f3'),clovis);
+  const applied=await colorOf('f3');
+  check(applied && applied.every((v,k)=>Math.abs(v-point.rgb[k])<10),'BRUNA recebeu a tinta capturada');
+  assert.deepEqual(await colorOf('f1'),clovis,'a estampa de origem ficou igual');
   report.push('Conta-gotas: cancelamento e captura de outra estampa preservam o alvo.');
   // 2) Todas da fonte Brasil 2026 pelo botão geral
   await evaluate('document.querySelector("[data-film-font-colors]").click()');
